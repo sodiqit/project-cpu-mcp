@@ -5,24 +5,102 @@ AI agent play on your behalf: read the world map, reveal cells, build and mine, 
 resources, and trade at marketplaces. Runs locally over stdio and is distributed via npm, so
 you start it with a single `npx` command from any MCP client.
 
-## Quick start
+## Installation
 
-Add the server to your MCP client config (e.g. `claude_desktop_config.json` or an `mcp.json`).
-The only required setting is your wallet's `PRIVATE_KEY`:
+Pick your client below and add the server. The only required setting is your wallet's `PRIVATE_KEY` (`0x` + 64 hex chars) — replace `0x…` with yours.
 
-```jsonc
+<details>
+<summary><strong>Claude Code</strong></summary>
+
+```bash
+claude mcp add cpu-game -s user -e PRIVATE_KEY=0x… -- npx -y cpu-game-mcp@latest
+```
+
+- `-s user` installs it across all your projects; omit it (or use `-s local`) for the current project only.
+- `-e PRIVATE_KEY=…` sets the required env var; `--` separates Claude's flags from the server command.
+
+</details>
+
+<details>
+<summary><strong>Claude Desktop</strong></summary>
+
+Edit `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/`, Windows: `%APPDATA%\Claude\`), then restart the app:
+
+```json
 {
   "mcpServers": {
     "cpu-game": {
       "command": "npx",
       "args": ["-y", "cpu-game-mcp@latest"],
-      "env": {
-        "PRIVATE_KEY": "0x…" // 0x + 64 hex chars (your 32-byte private key)
-      }
+      "env": { "PRIVATE_KEY": "0x…" }
     }
   }
 }
 ```
+
+</details>
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+Add to `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (this project):
+
+```json
+{
+  "mcpServers": {
+    "cpu-game": {
+      "command": "npx",
+      "args": ["-y", "cpu-game-mcp@latest"],
+      "env": { "PRIVATE_KEY": "0x…" }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>VS Code (Copilot agent mode)</strong></summary>
+
+Create `.vscode/mcp.json` — VS Code prompts for the key at startup instead of storing it:
+
+```json
+{
+  "inputs": [
+    { "type": "promptString", "id": "privateKey", "description": "CPU Game private key", "password": true }
+  ],
+  "servers": {
+    "cpu-game": {
+      "command": "npx",
+      "args": ["-y", "cpu-game-mcp@latest"],
+      "env": { "PRIVATE_KEY": "${input:privateKey}" }
+    }
+  }
+}
+```
+
+(In user `settings.json`, wrap the whole object in an `"mcp": { … }` key.)
+
+</details>
+
+<details>
+<summary><strong>Windsurf</strong></summary>
+
+Add to `~/.codeium/windsurf/mcp_config.json`, then restart Windsurf:
+
+```json
+{
+  "mcpServers": {
+    "cpu-game": {
+      "command": "npx",
+      "args": ["-y", "cpu-game-mcp@latest"],
+      "env": { "PRIVATE_KEY": "0x…" }
+    }
+  }
+}
+```
+
+</details>
 
 ## Environment variables
 
