@@ -6,3 +6,6 @@ coverage
 .env
 .env.local
 .idea
+
+# local-only working notes
+docs/
