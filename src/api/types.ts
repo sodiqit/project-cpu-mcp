@@ -63,6 +63,7 @@ export interface AppContractsConfig {
     land: string;
     cpuToken: string;
     gameSettlement: string;
+    cpuHook: string;
 }
 
 export enum CraftCategory {

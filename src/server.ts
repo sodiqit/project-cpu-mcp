@@ -16,6 +16,8 @@ import { registerGetMapTool } from './tools/map/get-map/get-map.js';
 import { registerClaimMiningTool } from './tools/mining/claim/claim-mining.js';
 import { registerGetMiningStatusTool } from './tools/mining/get-status/get-mining-status.js';
 import { registerRevealTool } from './tools/reveal/reveal.js';
+import { registerQuoteSwapTool } from './tools/swap/quote/quote-swap.js';
+import { registerSwapTool } from './tools/swap/swap.js';
 import { registerBuyLotTool } from './tools/trade/buy-lot/buy-lot.js';
 import { registerCancelLotTool } from './tools/trade/cancel-lot/cancel-lot.js';
 import { registerCreateLotTool } from './tools/trade/create-lot/create-lot.js';
@@ -55,6 +57,8 @@ const SERVER_INSTRUCTIONS = [
     'and act with `create_lot` (list goods), `buy_lot` (preview cost first with `quote_buy`), and `cancel_lot`',
     '— paid routes auto-settle on-chain; track your lots with `list_my_lots`.',
     'Check spendable $CPU and gas with `get_balance` before any paid action.',
+    'Swap between native ETH and $CPU on the token pool with `swap` (preview first with `quote_swap`);',
+    '`sell: "ETH"` buys $CPU and `sell: "CPU"` sells it — the trade auto-settles on-chain.',
 ].join(' ');
 
 export async function createServer(context: AppContext): Promise<void> {
@@ -87,6 +91,8 @@ export async function createServer(context: AppContext): Promise<void> {
     registerCreateLotTool(server, context);
     registerBuyLotTool(server, context);
     registerCancelLotTool(server, context);
+    registerQuoteSwapTool(server, context);
+    registerSwapTool(server, context);
     registerGetBalanceTool(server, context);
 
     const stdio = new StdioServerTransport();

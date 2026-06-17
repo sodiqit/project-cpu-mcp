@@ -10,6 +10,7 @@ import type { BuildService } from './services/build.service.js';
 import type { CraftService } from './services/craft.service.js';
 import type { MiningService } from './services/mining.service.js';
 import type { RevealService } from './services/reveal.service.js';
+import type { SwapService } from './services/swap.service.js';
 import type { TradeService } from './services/trade.service.js';
 import type { TransportService } from './services/transport.service.js';
 import type { SessionManager } from './session/manager.js';
@@ -33,6 +34,7 @@ export interface AppContext {
     mining: MiningService;
     transport: TransportService;
     trade: TradeService;
+    swap: SwapService;
     balance: BalanceService;
     mapSync: MapSync;
     mapReader: MapReader;

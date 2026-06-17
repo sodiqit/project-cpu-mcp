@@ -7,6 +7,7 @@ import { NoopLogger } from '../../logger/noop.logger.js';
 import { AppConfigService } from '../app-config.service.js';
 
 const GAME_SETTLEMENT = '0x1111111111111111111111111111111111111111';
+const CPU_HOOK = '0x4444444444444444444444444444444444444444';
 
 class FakeApi {
     public readonly paths: Array<string> = [];
@@ -27,6 +28,7 @@ function makeResponse(overrides: Partial<AppConfigResponse> = {}): AppConfigResp
             land: '0x3333333333333333333333333333333333333333',
             cpuToken: '0x2222222222222222222222222222222222222222',
             gameSettlement: GAME_SETTLEMENT,
+            cpuHook: CPU_HOOK,
             ...overrides.contracts,
         },
         resources: { 3: 'Silica' },
@@ -57,6 +59,7 @@ describe('AppConfigService', () => {
         expect(first.chainId).toBe(1);
         expect(first.network).toBe(Network.ETHEREUM);
         expect(first.contracts.gameSettlement).toBe(GAME_SETTLEMENT);
+        expect(first.contracts.cpuHook).toBe(CPU_HOOK);
         expect(first.resources[3]).toBe('Silica');
         expect(second).toBe(first);
     });
@@ -83,7 +86,7 @@ describe('AppConfigService', () => {
                 data: {
                     network: 'ethereum',
                     chainId: 1,
-                    contracts: { land: '', cpuToken: '', gameSettlement: GAME_SETTLEMENT },
+                    contracts: { land: '', cpuToken: '', gameSettlement: GAME_SETTLEMENT, cpuHook: '' },
                     resources: {},
                 },
             }),
@@ -96,7 +99,7 @@ describe('AppConfigService', () => {
     it('throws when the GameSettlement address is not yet deployed (empty string)', async () => {
         const api = new FakeApi({
             status: 200,
-            data: makeResponse({ contracts: { land: '', cpuToken: '', gameSettlement: '' } }),
+            data: makeResponse({ contracts: { land: '', cpuToken: '', gameSettlement: '', cpuHook: '' } }),
         });
         await expect(makeService(api).load()).rejects.toThrow(/not configured/i);
     });

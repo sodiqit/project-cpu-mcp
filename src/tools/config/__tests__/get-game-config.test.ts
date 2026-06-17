@@ -19,6 +19,7 @@ const CONFIG: AppConfig = {
         land: '0xland',
         cpuToken: '0xcpu',
         gameSettlement: '0x1111111111111111111111111111111111111111',
+        cpuHook: '0x4444444444444444444444444444444444444444',
     },
     resources: { 3: 'Silica' },
     recipes: [

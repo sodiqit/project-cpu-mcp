@@ -17,7 +17,7 @@ import type {
 import type { Network } from '../config/types.js';
 import type { ILogger } from '../logger/types.js';
 import type { SessionManager } from '../session/manager.js';
-import type { TxStatus, WalletProvider } from '../wallet/types.js';
+import type { TxStatus, WalletManager, WalletProvider } from '../wallet/types.js';
 
 export interface AuthServiceOptions {
     session: SessionManager;
@@ -38,6 +38,8 @@ export interface AppContracts {
     cpuToken: string;
     /** Always a valid address — `AppConfigService.load()` rejects a config without it. */
     gameSettlement: Address;
+    /** Uniswap v4 hook for the ETH/$CPU pool; empty until configured. Validate before a swap. */
+    cpuHook: string;
 }
 
 /** Chain + contract addresses for the configured network, loaded from the game API. */
@@ -365,6 +367,98 @@ export interface PaidLotResult {
 }
 
 export type LotResult = FreeLotResult | PaidLotResult;
+
+// ---- Swap (Uniswap v4 ETH/$CPU pool) ----
+
+export interface SwapServiceOptions {
+    wallet: WalletProvider;
+    appConfig: IAppConfig;
+    allowance: IAllowanceService;
+    logger: ILogger;
+}
+
+export enum SwapToken {
+    ETH = 'ETH',
+    CPU = 'CPU',
+}
+
+export enum SwapDirection {
+    EthToCpu = 'eth_to_cpu',
+    CpuToEth = 'cpu_to_eth',
+}
+
+export interface PoolKeyView {
+    currency0: Address;
+    currency1: Address;
+    fee: number;
+    tickSpacing: number;
+    hooks: Address;
+}
+
+export interface SwapRoute {
+    direction: SwapDirection;
+    tokenIn: Address;
+    tokenOut: Address;
+    zeroForOne: boolean;
+}
+
+export interface PreparedSwap {
+    config: AppConfig;
+    wallet: WalletManager;
+    pool: PoolKeyView;
+    route: SwapRoute;
+    amountInWei: bigint;
+    amountOutWei: bigint;
+    amountOutMinimumWei: bigint;
+}
+
+export interface V4SwapPlan {
+    poolKey: PoolKeyView;
+    zeroForOne: boolean;
+    inputCurrency: Address;
+    outputCurrency: Address;
+    amountInWei: bigint;
+    amountOutMinimumWei: bigint;
+    deadline: bigint;
+}
+
+export interface SwapInput {
+    sell: SwapToken;
+    amount: string;
+    slippage: number;
+}
+
+export interface SwapQuote {
+    direction: SwapDirection;
+    sell: SwapToken;
+    tokenIn: Address;
+    tokenOut: Address;
+    fee: number;
+    amountIn: string;
+    amountInWei: string;
+    amountOut: string;
+    amountOutWei: string;
+    amountOutMinimum: string;
+    amountOutMinimumWei: string;
+    slippage: number;
+}
+
+export interface SwapResult {
+    direction: SwapDirection;
+    sell: SwapToken;
+    tokenIn: Address;
+    tokenOut: Address;
+    amountIn: string;
+    amountInWei: string;
+    amountOutQuoted: string;
+    amountOutMinimum: string;
+    amountOutMinimumWei: string;
+    txHash: Hash;
+    approveTxHash: Hash | null;
+    permit2TxHash: Hash | null;
+    status: TxStatus;
+    blockNumber: string;
+}
 
 // ---- Account balance ----
 
