@@ -39,7 +39,8 @@ function harness(): { handler: Handler; sinceArgs: Array<number> } {
     const appConfig = {
         load: async (): Promise<{ resources: Record<number, string> }> => ({ resources: { 4: 'Iron Ore' } }),
     };
-    const context = { mapReader: map, wallet, appConfig, logger: new NoopLogger() } as unknown as AppContext;
+    const api = { getServerHealth: () => ({ reachable: true, reason: null }) };
+    const context = { mapReader: map, wallet, appConfig, api, logger: new NoopLogger() } as unknown as AppContext;
 
     let captured: Handler | null = null;
     const server = {
@@ -77,5 +78,13 @@ describe('get_changes tool', () => {
         };
         expect(parsed.version).toBe(200);
         expect(parsed.changed[0]?.resources[0]?.resourceName).toBe('Iron Ore');
+    });
+
+    it('surfaces server reachability in the header and payload', async () => {
+        const { handler } = harness();
+        const result = await handler({ sinceVersion: 0 });
+        expect(result.content[0]?.text).toContain('server=up');
+        const parsed = JSON.parse(result.content[1]?.text ?? '{}') as { server: { reachable: boolean } };
+        expect(parsed.server.reachable).toBe(true);
     });
 });

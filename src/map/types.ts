@@ -94,6 +94,10 @@ export interface SocketLifecycleHandlers {
 export interface ISocketClient {
     connect(handlers: SocketLifecycleHandlers): void;
     isConnected(): boolean;
+    // Re-establish the connection after a server-initiated disconnect, which socket.io does not
+    // auto-recover from (it detaches the socket from its manager). Idempotent / safe to call when
+    // already connected or reconnecting.
+    reconnect(): void;
     disconnect(): void;
 }
 

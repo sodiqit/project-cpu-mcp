@@ -119,4 +119,34 @@ describe('MapSync', () => {
         socket.emitDisconnect();
         expect(sync.isSocketConnected()).toBe(false);
     });
+
+    it('manually reconnects after a server-initiated disconnect and resyncs once back', async () => {
+        const { sync, socket, api } = setup([makeCell({ tokenId: '1', updated: 50 })]);
+        sync.start();
+        await waitReady(sync);
+
+        socket.emitDisconnect('io server disconnect');
+        expect(socket.reconnectCalls).toBeGreaterThanOrEqual(1);
+
+        socket.emitConnect();
+        expect(api.calls).toContain('/api/v1/map?since=50');
+        expect(sync.getReadiness()).toBe(MapReadiness.Ready);
+        expect(sync.isSocketConnected()).toBe(true);
+    });
+
+    it('nudges a reconnect on each poll tick while degraded (backstop)', async () => {
+        vi.useFakeTimers();
+        const { sync, socket } = setup([makeCell({ tokenId: '1', updated: 50 })]);
+        sync.start();
+        await vi.advanceTimersByTimeAsync(0);
+
+        // reason 'test' is not server-initiated, so there's no immediate reconnect.
+        socket.emitDisconnect();
+        await vi.advanceTimersByTimeAsync(GRACE_MS);
+        expect(sync.getReadiness()).toBe(MapReadiness.Degraded);
+
+        const before = socket.reconnectCalls;
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+        expect(socket.reconnectCalls).toBeGreaterThan(before);
+    });
 });

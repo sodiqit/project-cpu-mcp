@@ -11,6 +11,11 @@ export const MAP_SOCKET_PATH = '/api/socket.io';
 
 export const CELL_UPDATE_EVENT = 'cell_update';
 
+// socket.io disconnect reason for a server-initiated namespace disconnect. In this case the client
+// does NOT auto-reconnect (it detaches the socket from its manager), so we must reconnect manually.
+// Must match the string emitted by socket.io-client.
+export const SERVER_INITIATED_DISCONNECT_REASON = 'io server disconnect';
+
 // Axial hex neighbour offsets (6 directions) for the cube convention where `z = -x - y`, i.e.
 // `hexDistance = (|dx| + |dy| + |dx + dy|) / 2`. Order is irrelevant to callers.
 export const HEX_NEIGHBOR_OFFSETS: ReadonlyArray<readonly [number, number]> = [

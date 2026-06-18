@@ -94,6 +94,39 @@ describe('ApiClient', () => {
 
             expect(mockFetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ method: 'GET' }));
         });
+
+        it('throws a clear error on a non-JSON (HTML) response instead of a bare JSON parse error', async () => {
+            mockFetch.mockResolvedValueOnce(
+                new Response('<html>err</html>', { status: 502, headers: { 'content-type': 'text/html' } }),
+            );
+
+            const client = createClient();
+            await expect(client.request('/test')).rejects.toThrow(/502|non-JSON/i);
+        });
+
+        it('throws a clear error when fetch itself fails (server unreachable)', async () => {
+            mockFetch.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+
+            const client = createClient();
+            await expect(client.request('/test')).rejects.toThrow(/down or unreachable/i);
+        });
+    });
+
+    describe('server health', () => {
+        it('starts reachable, flips to unreachable on a non-JSON response, and recovers on the next ok response', async () => {
+            const client = createClient();
+            expect(client.getServerHealth().reachable).toBe(true);
+
+            mockFetch.mockResolvedValueOnce(new Response('<html>down</html>', { status: 503 }));
+            await expect(client.request('/test')).rejects.toThrow();
+            expect(client.getServerHealth().reachable).toBe(false);
+            expect(client.getServerHealth().reason).not.toBeNull();
+
+            mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+            await client.request('/test');
+            expect(client.getServerHealth().reachable).toBe(true);
+            expect(client.getServerHealth().reason).toBeNull();
+        });
     });
 
     describe('authenticatedRequest', () => {

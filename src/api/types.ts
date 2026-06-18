@@ -58,6 +58,13 @@ export interface ApiResponse<T> {
     data: T;
 }
 
+/** Last-known reachability of the game API, derived from whether the most recent HTTP call to it
+ *  produced a usable JSON response. `reachable: false` means the API is down/unreachable right now. */
+export interface ServerHealthView {
+    reachable: boolean;
+    reason: string | null;
+}
+
 /** `GET /api/v1/config?network=` contract addresses. */
 export interface AppContractsConfig {
     land: string;

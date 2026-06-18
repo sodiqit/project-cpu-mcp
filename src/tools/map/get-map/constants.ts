@@ -8,4 +8,6 @@ export const GET_MAP_DESCRIPTION = [
     'Scopes: "mine" (your cells), "around" (cells within a hex radius — scout a region),',
     '"cells" (specific tokenIds), "all" (everything), "summary" (no cells). Default: "mine", else "summary".',
     'Note units: version/updated are epoch ms, serverTime/startAt are unix seconds, amounts are decimal strings.',
+    'Also carries "server": { reachable } — false means the game server is unreachable right now and',
+    'actions will fail; retry once it is true again.',
 ].join(' ');

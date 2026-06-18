@@ -44,6 +44,13 @@ export class MapSocketClient implements ISocketClient {
         return this.socket?.connected ?? false;
     }
 
+    reconnect(): void {
+        // socket.io won't auto-reconnect after a server-initiated disconnect (it unsubscribes the
+        // socket from the manager). A single connect() re-subscribes the socket and re-arms socket.io's
+        // own backoff loop, which then owns the retries; connect() is a no-op if already connected.
+        this.socket?.connect();
+    }
+
     disconnect(): void {
         if (this.socket !== null) {
             this.socket.removeAllListeners();

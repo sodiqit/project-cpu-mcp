@@ -7,6 +7,7 @@ import type { CellState, ISocketClient, SocketLifecycleHandlers } from '../map/t
 export class FakeMapSocket implements ISocketClient {
     private handlers: SocketLifecycleHandlers | null = null;
     private connected = false;
+    public reconnectCalls = 0;
 
     connect(handlers: SocketLifecycleHandlers): void {
         this.handlers = handlers;
@@ -14,6 +15,11 @@ export class FakeMapSocket implements ISocketClient {
 
     isConnected(): boolean {
         return this.connected;
+    }
+
+    // Records the call; tests drive the actual recovery via emitConnect (mirroring an async reconnect).
+    reconnect(): void {
+        this.reconnectCalls += 1;
     }
 
     disconnect(): void {

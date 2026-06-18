@@ -1,4 +1,4 @@
-import { MAP_HTTP_PATH, STARTUP_FETCH_RETRY_MS } from './constants.js';
+import { MAP_HTTP_PATH, SERVER_INITIATED_DISCONNECT_REASON, STARTUP_FETCH_RETRY_MS } from './constants.js';
 import { parseSnapshot } from './map.utils.js';
 import type { MapStore } from './store.js';
 import {
@@ -134,6 +134,11 @@ export class MapSync implements MapStatus {
 
     private handleDisconnect(reason: string): void {
         this.logger.warn('map socket disconnected', { reason });
+        // socket.io does not auto-reconnect after a server-initiated disconnect — drive it once,
+        // which re-arms socket.io's own backoff loop. Other reasons it recovers on its own.
+        if (reason === SERVER_INITIATED_DISCONNECT_REASON) {
+            this.socket?.reconnect();
+        }
         if (this.degradeTimer !== null || !this.ready) {
             return;
         }
@@ -176,6 +181,11 @@ export class MapSync implements MapStatus {
             return;
         }
         this.pollTimer = setInterval(() => {
+            // Backstop: if the socket is still down, nudge a reconnect (idempotent) before polling, so
+            // recovery happens even if socket.io's own loop stopped (e.g. finite reconnectionAttempts).
+            if (this.socket !== null && !this.socket.isConnected()) {
+                this.socket.reconnect();
+            }
             void this.resync();
         }, this.pollIntervalMs);
     }

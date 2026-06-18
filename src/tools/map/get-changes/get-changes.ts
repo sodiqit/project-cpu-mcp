@@ -11,13 +11,19 @@ export function registerGetChangesTool(server: McpServer, context: AppContext): 
         'get_changes',
         { description: GET_CHANGES_DESCRIPTION, inputSchema: getChangesInputSchema },
         async (args) => {
+            const health = context.api.getServerHealth();
             const since = args.sinceVersion ?? 0;
             const changes = context.mapReader.getChanges(since, getWalletAddress(context));
             const { resources } = await context.appConfig.load();
 
-            const header = `Changes since v${since}: ${changes.changedCount} cells · now v${changes.version}`;
+            const serverTag = health.reachable ? 'server=up' : 'server=DOWN';
+            const header = `Changes since v${since}: ${changes.changedCount} cells · now v${changes.version} · ${serverTag}`;
 
-            const labeled = { ...changes, changed: changes.changed.map((cell) => labelCell(cell, resources)) };
+            const labeled = {
+                ...changes,
+                changed: changes.changed.map((cell) => labelCell(cell, resources)),
+                server: { reachable: health.reachable, reason: health.reason },
+            };
 
             return {
                 content: [

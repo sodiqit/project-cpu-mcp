@@ -48,7 +48,8 @@ function harness(
     const appConfig = {
         load: async (): Promise<{ resources: Record<number, string> }> => ({ resources: { 3: 'Silica' } }),
     };
-    const context = { mapReader: map, wallet, appConfig, logger: new NoopLogger() } as unknown as AppContext;
+    const api = { getServerHealth: () => ({ reachable: true, reason: null }) };
+    const context = { mapReader: map, wallet, appConfig, api, logger: new NoopLogger() } as unknown as AppContext;
 
     let captured: Handler | null = null;
     const server = {
@@ -102,8 +103,10 @@ describe('get_map tool', () => {
         expect(result.content).toHaveLength(2);
         const parsed = JSON.parse(result.content[1]?.text ?? '{}') as MapQueryResult & {
             resourceNames: Record<number, string>;
+            server: { reachable: boolean };
         };
         expect(parsed.summary.totalCells).toBe(3);
         expect(parsed.resourceNames).toEqual({ 3: 'Silica' });
+        expect(parsed.server.reachable).toBe(true);
     });
 });

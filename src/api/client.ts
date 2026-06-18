@@ -1,6 +1,14 @@
-import { type ApiClientOptions, type ApiResponse, HttpStatus, type IAuthenticator } from './types.js';
+import { parseJsonBody } from './response.utils.js';
+import {
+    type ApiClientOptions,
+    type ApiResponse,
+    HttpStatus,
+    type IAuthenticator,
+    type ServerHealthView,
+} from './types.js';
 import type { ILogger } from '../logger/types.js';
 import type { SessionManager } from '../session/manager.js';
+import { errorMessage } from '../utils/error.utils.js';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -14,6 +22,8 @@ export class ApiClient {
     private readonly session: SessionManager;
     private readonly logger: ILogger;
     private authenticator: IAuthenticator | null = null;
+    private serverReachable = true;
+    private serverDownReason: string | null = null;
 
     constructor(options: ApiClientOptions) {
         this.baseUrl = options.baseUrl;
@@ -77,12 +87,46 @@ export class ApiClient {
 
         this.logger.debug('api request', { method, path });
 
-        const response = await fetch(url, init);
-        const data = (await response.json()) as T;
+        let response: Response;
+        try {
+            response = await fetch(url, init);
+        } catch (error) {
+            this.setReachable(false, errorMessage(error));
+            throw new Error(
+                `Cannot reach the game API at ${this.baseUrl} — the server is likely down or unreachable. ` +
+                    `Retry shortly. (${errorMessage(error)})`,
+            );
+        }
 
+        let data: T;
+        try {
+            data = await parseJsonBody<T>(response);
+        } catch (error) {
+            this.setReachable(false, errorMessage(error));
+            throw error;
+        }
+
+        this.setReachable(true, null);
         this.logger.debug('api response', { method, path, status: response.status });
 
         return { status: response.status, data };
+    }
+
+    private setReachable(reachable: boolean, reason: string | null): void {
+        const changed = this.serverReachable !== reachable;
+        this.serverReachable = reachable;
+        this.serverDownReason = reachable ? null : reason;
+        if (changed) {
+            if (reachable) {
+                this.logger.info('game API reachable again');
+            } else {
+                this.logger.warn('game API unreachable', { reason });
+            }
+        }
+    }
+
+    getServerHealth(): ServerHealthView {
+        return { reachable: this.serverReachable, reason: this.serverDownReason };
     }
 
     getBaseUrl(): string {
