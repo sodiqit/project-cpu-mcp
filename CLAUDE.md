@@ -6,6 +6,26 @@ Two wallet modes via `WALLET_MODE` (defaults to `evm`): `evm` (private key in en
 
 The target chain is chosen by `NETWORK` (optional, default `ethereum`; one of `ethereum | ethereum_sepolia | base | base_sepolia`) — its chainId is routed locally (`src/config/network.utils.ts`) and contract addresses are loaded from the game API `GET /api/v1/config?network=`. Set `RPC_URL` when sending transactions (e.g. `reveal`); it falls back to the chain's public RPC otherwise.
 
+## Worktrees
+
+**ALWAYS work in a worktree for ANY change — no exceptions.** The moment a task will touch a file
+(code, config, workflow, docs, secrets — anything that gets committed), the FIRST action is to create
+a worktree. The main checkout stays on `main` as a read-only hub; **never edit, branch, or commit in
+it.** "It's a small/interactive/one-off change" is NOT an exception — every change goes through a
+worktree. Read-only work (exploring, answering questions, running tests/builds) may stay in the hub.
+
+Branches: `<type>/<kebab-slug>`, type — conventional-commit (`feat` `fix` `chore` `refactor` `test`
+`docs` `perf` `ci` `build` `revert`); defaults to `feat` when no type is given.
+
+- **YOU MUST** create worktrees only via `EnterWorktree` (or `claude --worktree <type>/<slug>`) — this
+  runs `.claude/hooks/worktree-create.sh`, which branches off `main`, copies local-only files, and
+  installs deps. A name without a type → branch `feat/<slug>`. Never `git worktree add` by hand and
+  never `git checkout -b` in the hub — both bypass the hook, leaving the worktree without local files
+  or deps (or polluting the hub).
+- Worktrees live in the sibling `../mcp-worktrees/<branch-slug>` directory.
+- A new local-only (gitignored) file a worktree needs → add its path to `ENV_FILES` in
+  `.claude/hooks/worktree-create.sh`.
+
 ## Structure
 
 ```

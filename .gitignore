@@ -9,3 +9,7 @@ coverage
 
 # local-only working notes
 docs/
+
+# Claude Code local-only
+.claude/settings.local.json
+CLAUDE.local.md
