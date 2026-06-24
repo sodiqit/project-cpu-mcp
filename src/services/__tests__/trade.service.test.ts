@@ -114,12 +114,12 @@ describe('TradeService.createLot', () => {
         expect(allowance.calls).toHaveLength(0);
     });
 
-    it('wraps a failed on-chain payment with the re-run hint', async () => {
+    it('wraps a failed on-chain payment with the wait-then-retry hint', async () => {
         const { service } = makeService({
             response: { status: 200, data: makePaidLot() },
             receipts: [TxStatus.Reverted],
         });
-        await expect(service.createLot(CREATE_INPUT)).rejects.toThrow(/re-run the action to retry/i);
+        await expect(service.createLot(CREATE_INPUT)).rejects.toThrow(/reconciled automatically/i);
     });
 
     it('surfaces a 409 conflict and sends no tx', async () => {

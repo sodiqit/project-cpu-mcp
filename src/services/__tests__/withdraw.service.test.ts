@@ -108,7 +108,7 @@ describe('WithdrawService', () => {
 
         const result = await service.withdraw({ tokenId: '42', amount: '100' });
 
-        // Only the pending lookup hits the API — never a second POST that the backend would 409.
+        // Only the pending lookup hits the API — never a second POST that the server would 409.
         expect(api.calls.map((c) => c.path)).toEqual(['/api/v1/cpu/withdraw/pending']);
         // It checks the on-chain used-flag before re-submitting the same signature.
         expect(wallet.reads[0]?.functionName).toBe('usedSignIds');

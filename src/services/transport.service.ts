@@ -121,8 +121,8 @@ export class TransportService {
         if (BigInt(action.deadline) * 1000n <= BigInt(Date.now())) {
             throw new Error(
                 `Transport job ${jobId} signature expired at ${action.deadline} (unix seconds). Its escrow is ` +
-                    `refunded automatically by a background sweep shortly after the deadline — wait for it to clear ` +
-                    `(track with get_pending_transports), then start a new transport.`,
+                    `refunded automatically shortly after the deadline — wait for it to clear (track with ` +
+                    `get_pending_transports), then start a new transport.`,
             );
         }
 

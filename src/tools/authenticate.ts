@@ -12,7 +12,7 @@ const DESCRIPTION = [
     'In AGW mode it returns a URL the user must open in their browser to approve.',
     'Once authenticated, subsequent wallet-dependent tools will work automatically.',
     'Pass force=true to discard the cached session and authenticate from scratch',
-    '(e.g. after the game backend was reset and the stored token references a stale user).',
+    '(e.g. after the game server was reset and the stored token references a stale user).',
 ].join(' ');
 
 const inputSchema = {

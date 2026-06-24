@@ -42,7 +42,7 @@ export const cellStateSchema = z.object({
     building: cellBuildingViewSchema.nullable(),
     // Per-unit $CPU a foreign mover pays to route through this cell (decimal string); populated for
     // Hubs, null otherwise. Lets the agent rank hubs by cost without a per-route quote. Defaults to
-    // null so a client that updates before the backend ships the field still parses cells.
+    // null so a client that updates before the server ships the field still parses cells.
     transitFeePerUnit: z.string().nullable().default(null),
     mining: cellMiningViewSchema.nullable(),
     crafting: z.array(cellCraftViewSchema),

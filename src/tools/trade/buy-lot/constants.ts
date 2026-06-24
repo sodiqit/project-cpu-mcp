@@ -5,5 +5,5 @@ export const BUY_LOT_DESCRIPTION = [
     'submits the on-chain payment. NOTE: this reserves the units immediately (no dry-run) — preview the exact',
     'cost first with `quote_buy`. Track delivery with `list_my_transports` / `get_lot`. If you already have a',
     'pending buy on this lot awaiting payment, a new one is rejected — retry once it settles or lapses (a lapsed',
-    'one is auto-refunded by a background sweep within ~a minute).',
+    'one is auto-refunded within ~a minute).',
 ].join(' ');

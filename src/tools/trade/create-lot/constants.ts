@@ -5,5 +5,5 @@ export const CREATE_LOT_DESCRIPTION = [
     'route through a foreign Hub costs $CPU — this tool then auto-approves the $CPU spend once and submits the',
     'on-chain payment. Returns the lotId — track it with `list_my_lots` / `get_lot`. While a prior paid listing',
     'of the same resource from the same cell is still awaiting payment, a new one is rejected — finish or let',
-    'the pending one lapse (a lapsed escrow is auto-refunded by a background sweep within ~a minute).',
+    'the pending one lapse (a lapsed escrow is auto-refunded within ~a minute).',
 ].join(' ');

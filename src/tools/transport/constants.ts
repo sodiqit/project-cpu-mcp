@@ -6,5 +6,5 @@ export const TRANSPORT_DESCRIPTION = [
     'transport jobId — track the shipment with `get_transport_status <jobId>`. If the on-chain payment fails,',
     'the source resource stays escrowed and the action is resumable with `resume_transport <jobId>`. While that',
     'paid shipment is still pending, starting another transport of the same resource from the same cell is',
-    'rejected — finish it with `resume_transport`, or wait for the background sweep to refund a lapsed one.',
+    'rejected — finish it with `resume_transport`, or wait for a lapsed one to be refunded automatically.',
 ].join(' ');

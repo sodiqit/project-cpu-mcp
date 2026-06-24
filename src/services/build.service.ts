@@ -72,7 +72,7 @@ export class BuildService {
             throw new Error(
                 `Build signature issued (signId ${sig.signId}) but the on-chain payment did not complete: ` +
                     `${errorMessage(error)}. The signature is valid until ${sig.deadline} (unix seconds) — re-run ` +
-                    `build with the same arguments to retry (the backend reissues the same signature).`,
+                    `build with the same arguments to retry (the server reissues the same signature).`,
             );
         }
     }

@@ -28,8 +28,7 @@ import type { WalletManager, WalletProvider } from '../wallet/types.js';
  * Crafting refines/forges resources on a cell. Free recipes start the timer immediately; the paid
  * forge escrows inputs and returns a `spendCpu` signature settled exactly like build. A craft
  * signature cannot be re-fetched, so the paid path submits atomically — a failed payment leaves a
- * pending escrow the backend's stale-intent sweep auto-refunds in the background shortly after the
- * signature deadline, with no resume.
+ * pending escrow that is auto-refunded shortly after the signature deadline, with no resume.
  */
 export class CraftService {
     private readonly api: ApiClient;
@@ -70,8 +69,8 @@ export class CraftService {
             if (response.status === HttpStatus.Conflict) {
                 throw new Error(
                     `Craft rejected (HTTP 409): ${describeApiError(response.data)}. A prior paid craft on cell ` +
-                        `${input.tokenId} is still escrowed awaiting payment — a background sweep auto-refunds it ` +
-                        `shortly after its signature deadline; retry then.`,
+                        `${input.tokenId} is still escrowed awaiting payment — it is auto-refunded shortly after ` +
+                        `its signature deadline; retry then.`,
                 );
             }
             throw new Error(`Craft request failed (HTTP ${response.status}): ${describeApiError(response.data)}`);
@@ -111,8 +110,8 @@ export class CraftService {
             throw new Error(
                 `Craft signature issued (signId ${sig.signId}) but the on-chain payment did not complete: ` +
                     `${errorMessage(error)}. The inputs stay escrowed on cell ${input.tokenId} past the signature ` +
-                    `deadline ${sig.deadline} (unix seconds), then a background sweep auto-refunds them — retry the ` +
-                    `craft after that.`,
+                    `deadline ${sig.deadline} (unix seconds), then they are auto-refunded — retry the craft after ` +
+                    `that.`,
             );
         }
     }
