@@ -16,6 +16,7 @@ jobs:
     permissions:
       contents: write # create the release commit, tag, and GitHub Release
       pull-requests: write # open/update the Release PR
+      issues: write # label the Release PR (autorelease: pending/tagged)
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
     steps:
