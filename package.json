@@ -1,7 +1,7 @@
 {
-    "name": "cpu-game-mcp",
+    "name": "project-cpu-mcp",
     "version": "0.4.2",
-    "description": "MCP server for CPU game — AI agents interact with the game on behalf of players",
+    "description": "MCP server for Project CPU — AI agents interact with the game on behalf of players",
     "keywords": [
         "mcp",
         "model-context-protocol",
@@ -12,19 +12,19 @@
         "evm",
         "abstract"
     ],
-    "homepage": "https://github.com/sodiqit/cpu-game-mcp#readme",
+    "homepage": "https://github.com/sodiqit/project-cpu-mcp#readme",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/sodiqit/cpu-game-mcp.git"
+        "url": "git+https://github.com/sodiqit/project-cpu-mcp.git"
     },
     "bugs": {
-        "url": "https://github.com/sodiqit/cpu-game-mcp/issues"
+        "url": "https://github.com/sodiqit/project-cpu-mcp/issues"
     },
     "license": "MIT",
     "author": "sodiqit",
     "type": "module",
     "bin": {
-        "cpu-game-mcp": "dist/index.js"
+        "project-cpu-mcp": "dist/index.js"
     },
     "main": "dist/index.js",
     "types": "dist/index.d.ts",

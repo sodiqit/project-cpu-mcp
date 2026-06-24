@@ -36,7 +36,7 @@ import { registerWithdrawTool } from './tools/withdraw/withdraw.js';
 import type { AppContext } from './types.js';
 
 const SERVER_INSTRUCTIONS = [
-    'MCP server for the CPU Game (blockchain game on EVM).',
+    'MCP server for Project CPU (blockchain game on EVM).',
     'Call `authenticate` to create a session: in the default EVM mode it signs in via SIWE locally;',
     'in AGW mode it starts a Device Authorization flow.',
     'Read the static rulebook once with `get_game_config` — resource catalog, building and reveal costs,',
