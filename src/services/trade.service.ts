@@ -44,9 +44,9 @@ import type { WalletManager, WalletProvider } from '../wallet/types.js';
 /**
  * The lot marketplace: discovery reads plus the three paid/free writes (create / buy / cancel). Each
  * paid write returns an EIP-712 signature the client settles on-chain (`transport` for create-lot,
- * `tradeBuy`, `tradeCancel`) through the shared `settleTransit` path. There is no server-side resume
- * for trade (the backend reconciles abandoned reservations on timeout), so a failed payment surfaces
- * the deadline and the action is simply re-run.
+ * `tradeBuy`, `tradeCancel`) through the shared `settleTransit` path. There is no resume for trade: the
+ * server reconciles an abandoned reservation a short while after its deadline, so a failed payment
+ * surfaces the deadline and the action is re-run once that reservation has cleared.
  */
 export class TradeService {
     private readonly api: ApiClient;
@@ -210,15 +210,16 @@ export class TradeService {
         const payable = this.validatePayable(config, wallet, data);
 
         // The paid POST already soft-reserved (create/buy) or escrowed (cancel) and minted the signature;
-        // if the on-chain payment now fails, the action dangles until its deadline and the backend
-        // auto-reconciles. Surface the deadline so the agent can simply re-run.
+        // if the on-chain payment now fails, the reservation dangles until its deadline, then reconciles
+        // automatically. Surface the deadline so the agent waits for it to clear before retrying.
         try {
             return await this.submitPayment(action, functionName, wallet, data, payable);
         } catch (error) {
             throw new Error(
                 `Paid ${action} on lot ${data.lotId} was signed but the on-chain payment did not complete: ` +
                     `${errorMessage(error)}. The signature is valid until ${data.deadline} (unix seconds); the ` +
-                    `backend auto-reconciles the reservation after the deadline — re-run the action to retry.`,
+                    `reservation is reconciled automatically a short while after the deadline — wait for it to ` +
+                    `clear, then re-run the action (re-running while it is still pending is rejected).`,
             );
         }
     }

@@ -1,7 +1,7 @@
 import { RESPONSE_BODY_SNIPPET_LENGTH } from './constants.js';
 
 /**
- * Reads the body once and parses it as JSON. On a non-JSON body — a down backend / proxy error page
+ * Reads the body once and parses it as JSON. On a non-JSON body — a down server / proxy error page
  * (`<html>...`), or an empty body — throws a clear, agent-readable error instead of letting a bare
  * `SyntaxError: Unexpected token '<'` surface from `response.json()`.
  */

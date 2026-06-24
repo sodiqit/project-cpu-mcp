@@ -61,6 +61,9 @@ const SERVER_INSTRUCTIONS = [
     'and act with `create_lot` (list goods), `buy_lot` (preview cost first with `quote_buy`), and `cancel_lot`',
     '— paid routes auto-settle on-chain; track your lots with `list_my_lots`.',
     'Check spendable $CPU and gas with `get_balance` before any paid action.',
+    'Paid actions (transport, trade, craft forge, withdraw) escrow at signing; if a payment is interrupted and',
+    'its signature lapses, the escrow is refunded automatically within about a minute — do not try to free it',
+    'manually, and note that starting the same action again while one is still pending is rejected.',
     'Swap between native ETH and $CPU on the token pool with `swap` (preview first with `quote_swap`);',
     '`sell: "ETH"` buys $CPU and `sell: "CPU"` sells it — the trade auto-settles on-chain.',
 ].join(' ');

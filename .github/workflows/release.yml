@@ -1,16 +1,37 @@
 name: Release
 
+# release-please owns versioning: on every push to main it opens/updates a Release PR
+# (version bump + changelog). Merging that Release PR tags the release, and the gated `publish`
+# job runs in the SAME workflow run — the bot's tag, made with GITHUB_TOKEN, can't trigger a
+# separate workflow, so publishing must live here behind `release_created`.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
 
-permissions:
-  contents: read
-  id-token: write # OIDC: npm trusted publishing + provenance
+permissions: {}
 
 jobs:
-  publish:
+  release-please:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release commit, tag, and GitHub Release
+      pull-requests: write # open/update the Release PR
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC: npm trusted publishing + provenance
     steps:
       - uses: actions/checkout@v5
 
@@ -27,12 +48,6 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm run build
       - run: pnpm run test:unit
-
-      - name: Verify tag matches package version
-        run: |
-          PKG=$(node -p "require('./package.json').version")
-          TAG="${GITHUB_REF_NAME#v}"
-          test "$PKG" = "$TAG" || { echo "tag $TAG != package version $PKG"; exit 1; }
 
       # Ensure npm is recent enough for OIDC trusted publishing
       - run: npm install -g npm@latest
