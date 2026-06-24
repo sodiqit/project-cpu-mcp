@@ -316,7 +316,8 @@ export interface BuyLotInput {
 
 export interface CancelLotInput {
     lotId: string;
-    /** `[hub, …waypoints, sellerDest]`; null only for a DRAFT lot (no return shipment). */
+    /** `[hub, …waypoints, sellerDest]` for an OPEN lot's return shipment. DRAFT lots can't be cancelled
+     *  manually (they auto-revert), so a null chain only ever yields a backend rejection. */
     chain: Array<TransportCoord> | null;
 }
 

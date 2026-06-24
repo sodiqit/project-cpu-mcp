@@ -36,7 +36,9 @@ export function summarizePending(views: Array<PendingTransportView>, resources: 
     }
     return views
         .map((v) => {
-            const next = v.resumable ? `resume_transport ${v.jobId}` : 'expired — re-initiate the route with transport';
+            const next = v.resumable
+                ? `resume_transport ${v.jobId}`
+                : 'expired — a background sweep auto-refunds the escrow shortly; wait for it to clear';
             return (
                 `job ${v.jobId}: ${v.amount} ${resourceLabel(resources, v.resourceId)}, ` +
                 `${cpuFromWei(v.totalAmount)} $CPU, deadline unix ${v.deadline} → ${next}`

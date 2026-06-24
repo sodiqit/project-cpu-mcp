@@ -48,8 +48,8 @@ export const cancelLotInputSchema = {
         .nullable()
         .default(null)
         .describe(
-            '[hub, ...waypoints, destination] for the return shipment — REQUIRED to cancel an OPEN lot; omit for a ' +
-                'DRAFT lot (nothing has shipped yet).',
+            '[hub, ...waypoints, destination] for the return shipment — REQUIRED to cancel an OPEN lot. DRAFT lots ' +
+                'cannot be cancelled manually (they auto-revert once their signature lapses).',
         ),
 };
 
