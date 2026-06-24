@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/sodiqit/project-cpu-mcp/compare/v0.5.0...v0.5.1) (2026-06-24)
+
+
+### Features
+
+* add mint_cell and quote_mint tools for SeaDrop land minting ([#9](https://github.com/sodiqit/project-cpu-mcp/issues/9)) ([5bc2cc0](https://github.com/sodiqit/project-cpu-mcp/commit/5bc2cc0659c6fb0fe4522959ae2a501a05cc8778))
+
 ## [0.5.0](https://github.com/sodiqit/project-cpu-mcp/compare/v0.4.2...v0.5.0) (2026-06-24)
 
 
