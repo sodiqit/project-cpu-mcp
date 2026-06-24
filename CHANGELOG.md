@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0](https://github.com/sodiqit/project-cpu-mcp/compare/v0.4.2...v0.5.0) (2026-06-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* the npm package is published under a new name (project-cpu-mcp); the old `npx cpu-game-mcp` will no longer receive updates. The MCP server key and the session directory also change, so existing client configs and saved sessions must be re-created (re-run `authenticate`).
+
+### Features
+
+* rebrand CPU Game to Project CPU ([#7](https://github.com/sodiqit/project-cpu-mcp/issues/7)) ([0793251](https://github.com/sodiqit/project-cpu-mcp/commit/07932515b5e41aec925b42633a0b4f72cd9e70ae))
+
 ## [0.4.2](https://github.com/sodiqit/project-cpu-mcp/compare/v0.4.1...v0.4.2) (2026-06-24)
 
 
