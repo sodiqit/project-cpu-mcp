@@ -19,6 +19,7 @@ import { BalanceService } from './services/balance.service.js';
 import { BuildService } from './services/build.service.js';
 import { CraftService } from './services/craft.service.js';
 import { MiningService } from './services/mining.service.js';
+import { MintService } from './services/mint.service.js';
 import { RevealService } from './services/reveal.service.js';
 import { SwapService } from './services/swap.service.js';
 import { TradeService } from './services/trade.service.js';
@@ -65,6 +66,7 @@ async function main(): Promise<void> {
     const transport = new TransportService({ api, wallet, appConfig, allowance, logger: logger.child('transport') });
     const trade = new TradeService({ api, wallet, appConfig, allowance, logger: logger.child('trade') });
     const swap = new SwapService({ wallet, appConfig, allowance, logger: logger.child('swap') });
+    const mint = new MintService({ wallet, appConfig, logger: logger.child('mint') });
     const balance = new BalanceService({ wallet, appConfig, logger: logger.child('balance') });
     const withdraw = new WithdrawService({ api, wallet, appConfig, allowance, logger: logger.child('withdraw') });
 
@@ -93,6 +95,7 @@ async function main(): Promise<void> {
         transport,
         trade,
         swap,
+        mint,
         balance,
         withdraw,
         mapSync,

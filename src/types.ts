@@ -9,6 +9,7 @@ import type { BalanceService } from './services/balance.service.js';
 import type { BuildService } from './services/build.service.js';
 import type { CraftService } from './services/craft.service.js';
 import type { MiningService } from './services/mining.service.js';
+import type { MintService } from './services/mint.service.js';
 import type { RevealService } from './services/reveal.service.js';
 import type { SwapService } from './services/swap.service.js';
 import type { TradeService } from './services/trade.service.js';
@@ -36,6 +37,7 @@ export interface AppContext {
     transport: TransportService;
     trade: TradeService;
     swap: SwapService;
+    mint: MintService;
     balance: BalanceService;
     withdraw: WithdrawService;
     mapSync: MapSync;

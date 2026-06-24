@@ -15,6 +15,8 @@ import { registerGetChangesTool } from './tools/map/get-changes/get-changes.js';
 import { registerGetMapTool } from './tools/map/get-map/get-map.js';
 import { registerClaimMiningTool } from './tools/mining/claim/claim-mining.js';
 import { registerGetMiningStatusTool } from './tools/mining/get-status/get-mining-status.js';
+import { registerMintCellTool } from './tools/mint/mint-cell.js';
+import { registerQuoteMintTool } from './tools/mint/quote/quote-mint.js';
 import { registerRevealTool } from './tools/reveal/reveal.js';
 import { registerQuoteSwapTool } from './tools/swap/quote/quote-swap.js';
 import { registerSwapTool } from './tools/swap/swap.js';
@@ -57,9 +59,10 @@ const SERVER_INSTRUCTIONS = [
     'Cash out a cell’s wCPU to the on-chain $CPU token (1:1) with `withdraw` — one in flight at a time; re-run',
     'with the same args to finish an interrupted one, and withdraw before selling a cell since wCPU travels',
     'with it.',
-    'Buy and sell land cells off-server on OpenSea — there is no in-server tool for this: on the primary market',
-    'mint new cells from the collection’s SeaDrop public drop, and on the secondary market buy or sell existing',
-    'cells via listings. Open the collection by its `land` contract address from `get_game_config`',
+    'Acquire land cells on the primary market with `mint_cell` — it mints new cells straight from the',
+    'collection’s OpenSea SeaDrop public drop, paid in native ETH (preview the ETH cost first with `quote_mint`).',
+    'For the secondary market — buying or selling existing cells — use OpenSea listings off-server: open the',
+    'collection by its `land` contract address from `get_game_config`',
     '(https://opensea.io/assets/<chain>/<land>; testnet chains live on testnets.opensea.io). For $CPU itself',
     'there is no external venue — buy and sell it in-game with `swap` (below).',
     'Trade at Hubs: survey the marketplace with `get_markets` then `list_lots`, inspect one with `get_lot`,',
@@ -105,6 +108,8 @@ export async function createServer(context: AppContext): Promise<void> {
     registerCancelLotTool(server, context);
     registerQuoteSwapTool(server, context);
     registerSwapTool(server, context);
+    registerQuoteMintTool(server, context);
+    registerMintCellTool(server, context);
     registerGetBalanceTool(server, context);
     registerWithdrawTool(server, context);
 

@@ -490,6 +490,73 @@ export interface SwapResult {
     blockNumber: string;
 }
 
+// ---- Mint (OpenSea SeaDrop land public drop) ----
+
+export interface MintServiceOptions {
+    wallet: WalletProvider;
+    appConfig: IAppConfig;
+    logger: ILogger;
+}
+
+export interface MintInput {
+    /** Number of land cells to mint, as a positive integer string. */
+    quantity: string;
+}
+
+/** The active SeaDrop public-drop terms for the land collection, read on-chain. */
+export interface PublicDropView {
+    /** ETH price per cell, in wei. */
+    mintPrice: bigint;
+    startTime: number;
+    endTime: number;
+    maxTotalMintableByWallet: number;
+    /** OpenSea fee, in basis points of the (inclusive) mint price. */
+    feeBps: number;
+    restrictFeeRecipients: boolean;
+}
+
+export interface PreparedMint {
+    config: AppConfig;
+    wallet: WalletManager;
+    land: Address;
+    drop: PublicDropView;
+    quantity: number;
+    /** quantity × mintPrice, in wei — the exact ETH the mint must pay. */
+    totalWei: bigint;
+}
+
+export interface MintQuote {
+    land: Address;
+    quantity: number;
+    /** Per-cell price, human-readable ETH and wei. */
+    mintPrice: string;
+    mintPriceWei: string;
+    /** quantity × mintPrice, human-readable ETH and wei. */
+    total: string;
+    totalWei: string;
+    feeBps: number;
+    startTime: number;
+    endTime: number;
+    maxTotalMintableByWallet: number;
+}
+
+/** A confirmed mint — the on-chain SeaDrop public-drop purchase of `quantity` cells, paid in ETH. */
+export interface MintResult {
+    land: Address;
+    quantity: number;
+    total: string;
+    totalWei: string;
+    txHash: Hash;
+    status: TxStatus;
+    blockNumber: string;
+}
+
+/** Mints land cells via the SeaDrop public drop — implemented by MintService. */
+export interface IMintService {
+    quote(input: MintInput): Promise<MintQuote>;
+    mint(input: MintInput): Promise<MintResult>;
+}
+
 // ---- Account balance ----
 
 export interface BalanceServiceOptions {
