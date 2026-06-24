@@ -10,7 +10,7 @@ export interface BuildSiweMessageInput {
     expirationTime: string;
 }
 
-const SIWE_STATEMENT = 'Sign in to CPU Game.';
+const SIWE_STATEMENT = 'Sign in to Project CPU.';
 
 /**
  * Builds an EIP-4361 SIWE message from the server-issued nonce. `domain`/`uri` are derived

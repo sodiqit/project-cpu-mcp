@@ -1,8 +1,8 @@
-# CPU Game MCP Server
+# Project CPU MCP Server
 
 MCP server for a blockchain game on EVM (Abstract). Distributed via npm, runs locally via `npx`.
 
-Two wallet modes via `WALLET_MODE` (defaults to `evm`): `evm` (private key in env, SIWE auth — requires `PRIVATE_KEY`) or `agw` (Device Authorization flow). Session state persists to `~/.cpu-game/session.json`.
+Two wallet modes via `WALLET_MODE` (defaults to `evm`): `evm` (private key in env, SIWE auth — requires `PRIVATE_KEY`) or `agw` (Device Authorization flow). Session state persists to `~/.project-cpu/session.json`.
 
 The target chain is chosen by `NETWORK` (optional, default `ethereum`; one of `ethereum | ethereum_sepolia | base | base_sepolia`) — its chainId is routed locally (`src/config/network.utils.ts`) and contract addresses are loaded from the game API `GET /api/v1/config?network=`. Set `RPC_URL` when sending transactions (e.g. `reveal`); it falls back to the chain's public RPC otherwise.
 
@@ -114,7 +114,7 @@ The logger redacts sensitive fields automatically (`privateKey`, `jwt`, `mnemoni
 
 Use `.integration.test.ts` when a test touches real filesystem or network; plain `.test.ts` for pure logic.
 
-Integration tests isolate state with `fs.mkdtempSync(path.join(os.tmpdir(), 'cpu-game-mcp-test-'))` and clean up in `afterEach`. Never touch `os.homedir()`.
+Integration tests isolate state with `fs.mkdtempSync(path.join(os.tmpdir(), 'project-cpu-mcp-test-'))` and clean up in `afterEach`. Never touch `os.homedir()`.
 
 Reference: `src/session/__tests__/`.
 
@@ -149,7 +149,7 @@ Pre-1.0: `release-please-config.json` sets `bump-minor-pre-major` + `bump-patch-
 
 To force a release the commits wouldn't trigger on their own (e.g. a docs-only change), add a `Release-As: x.y.z` footer to a commit on `main` (land it via a small PR) — release-please then opens a Release PR for that exact version. Never create the tag by hand: a stray tag desyncs release-please's manifest/release bookkeeping.
 
-Publishing runs in `.github/workflows/release.yml`: on push to `main`, release-please opens/updates the Release PR; when the Release PR merges, the **same run** tags the release and a gated `publish` job re-runs lint/typecheck/build/unit tests and runs `npm publish --provenance` (OIDC trusted publishing). The npm trusted publisher is bound to this workflow's filename (`release.yml`) — renaming the file requires updating it on npmjs.com. End users get it via `npx cpu-game-mcp@latest`.
+Publishing runs in `.github/workflows/release.yml`: on push to `main`, release-please opens/updates the Release PR; when the Release PR merges, the **same run** tags the release and a gated `publish` job re-runs lint/typecheck/build/unit tests and runs `npm publish --provenance` (OIDC trusted publishing). The npm trusted publisher is bound to this workflow's filename (`release.yml`) — renaming the file requires updating it on npmjs.com. End users get it via `npx project-cpu-mcp@latest`.
 
 ## Git
 

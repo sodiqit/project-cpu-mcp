@@ -29,7 +29,7 @@ describe('SessionStorage', () => {
     let storage: SessionStorage;
 
     beforeEach(() => {
-        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cpu-game-mcp-test-'));
+        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'project-cpu-mcp-test-'));
         storage = new SessionStorage(tempDir, new NoopLogger());
     });
 

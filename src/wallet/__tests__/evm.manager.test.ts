@@ -23,7 +23,7 @@ describe('EvmWalletManager', () => {
 
     it('signMessage produces a signature recoverable to the wallet address', async () => {
         const manager = createManager();
-        const message = 'hello cpu game';
+        const message = 'hello project cpu';
 
         const signature = await manager.signMessage(message);
 
