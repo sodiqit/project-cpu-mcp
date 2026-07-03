@@ -24,6 +24,8 @@ export const CPU_TOKEN = '0x2222222222222222222222222222222222222222';
 export const LAND = '0x3333333333333333333333333333333333333333';
 export const CPU_HOOK = '0x4444444444444444444444444444444444444444';
 export const CELL = '0x5555555555555555555555555555555555555555';
+export const CELL_LENS = '0x6666666666666666666666666666666666666666';
+export const TRANSPORT = '0x7777777777777777777777777777777777777777';
 export const WALLET_ADDRESS = '0x000000000000000000000000000000000000dEaD' as Address;
 export const APPROVE_HASH = `0x${'c'.repeat(64)}` as Hash;
 export const R = `0x${'a'.repeat(64)}` as Hex;
@@ -33,7 +35,15 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
     return {
         network: Network.ETHEREUM,
         chainId: 1,
-        contracts: { land: LAND, cpuToken, gameSettlement: GAME_SETTLEMENT, cpuHook: CPU_HOOK, cell: CELL },
+        contracts: {
+            land: LAND,
+            cpuToken,
+            gameSettlement: GAME_SETTLEMENT,
+            cpuHook: CPU_HOOK,
+            cell: CELL,
+            cellLens: CELL_LENS,
+            transport: TRANSPORT,
+        },
         resources: { 3: 'Silica' },
         recipes: [],
         buildings: [],
@@ -118,7 +128,7 @@ export class FakeWallet implements WalletManager, WalletProvider {
     async waitForReceipt(hash: Hash): Promise<TxReceipt> {
         const status = this.receipts[this.receiptIndex] ?? TxStatus.Success;
         this.receiptIndex += 1;
-        return { status, transactionHash: hash, blockNumber: 100n };
+        return { status, transactionHash: hash, blockNumber: 100n, logs: [] };
     }
     async readContract(params: ReadContractParams): Promise<unknown> {
         this.reads.push(params);

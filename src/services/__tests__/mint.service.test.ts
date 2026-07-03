@@ -60,7 +60,7 @@ class MintWallet implements WalletManager, WalletProvider {
     async waitForReceipt(hash: Hash): Promise<TxReceipt> {
         const status = this.receipts[this.receiptIndex] ?? TxStatus.Success;
         this.receiptIndex += 1;
-        return { status, transactionHash: hash, blockNumber: 100n };
+        return { status, transactionHash: hash, blockNumber: 100n, logs: [] };
     }
     async readContract(params: ReadContractParams): Promise<unknown> {
         this.reads.push(params);
@@ -84,7 +84,16 @@ function makeConfig(contracts: Partial<AppContracts> = {}): AppConfig {
     return {
         network: Network.BASE,
         chainId: BASE_CHAIN_ID,
-        contracts: { land: LAND, cpuToken: '', gameSettlement: zeroAddress, cpuHook: '', cell: '', ...contracts },
+        contracts: {
+            land: LAND,
+            cpuToken: '',
+            gameSettlement: zeroAddress,
+            cpuHook: '',
+            cell: '',
+            cellLens: '',
+            transport: '',
+            ...contracts,
+        },
         resources: {},
         recipes: [],
         buildings: [],

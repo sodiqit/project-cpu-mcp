@@ -64,7 +64,7 @@ class SwapWallet implements WalletManager, WalletProvider {
     async waitForReceipt(hash: Hash): Promise<TxReceipt> {
         const status = this.receipts[this.receiptIndex] ?? TxStatus.Success;
         this.receiptIndex += 1;
-        return { status, transactionHash: hash, blockNumber: 100n };
+        return { status, transactionHash: hash, blockNumber: 100n, logs: [] };
     }
     async readContract(params: ReadContractParams): Promise<unknown> {
         this.reads.push(params);
@@ -106,6 +106,8 @@ function makeConfig(contracts: Partial<AppContracts> = {}): AppConfig {
             gameSettlement: GAME_SETTLEMENT,
             cpuHook: CPU_HOOK,
             cell: '',
+            cellLens: '',
+            transport: '',
             ...contracts,
         },
         resources: {},

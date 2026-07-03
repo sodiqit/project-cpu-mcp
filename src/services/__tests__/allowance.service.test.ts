@@ -42,7 +42,7 @@ class FakeWallet implements WalletManager, WalletProvider {
         return `0x${'e'.repeat(64)}` as Hash;
     }
     async waitForReceipt(hash: Hash): Promise<TxReceipt> {
-        return { status: this.receipt, transactionHash: hash, blockNumber: 1n };
+        return { status: this.receipt, transactionHash: hash, blockNumber: 1n, logs: [] };
     }
     async readContract(params: { functionName: string; args: ReadonlyArray<unknown> }): Promise<unknown> {
         this.reads.push({ functionName: params.functionName, args: params.args });

@@ -1,10 +1,9 @@
 export const TRANSPORT_DESCRIPTION = [
-    'Move a resource between cells along a waypoint chain. Requires a session — call `authenticate` first.',
-    'A route over only your own cells is free and starts immediately; a route through a foreign Hub costs $CPU',
-    '— this tool then auto-approves the $CPU spend once (a one-time unbounded allowance) and submits the',
-    'on-chain payment, waiting for its confirmation. Preview the cost first with `quote_transport`. Returns the',
-    'transport jobId — track the shipment with `get_transport_status <jobId>`. If the on-chain payment fails,',
-    'the source resource stays escrowed and the action is resumable with `resume_transport <jobId>`. While that',
-    'paid shipment is still pending, starting another transport of the same resource from the same cell is',
-    'rejected — finish it with `resume_transport`, or wait for a lapsed one to be refunded automatically.',
+    'Move a resource between cells along a waypoint chain, on-chain. Requires a session — call `authenticate` first.',
+    'One atomic move: it debits the source cell, pays the $CPU transit fee for every foreign Hub on the route',
+    '(auto-approving the $CPU spend once, a one-time unbounded allowance), and escrows a time-delayed delivery;',
+    'you also pay gas. Preview the fee and ETA first with `quote_transport`. Returns the on-chain deliveryId and',
+    'arrival time. The delivery is not credited to the target until it arrives and is finalized — after arrivalAt,',
+    'call `finalize_delivery` (`list_my_transports` shows what is ready). A route over only your own cells pays no',
+    '$CPU fee (just gas).',
 ].join(' ');

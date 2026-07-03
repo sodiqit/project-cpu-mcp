@@ -31,6 +31,8 @@ function makeResponse(overrides: Partial<AppConfigResponse> = {}): AppConfigResp
             gameSettlement: GAME_SETTLEMENT,
             cpuHook: CPU_HOOK,
             cell: CELL,
+            cellLens: '0x6666666666666666666666666666666666666666',
+            transport: '0x7777777777777777777777777777777777777777',
             ...overrides.contracts,
         },
         resources: { 3: 'Silica' },
@@ -101,7 +103,17 @@ describe('AppConfigService', () => {
     it('throws when the GameSettlement address is not yet deployed (empty string)', async () => {
         const api = new FakeApi({
             status: 200,
-            data: makeResponse({ contracts: { land: '', cpuToken: '', gameSettlement: '', cpuHook: '', cell: '' } }),
+            data: makeResponse({
+                contracts: {
+                    land: '',
+                    cpuToken: '',
+                    gameSettlement: '',
+                    cpuHook: '',
+                    cell: '',
+                    cellLens: '',
+                    transport: '',
+                },
+            }),
         });
         await expect(makeService(api).load()).rejects.toThrow(/not configured/i);
     });

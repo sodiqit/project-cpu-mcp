@@ -72,6 +72,8 @@ export interface AppContractsConfig {
     gameSettlement: string;
     cpuHook: string;
     cell: string;
+    cellLens: string;
+    transport: string;
 }
 
 export enum CraftCategory {
@@ -219,77 +221,6 @@ export interface TransportCoord {
     y: number;
 }
 
-/** Lifecycle of a transport job. */
-export enum TransportStatus {
-    InTransit = 'in_transit',
-    Delivered = 'delivered',
-    AwaitingPayment = 'awaiting_payment',
-    Cancelled = 'cancelled',
-    Reverted = 'reverted',
-}
-
-/** `POST /api/v1/transport` (and `/transport/quote`) request body. */
-export interface TransportRequest {
-    /** Waypoint chain `[source, ...intermediate, target]` in axial hex coords. */
-    path: Array<TransportCoord>;
-    resourceId: number;
-    amount: string;
-    network: string;
-}
-
-/** Free branch of `POST /api/v1/transport` — an off-chain job that started immediately. */
-export interface TransportJobResponse {
-    id: number;
-    status: TransportStatus;
-    sourceTokenId: string;
-    targetTokenId: string;
-    resourceId: number;
-    amount: string;
-    totalDistance: number;
-    totalTimeSec: number;
-    /** Departure / expected-arrival times, unix seconds. */
-    startedAt: number;
-    arrivalAt: number;
-}
-
-/** Paid branch — the EIP-712 signature to submit to `GameSettlement.transport`. */
-export interface PaidTransportSignatureResponse {
-    jobId: number;
-    signId: number;
-    status: TransportStatus;
-    sender: string;
-    sourceTokenId: string;
-    targetTokenId: string;
-    resourceId: number;
-    amount: string;
-    /** On-chain amounts in wei. */
-    totalAmount: string;
-    burnAmount: string;
-    recipients: Array<string>;
-    payouts: Array<string>;
-    deadline: string;
-    v: number;
-    r: string;
-    s: string;
-}
-
-/** Lazily-computed in-flight position of a shipment. */
-export interface TransportProgressView {
-    elapsedSec: number;
-    traveledDistance: number;
-    totalDistance: number;
-    totalTimeSec: number;
-    arrived: boolean;
-    segmentIndex: number;
-    reachedWaypoints: number;
-    position: TransportCoord;
-}
-
-/** `GET /api/v1/transport/:id` and each entry of `GET /api/v1/transport/mine`. */
-export interface TransportStatusResponse extends TransportJobResponse {
-    progress: TransportProgressView;
-}
-
 /** Transit-fee preview — human-readable CPU (`*`) plus the on-chain wei (`*Wei`) the paid branch submits. */
 export interface TransportQuoteFee {
     total: string;
@@ -301,12 +232,29 @@ export interface TransportQuoteFee {
     payoutsWei: Array<string>;
 }
 
-/** `POST /api/v1/transport/quote` — non-destructive price/route preview (no escrow). */
-export interface TransportQuoteResponse {
-    paid: boolean;
-    totalDistance: number;
-    totalTimeSec: number;
-    fee: TransportQuoteFee;
+export enum DeliveryTargetKind {
+    Cell = 'cell',
+    Lot = 'lot',
+}
+
+export interface DeliveryResponse {
+    deliveryId: string;
+    payer: string | null;
+    receiver: string;
+    sourceTokenId: string | null;
+    targetTokenId: string;
+    targetKind: DeliveryTargetKind;
+    resourceId: number;
+    amount: string;
+    arrivalAt: number | null;
+    delivered: boolean;
+    updated: number;
+}
+
+export interface DeliveriesResponse {
+    serverTime: number;
+    version: number;
+    deliveries: Array<DeliveryResponse>;
 }
 
 /** A paid process stays `pending` until its on-chain payment settles. */

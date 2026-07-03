@@ -1,4 +1,4 @@
-import type { Abi, Address, Hash, Hex } from 'viem';
+import type { Abi, Address, Hash, Hex, Log } from 'viem';
 
 import type { EnvConfig } from '../config/types.js';
 import type { ILogger } from '../logger/types.js';
@@ -21,6 +21,7 @@ export interface TxReceipt {
     status: TxStatus;
     transactionHash: Hash;
     blockNumber: bigint;
+    logs: Array<Log>;
 }
 
 export interface ReadContractParams {
@@ -50,6 +51,7 @@ export interface ConfirmedTx {
     txHash: Hash;
     status: TxStatus;
     blockNumber: string;
+    logs: Array<Log>;
 }
 
 export interface IContractClient {

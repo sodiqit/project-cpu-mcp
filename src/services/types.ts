@@ -12,7 +12,6 @@ import type {
     RecipeView,
     RevealCostView,
     TransportCoord,
-    TransportStatus,
 } from '../api/types.js';
 import type { Network } from '../config/types.js';
 import type { ILogger } from '../logger/types.js';
@@ -42,6 +41,8 @@ export interface AppContracts {
     /** Uniswap v4 hook for the ETH/$CPU pool; empty until configured. Validate before a swap. */
     cpuHook: string;
     cell: string;
+    cellLens: string;
+    transport: string;
 }
 
 /** Chain + contract addresses for the configured network, loaded from the game API. */
@@ -183,11 +184,53 @@ export interface MiningServiceOptions {
     logger: ILogger;
 }
 
+export interface TransportClientOptions {
+    contracts: IContractClient;
+    logger: ILogger;
+}
+
+export interface QuoteRouteParams {
+    transport: Address;
+    from: Address;
+    xs: Array<bigint>;
+    ys: Array<bigint>;
+    res: number;
+    amount: bigint;
+}
+
+export interface RouteQuote {
+    totalFee: bigint;
+    totalDistance: bigint;
+    arrivalAt: bigint;
+}
+
+export interface MoveParams {
+    transport: Address;
+    xs: Array<bigint>;
+    ys: Array<bigint>;
+    res: number;
+    amount: bigint;
+    maxFee: bigint;
+}
+
+export interface FinalizeParams {
+    transport: Address;
+    ids: Array<bigint>;
+}
+
+export interface ITransportClient {
+    quoteRoute(params: QuoteRouteParams): Promise<RouteQuote>;
+    move(params: MoveParams): Promise<Hash>;
+    finalize(params: FinalizeParams): Promise<Hash>;
+}
+
 export interface TransportServiceOptions {
     api: ApiClient;
     wallet: WalletProvider;
     appConfig: IAppConfig;
     allowance: IAllowanceService;
+    contracts: IContractClient;
+    transportClient: ITransportClient;
     logger: ILogger;
 }
 
@@ -197,65 +240,52 @@ export interface TransportInput {
     amount: string;
 }
 
-export enum TransportResultKind {
-    Free = 'free',
-    Paid = 'paid',
-}
-
-/** A free transport that started immediately — nothing was spent on-chain. */
-export interface FreeTransportResult {
-    kind: TransportResultKind.Free;
-    jobId: number;
-    status: TransportStatus;
-    sourceTokenId: string;
-    targetTokenId: string;
-    resourceId: number;
-    amount: string;
+export interface TransportQuote {
+    feeWei: string;
     totalDistance: number;
-    totalTimeSec: number;
-    startedAt: number;
     arrivalAt: number;
 }
 
-/** A paid transport whose on-chain payment was submitted and confirmed. */
-export interface PaidTransportResult {
-    kind: TransportResultKind.Paid;
-    jobId: number;
-    signId: number;
+export interface TransportResult {
+    deliveryId: string;
     sourceTokenId: string;
     targetTokenId: string;
     resourceId: number;
     amount: string;
-    /** On-chain amounts in wei. */
-    totalAmount: string;
-    burnAmount: string;
-    recipients: Array<string>;
-    payouts: Array<string>;
+    feeWei: string;
+    arrivalAt: number;
     txHash: Hash;
-    /** Present only when a $CPU approve was needed before the payment. */
     approveTxHash: Hash | null;
     status: TxStatus;
     blockNumber: string;
 }
 
-export type TransportResult = FreeTransportResult | PaidTransportResult;
+export enum DeliveryFilter {
+    All = 'all',
+    InTransit = 'in_transit',
+    Delivered = 'delivered',
+    ReadyToFinalize = 'ready_to_finalize',
+}
 
-/** A resumable paid action awaiting on-chain payment — the input to `resume_transport`. */
-export interface PendingTransportView {
-    jobId: number;
-    signId: number;
-    sourceTokenId: string;
+export interface DeliveryView {
+    deliveryId: string;
+    payer: string | null;
+    sourceTokenId: string | null;
     targetTokenId: string;
     resourceId: number;
     amount: string;
-    /** On-chain total in wei. */
-    totalAmount: string;
-    deadline: string;
-    /** True while the signature deadline is still in the future. */
-    resumable: boolean;
+    arrivalAt: number | null;
+    delivered: boolean;
+    readyToFinalize: boolean;
 }
 
-/** Resolved on-chain settlement inputs for a paid action, after the deterministic pre-flight checks. */
+export interface FinalizeResult {
+    deliveryIds: Array<string>;
+    txHash: Hash;
+    status: TxStatus;
+    blockNumber: string;
+}
+
 export interface Payable {
     gameSettlement: Address;
     cpuToken: Address;
