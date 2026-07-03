@@ -1,12 +1,12 @@
 import type { LotView, MarketResourceSummary, TradeQuoteResponse } from '../../api/types.js';
 import { type LotResult, LotResultKind } from '../../services/types.js';
-import { cpuFromWei, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
+import { cpuFromWei, formatUnixSeconds, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
 
 /** Human header for a completed create / buy / cancel (free or paid). */
 export function summarizeLotResult(result: LotResult): string {
     if (result.kind === LotResultKind.Free) {
         return (
-            `Free ${result.action} on lot ${result.lotId}: now ${result.state} (ETA unix ${result.arrivalAt}). ` +
+            `Free ${result.action} on lot ${result.lotId}: now ${result.state} (ETA ${formatUnixSeconds(result.arrivalAt)}). ` +
             `Track with get_lot ${result.lotId} / list_my_lots.`
         );
     }

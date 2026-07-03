@@ -1,7 +1,7 @@
 import type { ClaimCraftResponse, CraftProcessStatusResponse, CraftStackView, RecipeView } from '../../api/types.js';
 import { CraftProcessStatus } from '../../api/types.js';
 import type { FreeCraftResult, PaidCraftResult } from '../../services/types.js';
-import { cpuFromWei, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
+import { cpuFromWei, formatUnixSeconds, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
 
 function formatStacks(stacks: Array<CraftStackView>, resources: ResourceNames): string {
     if (stacks.length === 0) {
@@ -40,7 +40,7 @@ export function summarizeRecipes(recipes: Array<RecipeView>, resources: Resource
 export function summarizeFreeCraft(r: FreeCraftResult, resources: ResourceNames): string {
     return (
         `Free craft started on cell ${r.tokenId}: ${r.batches}× ${r.recipeId}, consumes ` +
-        `${formatStacks(r.debitedInputs, resources)}, ready by unix ${r.endsAt}. Bank it with claim_craft ${r.tokenId}.`
+        `${formatStacks(r.debitedInputs, resources)}, ready by ${formatUnixSeconds(r.endsAt)}. Bank it with claim_craft ${r.tokenId}.`
     );
 }
 
@@ -69,8 +69,10 @@ export function summarizeCraftStatus(processes: Array<CraftProcessStatusResponse
             const when = p.isFinished
                 ? 'finished'
                 : p.nextBatchAt !== null
-                  ? `next batch unix ${p.nextBatchAt}`
-                  : `done unix ${p.endsAt}`;
+                  ? `next batch ${formatUnixSeconds(p.nextBatchAt)}`
+                  : p.endsAt !== null
+                    ? `done ${formatUnixSeconds(p.endsAt)}`
+                    : 'in progress';
             return `${p.recipeId}: ${p.completedBatches}/${p.batches} batches done${claimable}, ${when}`;
         })
         .join('\n');

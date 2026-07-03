@@ -13,6 +13,7 @@ import {
 import { GAME_SETTLEMENT_ABI } from '../contracts/game-settlement.abi.js';
 import type { ILogger } from '../logger/types.js';
 import { errorMessage } from '../utils/error.utils.js';
+import { formatUnixSeconds } from '../utils/format.utils.js';
 import type { WalletManager, WalletProvider } from '../wallet/types.js';
 
 export class WithdrawService {
@@ -82,13 +83,14 @@ export class WithdrawService {
         if (pending.tokenId !== input.tokenId || BigInt(pending.amount) !== amountWei) {
             throw new Error(
                 `A different withdraw is already pending: cell ${pending.tokenId} for ${formatEther(BigInt(pending.amount))} wCPU. ` +
-                    `Finish it by re-running withdraw with those args, or wait for it to lapse (deadline ${pending.deadline} unix seconds).`,
+                    `Finish it by re-running withdraw with those args, or wait for it to lapse ` +
+                    `(deadline ${formatUnixSeconds(Number(pending.deadline))}).`,
             );
         }
 
         if (BigInt(pending.deadline) * 1000n <= BigInt(Date.now())) {
             throw new Error(
-                `The pending withdraw for cell ${pending.tokenId} expired at ${pending.deadline} (unix seconds); ` +
+                `The pending withdraw for cell ${pending.tokenId} expired at ${formatUnixSeconds(Number(pending.deadline))}; ` +
                     `its wCPU is auto-refunded to the cell. Re-run withdraw to start a fresh one.`,
             );
         }
@@ -138,7 +140,7 @@ export class WithdrawService {
             throw new Error(
                 `Withdraw signed (signId ${sig.signId}, ${formatEther(BigInt(sig.amount))} wCPU debited from cell ` +
                     `${sig.tokenId}) but the on-chain mint did not complete: ${errorMessage(error)}. The signature is ` +
-                    `valid until ${sig.deadline} (unix seconds) — re-run withdraw with the same tokenId and amount to ` +
+                    `valid until ${formatUnixSeconds(Number(sig.deadline))} — re-run withdraw with the same tokenId and amount to ` +
                     `finish it; your wCPU is held until then.`,
             );
         }

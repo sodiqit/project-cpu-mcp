@@ -14,6 +14,7 @@ import {
 import { SEADROP_ABI } from '../contracts/seadrop.abi.js';
 import type { ILogger } from '../logger/types.js';
 import { errorMessage } from '../utils/error.utils.js';
+import { formatUnixSeconds } from '../utils/format.utils.js';
 import { TxStatus, type WalletManager, type WalletProvider } from '../wallet/types.js';
 
 export class MintService implements IMintService {
@@ -94,10 +95,12 @@ export class MintService implements IMintService {
 
         const now = Math.floor(Date.now() / 1000);
         if (now < drop.startTime) {
-            throw new Error(`The land public drop has not started yet (opens at ${drop.startTime}, unix seconds).`);
+            throw new Error(
+                `The land public drop has not started yet (opens at ${formatUnixSeconds(drop.startTime)}).`,
+            );
         }
         if (drop.endTime !== 0 && now > drop.endTime) {
-            throw new Error(`The land public drop has ended (closed at ${drop.endTime}, unix seconds).`);
+            throw new Error(`The land public drop has ended (closed at ${formatUnixSeconds(drop.endTime)}).`);
         }
         if (drop.mintPrice === 0n && drop.startTime === 0 && drop.endTime === 0) {
             throw new Error('No active land public drop found for the configured land contract.');
