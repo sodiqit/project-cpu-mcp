@@ -18,3 +18,7 @@ export function resourceLabel(resources: ResourceNames, id: number): string {
 export function cpuFromWei(wei: string): string {
     return formatEther(BigInt(wei));
 }
+
+export function formatUnixSeconds(seconds: number): string {
+    return `${new Date(seconds * 1000).toISOString().slice(0, 19).replace('T', ' ')} UTC`;
+}

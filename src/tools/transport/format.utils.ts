@@ -1,9 +1,9 @@
 import type { DeliveryView, TransportQuote, TransportResult } from '../../services/types.js';
-import { cpuFromWei, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
+import { cpuFromWei, formatUnixSeconds, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
 
 export function summarizeQuote(quote: TransportQuote): string {
     const fee = quote.feeWei === '0' ? 'free (own cells only)' : `${cpuFromWei(quote.feeWei)} $CPU fee`;
-    return `Route — ${fee}, ${quote.totalDistance} hops, arrival unix ${quote.arrivalAt}. Commit it with transport.`;
+    return `Route — ${fee}, ${quote.totalDistance} hops, arrival ${formatUnixSeconds(quote.arrivalAt)}. Commit it with transport.`;
 }
 
 export function summarizeTransport(r: TransportResult, resources: ResourceNames): string {
@@ -12,13 +12,13 @@ export function summarizeTransport(r: TransportResult, resources: ResourceNames)
     return (
         `Transport delivery ${r.deliveryId}: ${r.amount} ${resourceLabel(resources, r.resourceId)} from cell ` +
         `${r.sourceTokenId} → ${r.targetTokenId}, ${fee}. ${approve}move tx ${r.txHash} confirmed in block ` +
-        `${r.blockNumber}. Arrives unix ${r.arrivalAt} — after that, finalize_delivery ${r.deliveryId}.`
+        `${r.blockNumber}. Arrives ${formatUnixSeconds(r.arrivalAt)} — after that, finalize_delivery ${r.deliveryId}.`
     );
 }
 
 export function summarizeDelivery(d: DeliveryView, resources: ResourceNames): string {
     const state = d.delivered ? 'delivered' : d.readyToFinalize ? 'ready to finalize' : 'in transit';
-    const eta = d.arrivalAt !== null ? ` · arrival unix ${d.arrivalAt}` : '';
+    const eta = d.arrivalAt !== null ? ` · arrival ${formatUnixSeconds(d.arrivalAt)}` : '';
     return (
         `Delivery ${d.deliveryId}: ${state} · ${d.amount} ${resourceLabel(resources, d.resourceId)} ` +
         `${d.sourceTokenId ?? '—'}→${d.targetTokenId}${eta}`
