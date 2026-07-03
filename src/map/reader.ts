@@ -69,6 +69,14 @@ export class MapReader {
         return { cell: enriched, neighbors, distanceFromMine: this.nearestOwnedDistance(cell, ownerAddress) };
     }
 
+    readRevealCell(tokenId: string): CellState | null {
+        return this.store.get(tokenId);
+    }
+
+    refresh(): Promise<void> {
+        return this.status.resyncNow();
+    }
+
     getChanges(sinceVersion: number, ownerAddress: string | null): MapChanges {
         const changed = this.store.changedSince(sinceVersion).map((cell) => this.enrich(cell, ownerAddress));
         return {

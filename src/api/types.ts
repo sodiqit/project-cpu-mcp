@@ -71,6 +71,7 @@ export interface AppContractsConfig {
     cpuToken: string;
     gameSettlement: string;
     cpuHook: string;
+    cell: string;
 }
 
 export enum CraftCategory {
@@ -131,23 +132,6 @@ export interface AppConfigResponse {
     buildings: Array<BuildingView>;
     /** First-reveal-free + re-reveal cost params. */
     reveal: RevealCostView;
-}
-
-/** `POST /api/v1/reveal` request body. */
-export interface RevealRequest {
-    tokenId: string;
-    network: string;
-}
-
-/** The signed reveal intent — the EIP-712 signature to submit to `GameSettlement.reveal`. */
-export interface RevealSignatureResponse {
-    signId: number;
-    tokenId: string;
-    cpuAmount: string;
-    deadline: string;
-    v: number;
-    r: string;
-    s: string;
 }
 
 /** The kind of building a cell can hold. */

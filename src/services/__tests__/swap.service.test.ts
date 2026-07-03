@@ -105,6 +105,7 @@ function makeConfig(contracts: Partial<AppContracts> = {}): AppConfig {
             cpuToken: CPU_TOKEN,
             gameSettlement: GAME_SETTLEMENT,
             cpuHook: CPU_HOOK,
+            cell: '',
             ...contracts,
         },
         resources: {},

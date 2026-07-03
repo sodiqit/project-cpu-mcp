@@ -4,6 +4,7 @@ import type { EnvConfig } from '../config/types.js';
 import type { ILogger } from '../logger/types.js';
 import type { SessionManager } from '../session/manager.js';
 import type { AgwSessionConfig } from '../session/types.js';
+import type { RetryOptions } from '../utils/retry.utils.js';
 
 export interface TransactionRequest {
     to: Address;
@@ -43,6 +44,24 @@ export interface WalletManager {
 export interface WalletProvider {
     get(): WalletManager;
     isReady(): boolean;
+}
+
+export interface ConfirmedTx {
+    txHash: Hash;
+    status: TxStatus;
+    blockNumber: string;
+}
+
+export interface IContractClient {
+    read<T>(params: ReadContractParams): Promise<T>;
+    send(tx: TransactionRequest): Promise<Hash>;
+    confirm(hash: Hash, revertLabel: string): Promise<ConfirmedTx>;
+}
+
+export interface ContractClientOptions {
+    wallet: WalletProvider;
+    logger: ILogger;
+    retry: Partial<RetryOptions> | null;
 }
 
 export interface EvmWalletManagerOptions {

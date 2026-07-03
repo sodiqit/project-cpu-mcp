@@ -8,6 +8,7 @@ import { AppConfigService } from '../app-config.service.js';
 
 const GAME_SETTLEMENT = '0x1111111111111111111111111111111111111111';
 const CPU_HOOK = '0x4444444444444444444444444444444444444444';
+const CELL = '0x5555555555555555555555555555555555555555';
 
 class FakeApi {
     public readonly paths: Array<string> = [];
@@ -29,6 +30,7 @@ function makeResponse(overrides: Partial<AppConfigResponse> = {}): AppConfigResp
             cpuToken: '0x2222222222222222222222222222222222222222',
             gameSettlement: GAME_SETTLEMENT,
             cpuHook: CPU_HOOK,
+            cell: CELL,
             ...overrides.contracts,
         },
         resources: { 3: 'Silica' },
@@ -99,7 +101,7 @@ describe('AppConfigService', () => {
     it('throws when the GameSettlement address is not yet deployed (empty string)', async () => {
         const api = new FakeApi({
             status: 200,
-            data: makeResponse({ contracts: { land: '', cpuToken: '', gameSettlement: '', cpuHook: '' } }),
+            data: makeResponse({ contracts: { land: '', cpuToken: '', gameSettlement: '', cpuHook: '', cell: '' } }),
         });
         await expect(makeService(api).load()).rejects.toThrow(/not configured/i);
     });

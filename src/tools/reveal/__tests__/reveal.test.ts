@@ -38,32 +38,48 @@ function harness(outcome: RevealResult | Error): Handler {
     return captured;
 }
 
-const freeResult: RevealResult = {
+const fulfilledGenesis: RevealResult = {
     tokenId: '42',
-    signId: 5,
+    x: 1,
+    y: -2,
+    genesis: true,
     txHash: '0xreveal',
-    approveTxHash: null,
     status: TxStatus.Success,
-    cpuAmount: '0',
     blockNumber: '100',
+    feeWei: '1000',
+    reRevealCostWei: '0',
+    approveTxHash: null,
+    fulfilled: true,
 };
 
 describe('reveal tool', () => {
-    it('reports the reveal tx for a free reveal', async () => {
-        const result = await harness(freeResult)({ tokenId: '42' });
+    it('reports a fulfilled genesis reveal without an approve line', async () => {
+        const result = await harness(fulfilledGenesis)({ tokenId: '42' });
         expect(result.content[0]?.text).toMatch(/0xreveal/);
+        expect(result.content[0]?.text).toMatch(/first reveal \(free\)/);
+        expect(result.content[0]?.text).toMatch(/revealed/i);
         expect(result.content[0]?.text).not.toMatch(/approve/i);
         const parsed = JSON.parse(result.content[1]?.text ?? '{}') as RevealResult;
         expect(parsed.txHash).toBe('0xreveal');
         expect(parsed.approveTxHash).toBeNull();
     });
 
-    it('reports both the approve and reveal tx for a paid re-reveal', async () => {
-        const result = await harness({ ...freeResult, approveTxHash: '0xapprove', cpuAmount: '1000' })({
-            tokenId: '42',
-        });
+    it('reports the approve tx and re-reveal cost for a paid re-reveal', async () => {
+        const result = await harness({
+            ...fulfilledGenesis,
+            genesis: false,
+            approveTxHash: '0xapprove',
+            reRevealCostWei: '1000',
+        })({ tokenId: '42' });
         expect(result.content[0]?.text).toMatch(/approve tx 0xapprove/);
-        expect(result.content[0]?.text).toMatch(/1000 \$CPU/);
+        expect(result.content[0]?.text).toMatch(/re-reveal/);
+        expect(result.content[0]?.text).toMatch(/1000 wei \$CPU/);
+    });
+
+    it('tells the agent to poll get_cell when the reveal is still pending', async () => {
+        const result = await harness({ ...fulfilledGenesis, fulfilled: false })({ tokenId: '42' });
+        expect(result.content[0]?.text).toMatch(/poll get_cell/);
+        expect(result.content[0]?.text).toMatch(/not ready yet/i);
     });
 
     it('propagates service errors', async () => {

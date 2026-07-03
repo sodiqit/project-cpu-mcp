@@ -1,0 +1,1 @@
+export const REVEAL_CALLBACK_GAS = 500_000;

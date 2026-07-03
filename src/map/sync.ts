@@ -70,6 +70,10 @@ export class MapSync implements MapStatus {
         return this.socket?.isConnected() ?? false;
     }
 
+    async resyncNow(): Promise<void> {
+        await this.resync();
+    }
+
     stop(): void {
         this.stopPolling();
         this.clearDegradeTimer();

@@ -17,6 +17,7 @@ import { AppConfigService } from './services/app-config.service.js';
 import { AuthService } from './services/auth.service.js';
 import { BalanceService } from './services/balance.service.js';
 import { BuildService } from './services/build.service.js';
+import { CellClient } from './services/cell.client.js';
 import { CraftService } from './services/craft.service.js';
 import { MiningService } from './services/mining.service.js';
 import { MintService } from './services/mint.service.js';
@@ -29,6 +30,7 @@ import { SessionManager } from './session/manager.js';
 import { SessionStorage } from './session/storage.js';
 import type { AppContext } from './types.js';
 import { errorMessage } from './utils/error.utils.js';
+import { ContractClient } from './wallet/contract-client.js';
 import { createWalletProvider } from './wallet/index.js';
 
 async function main(): Promise<void> {
@@ -59,7 +61,8 @@ async function main(): Promise<void> {
 
     const appConfig = new AppConfigService({ api, network: config.NETWORK, logger: logger.child('config') });
     const allowance = new AllowanceService({ wallet, logger: logger.child('allowance') });
-    const reveal = new RevealService({ api, wallet, appConfig, allowance, logger: logger.child('reveal') });
+    const contracts = new ContractClient({ wallet, logger: logger.child('contract'), retry: null });
+    const cellClient = new CellClient({ contracts, logger: logger.child('cell') });
     const build = new BuildService({ api, wallet, appConfig, allowance, logger: logger.child('build') });
     const craft = new CraftService({ api, wallet, appConfig, allowance, logger: logger.child('craft') });
     const mining = new MiningService({ api, logger: logger.child('mining') });
@@ -80,6 +83,16 @@ async function main(): Promise<void> {
         reconnectGraceMs: DEFAULT_RECONNECT_GRACE_MS,
     });
     const mapReader = new MapReader({ store, status: mapSync });
+
+    const reveal = new RevealService({
+        wallet,
+        appConfig,
+        allowance,
+        cellClient,
+        contracts,
+        mapReader,
+        logger: logger.child('reveal'),
+    });
 
     const context: AppContext = {
         config,

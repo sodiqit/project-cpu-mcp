@@ -6,7 +6,7 @@ import { type CellState, MapReadiness, MapScope, type MapStatus } from '../types
 import { makeCell, makeSnapshot } from './fixtures.js';
 
 function status(readiness: MapReadiness = MapReadiness.Ready, connected = true): MapStatus {
-    return { getReadiness: () => readiness, isSocketConnected: () => connected };
+    return { getReadiness: () => readiness, isSocketConnected: () => connected, resyncNow: () => Promise.resolve() };
 }
 
 function makeReader(cells: Array<CellState>, st: MapStatus = status()): { reader: MapReader; store: MapStore } {
@@ -74,5 +74,28 @@ describe('MapReader', () => {
 
         expect(changes.changed.map((c) => c.tokenId)).toEqual(['2']);
         expect(changes.version).toBe(120);
+    });
+
+    it('reads a reveal cell by tokenId and returns null when absent', () => {
+        const { reader } = makeReader([makeCell({ tokenId: '7', x: 2, y: -1, revealCount: 3, updated: 50 })]);
+
+        expect(reader.readRevealCell('7')).toMatchObject({ tokenId: '7', x: 2, y: -1, revealCount: 3 });
+        expect(reader.readRevealCell('missing')).toBeNull();
+    });
+
+    it('delegates refresh to the map status resync', async () => {
+        let resyncs = 0;
+        const st: MapStatus = {
+            getReadiness: () => MapReadiness.Ready,
+            isSocketConnected: () => true,
+            resyncNow: async () => {
+                resyncs += 1;
+            },
+        };
+        const { reader } = makeReader([makeCell({ tokenId: '1', updated: 50 })], st);
+
+        await reader.refresh();
+
+        expect(resyncs).toBe(1);
     });
 });

@@ -46,18 +46,18 @@ export interface SettleSpendOptions {
     gameSettlement: Address;
     /** $CPU token to approve, or null to skip the approve for a free action (or a mint-only `withdrawCpu`). */
     cpuToken: Address | null;
-    /** GameSettlement entry-point — `spendCpu` (build/craft), `reveal`, or `withdrawCpu` (mints $CPU). */
-    functionName: 'spendCpu' | 'reveal' | 'withdrawCpu';
+    /** GameSettlement entry-point — `spendCpu` (build/craft) or `withdrawCpu` (mints $CPU). */
+    functionName: 'spendCpu' | 'withdrawCpu';
     sig: SpendSignature;
     /** Action name for the revert error, e.g. `'Build transaction'`. */
     revertLabel: string;
 }
 
 /**
- * Approve $CPU when there's a cost, then submit the GameSettlement call and wait for it. `spendCpu`,
- * `reveal` and `withdrawCpu` share one arg tuple (`withdrawCpu` mints rather than spends, so it passes
- * `cpuToken: null`); the signature is bound to the SIWE address, so the wallet must be that same address
- * or the contract reverts (BadSignature).
+ * Approve $CPU when there's a cost, then submit the GameSettlement call and wait for it. `spendCpu` and
+ * `withdrawCpu` share one arg tuple (`withdrawCpu` mints rather than spends, so it passes `cpuToken: null`);
+ * the signature is bound to the SIWE address, so the wallet must be that same address or the contract
+ * reverts (BadSignature).
  */
 export async function settleSpend(opts: SettleSpendOptions): Promise<SpendSettlement> {
     const cpuAmount = BigInt(opts.sig.cpuAmount);

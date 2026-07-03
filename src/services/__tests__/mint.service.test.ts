@@ -84,7 +84,7 @@ function makeConfig(contracts: Partial<AppContracts> = {}): AppConfig {
     return {
         network: Network.BASE,
         chainId: BASE_CHAIN_ID,
-        contracts: { land: LAND, cpuToken: '', gameSettlement: zeroAddress, cpuHook: '', ...contracts },
+        contracts: { land: LAND, cpuToken: '', gameSettlement: zeroAddress, cpuHook: '', cell: '', ...contracts },
         resources: {},
         recipes: [],
         buildings: [],
