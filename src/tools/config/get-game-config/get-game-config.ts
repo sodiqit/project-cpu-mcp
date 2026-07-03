@@ -19,7 +19,8 @@ export function registerGetGameConfigTool(server: McpServer, context: AppContext
             `Network ${config.network} (chainId ${config.chainId}). ${config.recipes.length} recipe(s) ` +
             `(see list_recipes). Buildings: ${buildings}. Reveal: ${reveal}. Resources: ${resourceList}. ` +
             `Contracts — land ${config.contracts.land}, $CPU ${config.contracts.cpuToken}, ` +
-            `gameSettlement ${config.contracts.gameSettlement}, cpuHook ${config.contracts.cpuHook}.`;
+            `gameSettlement ${config.contracts.gameSettlement}, cpuHook ${config.contracts.cpuHook}, ` +
+            `cell ${config.contracts.cell}.`;
 
         return {
             content: [

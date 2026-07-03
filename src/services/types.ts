@@ -16,8 +16,9 @@ import type {
 } from '../api/types.js';
 import type { Network } from '../config/types.js';
 import type { ILogger } from '../logger/types.js';
+import type { RevealCellReader } from '../map/types.js';
 import type { SessionManager } from '../session/manager.js';
-import type { TxStatus, WalletManager, WalletProvider } from '../wallet/types.js';
+import type { IContractClient, TxStatus, WalletManager, WalletProvider } from '../wallet/types.js';
 
 export interface AuthServiceOptions {
     session: SessionManager;
@@ -40,6 +41,7 @@ export interface AppContracts {
     gameSettlement: Address;
     /** Uniswap v4 hook for the ETH/$CPU pool; empty until configured. Validate before a swap. */
     cpuHook: string;
+    cell: string;
 }
 
 /** Chain + contract addresses for the configured network, loaded from the game API. */
@@ -77,23 +79,45 @@ export interface AllowanceServiceOptions {
     logger: ILogger;
 }
 
+export interface CellClientOptions {
+    contracts: IContractClient;
+    logger: ILogger;
+}
+
+export interface RequestRevealParams {
+    cell: Address;
+    x: bigint;
+    y: bigint;
+    value: bigint;
+}
+
+export interface ICellClient {
+    quoteRevealFee(cell: Address): Promise<bigint>;
+    requestReveal(params: RequestRevealParams): Promise<Hash>;
+}
+
 export interface RevealServiceOptions {
-    api: ApiClient;
     wallet: WalletProvider;
     appConfig: IAppConfig;
     allowance: IAllowanceService;
+    cellClient: ICellClient;
+    contracts: IContractClient;
+    mapReader: RevealCellReader;
     logger: ILogger;
 }
 
 export interface RevealResult {
     tokenId: string;
-    signId: number;
+    x: number;
+    y: number;
+    genesis: boolean;
     txHash: Hash;
-    /** Present only when a paid re-reveal required a $CPU approve before the reveal. */
-    approveTxHash: Hash | null;
     status: TxStatus;
-    cpuAmount: string;
     blockNumber: string;
+    feeWei: string;
+    reRevealCostWei: string;
+    approveTxHash: Hash | null;
+    fulfilled: boolean;
 }
 
 export interface BuildServiceOptions {

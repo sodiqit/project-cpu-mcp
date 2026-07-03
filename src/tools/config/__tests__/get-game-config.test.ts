@@ -20,6 +20,7 @@ const CONFIG: AppConfig = {
         cpuToken: '0xcpu',
         gameSettlement: '0x1111111111111111111111111111111111111111',
         cpuHook: '0x4444444444444444444444444444444444444444',
+        cell: '0x5555555555555555555555555555555555555555',
     },
     resources: { 3: 'Silica' },
     recipes: [
@@ -66,6 +67,7 @@ describe('get_game_config tool', () => {
         expect(header).toMatch(/first reveal free, re-reveal 1000 \$CPU/);
         expect(header).toMatch(/1 recipe\(s\)/);
         expect(header).toMatch(/3:Silica/);
+        expect(header).toMatch(/cell 0x5555555555555555555555555555555555555555/);
 
         const json = JSON.parse(result.content[1]?.text ?? '{}') as AppConfig;
         expect(json.buildings[0]?.buildCost).toBe('2000');

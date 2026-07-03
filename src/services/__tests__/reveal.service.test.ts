@@ -1,132 +1,221 @@
-import { decodeFunctionData } from 'viem';
-import { describe, expect, it } from 'vitest';
+import { parseEther, type Hash } from 'viem';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { RevealSignatureResponse } from '../../api/types.js';
-import { GAME_SETTLEMENT_ABI } from '../../contracts/game-settlement.abi.js';
-import { TxStatus } from '../../wallet/types.js';
+import { NoopLogger } from '../../logger/noop.logger.js';
+import type { CellState } from '../../map/types.js';
+import {
+    type ConfirmedTx,
+    type IContractClient,
+    type ReadContractParams,
+    type TransactionRequest,
+    TxStatus,
+    type WalletProvider,
+} from '../../wallet/types.js';
 import { RevealService } from '../reveal.service.js';
+import type { AppConfig, ICellClient, IAppConfig, RequestRevealParams } from '../types.js';
 import {
     APPROVE_HASH,
+    CELL,
     CPU_TOKEN,
-    GAME_SETTLEMENT,
-    type Harness,
-    type HarnessOptions,
+    FakeAllowance,
+    FakeWallet,
+    WALLET_ADDRESS,
     makeConfig,
-    makeHarness,
-    R,
-    S,
 } from './service-fakes.js';
 
-function makeSig(overrides: Partial<RevealSignatureResponse> = {}): RevealSignatureResponse {
-    return { signId: 5, tokenId: '42', cpuAmount: '0', deadline: '1700', v: 27, r: R, s: S, ...overrides };
+const REQUEST_HASH = `0x${'e'.repeat(64)}` as Hash;
+
+function revealState(over: Partial<CellState> = {}): CellState {
+    return { tokenId: '42', x: 1, y: -2, owner: WALLET_ADDRESS, revealCount: 0, ...over } as unknown as CellState;
 }
 
-function makeService(opts: HarnessOptions): Harness<RevealService> {
-    return makeHarness((deps) => new RevealService(deps), opts);
+class FakeAppConfig implements IAppConfig {
+    constructor(private readonly config: AppConfig) {}
+    async load(): Promise<AppConfig> {
+        return this.config;
+    }
+}
+
+class FakeCellClient implements ICellClient {
+    public readonly requests: Array<RequestRevealParams> = [];
+    constructor(
+        private readonly fee: bigint = 1_000n,
+        private readonly quoteError: Error | null = null,
+    ) {}
+    async quoteRevealFee(): Promise<bigint> {
+        if (this.quoteError !== null) {
+            throw this.quoteError;
+        }
+        return this.fee;
+    }
+    async requestReveal(params: RequestRevealParams): Promise<Hash> {
+        this.requests.push(params);
+        return REQUEST_HASH;
+    }
+}
+
+class FakeContractClient implements IContractClient {
+    public readonly reads: Array<ReadContractParams> = [];
+    public readonly sent: Array<TransactionRequest> = [];
+    constructor(private readonly reverts: boolean = false) {}
+    async read<T>(params: ReadContractParams): Promise<T> {
+        this.reads.push(params);
+        return undefined as T;
+    }
+    async send(tx: TransactionRequest): Promise<Hash> {
+        this.sent.push(tx);
+        return REQUEST_HASH;
+    }
+    async confirm(hash: Hash, revertLabel: string): Promise<ConfirmedTx> {
+        if (this.reverts) {
+            throw new Error(`${revertLabel} reverted on-chain (tx ${hash}).`);
+        }
+        return { txHash: hash, status: TxStatus.Success, blockNumber: '100' };
+    }
+}
+
+class FakeRevealCellReader {
+    public refreshes = 0;
+    constructor(
+        private state: CellState | null,
+        private readonly bumpTo: number | null = null,
+    ) {}
+    readRevealCell(): CellState | null {
+        return this.state;
+    }
+    async refresh(): Promise<void> {
+        this.refreshes += 1;
+        if (this.bumpTo !== null && this.state !== null) {
+            this.state = { ...this.state, revealCount: this.bumpTo };
+        }
+    }
+}
+
+type HarnessOptions = Partial<{
+    config: AppConfig;
+    state: CellState | null;
+    bumpTo: number | null;
+    fee: bigint;
+    quoteError: Error | null;
+    approve: Hash | null | Error;
+    reverts: boolean;
+    walletChainId: number;
+}>;
+
+function makeReveal(opts: HarnessOptions = {}): {
+    service: RevealService;
+    wallet: FakeWallet;
+    allowance: FakeAllowance;
+    cellClient: FakeCellClient;
+    contracts: FakeContractClient;
+    reader: FakeRevealCellReader;
+} {
+    const wallet = new FakeWallet(opts.walletChainId ?? 1);
+    const allowance = new FakeAllowance(opts.approve ?? null);
+    const cellClient = new FakeCellClient(opts.fee ?? 1_000n, opts.quoteError ?? null);
+    const contracts = new FakeContractClient(opts.reverts ?? false);
+    const reader = new FakeRevealCellReader(opts.state === undefined ? revealState() : opts.state, opts.bumpTo ?? null);
+    const service = new RevealService({
+        wallet: wallet as unknown as WalletProvider,
+        appConfig: new FakeAppConfig(opts.config ?? makeConfig()),
+        allowance,
+        cellClient,
+        contracts,
+        mapReader: reader,
+        logger: new NoopLogger(),
+    });
+    return { service, wallet, allowance, cellClient, contracts, reader };
 }
 
 describe('RevealService', () => {
-    it('encodes and submits a free reveal, returns the confirmed tx', async () => {
-        const { service, api, wallet, allowance } = makeService({ response: { status: 200, data: makeSig() } });
-
-        const result = await service.reveal('42');
-
-        expect(api.calls[0]?.path).toBe('/api/v1/reveal');
-        expect(api.calls[0]?.body).toEqual({ tokenId: '42', network: 'ethereum' });
-        expect(allowance.calls).toHaveLength(0); // free reveal never touches $CPU
-
-        expect(wallet.sent).toHaveLength(1);
-        const sent = wallet.sent[0];
-        if (sent === undefined) {
-            throw new Error('expected one tx');
-        }
-        expect(sent.to).toBe(GAME_SETTLEMENT);
-        const decoded = decodeFunctionData({ abi: GAME_SETTLEMENT_ABI, data: sent.data });
-        expect(decoded.functionName).toBe('reveal');
-        expect(decoded.args).toEqual([5n, 42n, 0n, 1700n, 27, R, S]);
-
-        expect(result.approveTxHash).toBeNull();
-        expect(result.status).toBe(TxStatus.Success);
-        expect(result.txHash).toBe(`0x${'1'.padStart(64, '0')}`);
-        expect(result.blockNumber).toBe('100');
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
-    it('ensures the $CPU allowance before a paid re-reveal, then reveals', async () => {
-        const { service, wallet, allowance } = makeService({
-            response: { status: 200, data: makeSig({ cpuAmount: '1000' }) },
-            approve: APPROVE_HASH,
-        });
+    it('submits a genesis reveal paying the buffered ETH fee, no $CPU touched', async () => {
+        const h = makeReveal({ fee: 1_000n, bumpTo: 1 });
 
-        const result = await service.reveal('42');
+        const p = h.service.reveal('42');
+        await vi.runAllTimersAsync();
+        const result = await p;
 
-        // Approve is delegated to the allowance service with the right token/spender/amount.
-        expect(allowance.calls).toEqual([{ token: CPU_TOKEN, spender: GAME_SETTLEMENT, needed: 1000n }]);
-        // Only the reveal tx flows through the wallet here.
-        expect(wallet.sent).toHaveLength(1);
-        const sent = wallet.sent[0];
-        if (sent === undefined) {
-            throw new Error('expected one tx');
-        }
-        expect(sent.to).toBe(GAME_SETTLEMENT);
-        const reveal = decodeFunctionData({ abi: GAME_SETTLEMENT_ABI, data: sent.data });
-        expect(reveal.functionName).toBe('reveal');
-        expect(reveal.args).toEqual([5n, 42n, 1000n, 1700n, 27, R, S]);
+        expect(h.allowance.calls).toHaveLength(0);
+        expect(h.cellClient.requests).toEqual([{ cell: CELL, x: 1n, y: -2n, value: 1_250n }]);
+        expect(result.genesis).toBe(true);
+        expect(result.feeWei).toBe('1000');
+        expect(result.reRevealCostWei).toBe('0');
+        expect(result.approveTxHash).toBeNull();
+        expect(result.txHash).toBe(REQUEST_HASH);
+        expect(result.blockNumber).toBe('100');
+        expect(result.status).toBe(TxStatus.Success);
+        expect(result.fulfilled).toBe(true);
+    });
 
+    it('approves $CPU to the Cell before a paid re-reveal, then requests', async () => {
+        const config = { ...makeConfig(), reveal: { firstFree: true, reRevealCost: '1' } };
+        const h = makeReveal({ config, state: revealState({ revealCount: 1 }), approve: APPROVE_HASH, bumpTo: 2 });
+
+        const p = h.service.reveal('42');
+        await vi.runAllTimersAsync();
+        const result = await p;
+
+        expect(h.allowance.calls).toEqual([{ token: CPU_TOKEN, spender: CELL, needed: parseEther('1') }]);
+        expect(h.cellClient.requests).toHaveLength(1);
+        expect(result.genesis).toBe(false);
+        expect(result.reRevealCostWei).toBe(parseEther('1').toString());
         expect(result.approveTxHash).toBe(APPROVE_HASH);
     });
 
-    it('reports no approve tx when the allowance already covered the cost', async () => {
-        const { service, allowance } = makeService({
-            response: { status: 200, data: makeSig({ cpuAmount: '1000' }) },
-            approve: null,
-        });
+    it('reports fulfilled=false when deposits do not land within the poll window', async () => {
+        const h = makeReveal({ bumpTo: null });
 
-        const result = await service.reveal('42');
+        const p = h.service.reveal('42');
+        await vi.runAllTimersAsync();
+        const result = await p;
 
-        expect(allowance.calls).toHaveLength(1);
-        expect(result.approveTxHash).toBeNull();
-    });
-
-    it('throws before touching the wallet when $CPU is not configured for a paid re-reveal', async () => {
-        const { service, wallet, allowance } = makeService({
-            response: { status: 200, data: makeSig({ cpuAmount: '1000' }) },
-            config: makeConfig(''),
-        });
-        await expect(service.reveal('42')).rejects.toThrow(/not configured/i);
-        expect(allowance.calls).toHaveLength(0);
-        expect(wallet.sent).toHaveLength(0);
-    });
-
-    it('propagates an approve failure and does not reveal', async () => {
-        const { service, wallet } = makeService({
-            response: { status: 200, data: makeSig({ cpuAmount: '1000' }) },
-            approve: new Error('Approve transaction reverted on-chain (tx 0xabc).'),
-        });
-        await expect(service.reveal('42')).rejects.toThrow(/approve transaction reverted/i);
-        expect(wallet.sent).toHaveLength(0);
-    });
-
-    it('throws when the reveal tx reverts on-chain', async () => {
-        const { service } = makeService({ response: { status: 200, data: makeSig() }, receipts: [TxStatus.Reverted] });
-        await expect(service.reveal('42')).rejects.toThrow(/reverted/i);
-    });
-
-    it('surfaces an API error and sends no transaction', async () => {
-        const { service, wallet, allowance } = makeService({
-            response: { status: 403, data: { message: 'NotCellOwner' } },
-        });
-        await expect(service.reveal('42')).rejects.toThrow(/NotCellOwner/);
-        expect(wallet.sent).toHaveLength(0);
-        expect(allowance.calls).toHaveLength(0);
+        expect(result.fulfilled).toBe(false);
+        expect(h.reader.refreshes).toBeGreaterThan(1);
     });
 
     it('refuses when the wallet chainId does not match the chain config', async () => {
-        const { service, api, wallet } = makeService({
-            response: { status: 200, data: makeSig() },
-            walletChainId: 8453,
-        });
-        await expect(service.reveal('42')).rejects.toThrow(/chain mismatch/i);
-        expect(api.calls).toHaveLength(0);
-        expect(wallet.sent).toHaveLength(0);
+        const h = makeReveal({ walletChainId: 8453 });
+        await expect(h.service.reveal('42')).rejects.toThrow(/chain mismatch/i);
+        expect(h.cellClient.requests).toHaveLength(0);
+    });
+
+    it('throws when the cell contract is not configured', async () => {
+        const config = { ...makeConfig(), contracts: { ...makeConfig().contracts, cell: '' } };
+        const h = makeReveal({ config });
+        await expect(h.service.reveal('42')).rejects.toThrow(/cell contract is not configured/i);
+    });
+
+    it('throws when the cell is not in the map', async () => {
+        const h = makeReveal({ state: null });
+        await expect(h.service.reveal('42')).rejects.toThrow(/not in the current map/i);
+    });
+
+    it('throws when the wallet does not own the cell', async () => {
+        const h = makeReveal({ state: revealState({ owner: '0x000000000000000000000000000000000000bEEF' }) });
+        await expect(h.service.reveal('42')).rejects.toThrow(/do not own/i);
+    });
+
+    it('throws before requesting when $CPU is not configured for a paid re-reveal', async () => {
+        const config = {
+            ...makeConfig(),
+            contracts: { ...makeConfig().contracts, cpuToken: '' },
+            reveal: { firstFree: true, reRevealCost: '1' },
+        };
+        const h = makeReveal({ config, state: revealState({ revealCount: 1 }) });
+        await expect(h.service.reveal('42')).rejects.toThrow(/not configured/i);
+        expect(h.allowance.calls).toHaveLength(0);
+        expect(h.cellClient.requests).toHaveLength(0);
+    });
+
+    it('throws when the request tx reverts on-chain', async () => {
+        const h = makeReveal({ reverts: true });
+        await expect(h.service.reveal('42')).rejects.toThrow(/reverted/i);
     });
 });

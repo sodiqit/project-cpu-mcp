@@ -118,6 +118,12 @@ export interface IMapApi {
 export interface MapStatus {
     getReadiness(): MapReadiness;
     isSocketConnected(): boolean;
+    resyncNow(): Promise<void>;
+}
+
+export interface RevealCellReader {
+    readRevealCell(tokenId: string): CellState | null;
+    refresh(): Promise<void>;
 }
 
 export interface MapSyncOptions {

@@ -23,6 +23,7 @@ export const GAME_SETTLEMENT = '0x1111111111111111111111111111111111111111';
 export const CPU_TOKEN = '0x2222222222222222222222222222222222222222';
 export const LAND = '0x3333333333333333333333333333333333333333';
 export const CPU_HOOK = '0x4444444444444444444444444444444444444444';
+export const CELL = '0x5555555555555555555555555555555555555555';
 export const WALLET_ADDRESS = '0x000000000000000000000000000000000000dEaD' as Address;
 export const APPROVE_HASH = `0x${'c'.repeat(64)}` as Hash;
 export const R = `0x${'a'.repeat(64)}` as Hex;
@@ -32,7 +33,7 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
     return {
         network: Network.ETHEREUM,
         chainId: 1,
-        contracts: { land: LAND, cpuToken, gameSettlement: GAME_SETTLEMENT, cpuHook: CPU_HOOK },
+        contracts: { land: LAND, cpuToken, gameSettlement: GAME_SETTLEMENT, cpuHook: CPU_HOOK, cell: CELL },
         resources: { 3: 'Silica' },
         recipes: [],
         buildings: [],
