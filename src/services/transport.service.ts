@@ -1,7 +1,7 @@
 import { isAddress, parseEventLogs, type Address, type Hash, type Log } from 'viem';
 
 import { describeApiError } from './reveal.helpers.js';
-import { TRANSPORT_MAX_FEE_BUFFER_BPS } from './transport.constants.js';
+import { TRANSPORT_MAX_FEE_BUFFER_PERCENT } from './transport.constants.js';
 import {
     DeliveryFilter,
     type AppConfig,
@@ -61,7 +61,7 @@ export class TransportService {
             network: config.network,
         });
         const quote = await this.transportClient.quoteRoute(route);
-        const maxFee = quote.totalFee + (quote.totalFee * TRANSPORT_MAX_FEE_BUFFER_BPS) / 10_000n;
+        const maxFee = quote.totalFee + (quote.totalFee * BigInt(TRANSPORT_MAX_FEE_BUFFER_PERCENT)) / 100n;
 
         const approveTxHash = await this.approveFee(config, route.transport, maxFee);
 
