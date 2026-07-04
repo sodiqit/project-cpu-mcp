@@ -5,7 +5,6 @@ import type {
     BuildingType,
     BuildingView,
     CraftRecipeId,
-    CraftStackView,
     LotAvailability,
     LotSort,
     LotState,
@@ -92,9 +91,43 @@ export interface RequestRevealParams {
     value: bigint;
 }
 
+export interface PlaceParams {
+    cell: Address;
+    tokenId: bigint;
+    buildingType: number;
+}
+
+export interface DemolishParams {
+    cell: Address;
+    tokenId: bigint;
+}
+
+export interface StartMiningParams {
+    cell: Address;
+    tokenId: bigint;
+    target: number;
+}
+
+export interface StartCraftParams {
+    cell: Address;
+    tokenId: bigint;
+    recipeId: bigint;
+    batches: number;
+}
+
+export interface ClaimParams {
+    cell: Address;
+    tokenId: bigint;
+}
+
 export interface ICellClient {
     quoteRevealFee(cell: Address): Promise<bigint>;
     requestReveal(params: RequestRevealParams): Promise<Hash>;
+    place(params: PlaceParams): Promise<Hash>;
+    demolish(params: DemolishParams): Promise<Hash>;
+    startMining(params: StartMiningParams): Promise<Hash>;
+    startCraft(params: StartCraftParams): Promise<Hash>;
+    claim(params: ClaimParams): Promise<Hash>;
 }
 
 export interface RevealServiceOptions {
@@ -122,10 +155,12 @@ export interface RevealResult {
 }
 
 export interface BuildServiceOptions {
-    api: ApiClient;
     wallet: WalletProvider;
     appConfig: IAppConfig;
     allowance: IAllowanceService;
+    cellClient: ICellClient;
+    contracts: IContractClient;
+    mapReader: RevealCellReader;
     logger: ILogger;
 }
 
@@ -135,18 +170,25 @@ export interface BuildInput {
     targetResourceId: number | null;
 }
 
-/** A confirmed build — the on-chain $CPU spend that places the building (and starts mining for an extractor). */
 export interface BuildResult {
     tokenId: string;
-    signId: number;
     buildingType: BuildingType;
     targetResourceId: number | null;
-    txHash: Hash;
-    /** Present only when a $CPU approve was needed before the build. */
+    buildCostWei: string;
     approveTxHash: Hash | null;
+    buildTxHash: Hash | null;
+    miningTxHash: Hash | null;
+    alreadyBuilt: boolean;
+}
+
+export interface DemolishInput {
+    tokenId: string;
+}
+
+export interface DemolishResult {
+    tokenId: string;
+    txHash: Hash;
     status: TxStatus;
-    /** $CPU cost in wei. */
-    cpuAmount: string;
     blockNumber: string;
 }
 
@@ -180,8 +222,31 @@ export interface WithdrawResult {
 }
 
 export interface MiningServiceOptions {
-    api: ApiClient;
+    wallet: WalletProvider;
+    appConfig: IAppConfig;
+    cellClient: ICellClient;
+    contracts: IContractClient;
+    mapReader: RevealCellReader;
     logger: ILogger;
+}
+
+export interface MiningStatusResult {
+    tokenId: string;
+    active: boolean;
+    targetResourceId: number | null;
+    rate: number | null;
+    startAt: number | null;
+    claimable: string;
+    depositRemaining: string;
+}
+
+export interface MiningClaimResult {
+    tokenId: string;
+    resourceId: number | null;
+    claimedAmount: string;
+    txHash: Hash;
+    status: TxStatus;
+    blockNumber: string;
 }
 
 export interface TransportClientOptions {
@@ -293,10 +358,12 @@ export interface Payable {
 }
 
 export interface CraftServiceOptions {
-    api: ApiClient;
     wallet: WalletProvider;
     appConfig: IAppConfig;
     allowance: IAllowanceService;
+    cellClient: ICellClient;
+    contracts: IContractClient;
+    mapReader: RevealCellReader;
     logger: ILogger;
 }
 
@@ -306,42 +373,43 @@ export interface CraftInput {
     batches: number;
 }
 
-export enum CraftResultKind {
-    Free = 'free',
-    Paid = 'paid',
-}
-
-/** A free craft that started immediately — nothing was spent on-chain. */
-export interface FreeCraftResult {
-    kind: CraftResultKind.Free;
-    uuid: string;
+export interface CraftStartResult {
     tokenId: string;
     recipeId: CraftRecipeId;
     batches: number;
-    startAt: number;
-    endsAt: number;
-    debitedInputs: Array<CraftStackView>;
-}
-
-/** A paid craft whose on-chain payment was submitted and confirmed; the timer starts on settlement. */
-export interface PaidCraftResult {
-    kind: CraftResultKind.Paid;
-    uuid: string;
-    signId: number;
-    tokenId: string;
-    recipeId: CraftRecipeId;
-    batches: number;
-    /** $CPU cost in wei. */
-    cpuAmount: string;
-    txHash: Hash;
-    /** Present only when a $CPU approve was needed before the payment. */
+    costCpuWei: string;
     approveTxHash: Hash | null;
+    txHash: Hash;
     status: TxStatus;
     blockNumber: string;
-    debitedInputs: Array<CraftStackView>;
 }
 
-export type CraftResult = FreeCraftResult | PaidCraftResult;
+export interface CraftOutput {
+    resourceId: number;
+    amount: string;
+}
+
+export interface CraftClaimResult {
+    tokenId: string;
+    recipeId: CraftRecipeId | null;
+    batches: number;
+    outputs: Array<CraftOutput>;
+    txHash: Hash;
+    status: TxStatus;
+    blockNumber: string;
+}
+
+export interface CraftStatusResult {
+    tokenId: string;
+    active: boolean;
+    recipeId: string | null;
+    batches: number;
+    claimedBatches: number;
+    maturedBatches: number;
+    claimableBatches: number;
+    startAt: number | null;
+    durationSec: number | null;
+}
 
 // ---- Trade (lot marketplace) ----
 

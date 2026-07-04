@@ -10,13 +10,12 @@ export function registerGetCraftStatusTool(server: McpServer, context: AppContex
         'get_craft_status',
         { description: GET_CRAFT_STATUS_DESCRIPTION, inputSchema: craftCellInputSchema },
         async (args) => {
-            const processes = await context.craft.getStatus(args.tokenId);
-            const { resources } = await context.appConfig.load();
+            const status = await context.craft.getStatus(args.tokenId);
 
             return {
                 content: [
-                    { type: 'text', text: summarizeCraftStatus(processes, resources) },
-                    { type: 'text', text: JSON.stringify(processes) },
+                    { type: 'text', text: summarizeCraftStatus(status) },
+                    { type: 'text', text: JSON.stringify(status) },
                 ],
             };
         },

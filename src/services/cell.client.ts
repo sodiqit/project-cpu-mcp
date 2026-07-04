@@ -1,7 +1,16 @@
 import { encodeFunctionData, zeroAddress, type Address, type Hash } from 'viem';
 
 import { REVEAL_CALLBACK_GAS } from './cell.constants.js';
-import type { CellClientOptions, ICellClient, RequestRevealParams } from './types.js';
+import type {
+    CellClientOptions,
+    ClaimParams,
+    DemolishParams,
+    ICellClient,
+    PlaceParams,
+    RequestRevealParams,
+    StartCraftParams,
+    StartMiningParams,
+} from './types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import { ENTROPY_ABI } from '../contracts/entropy.abi.js';
 import type { ILogger } from '../logger/types.js';
@@ -49,5 +58,68 @@ export class CellClient implements ICellClient {
             valueWei: params.value.toString(),
         });
         return this.contracts.send({ to: params.cell, data, value: params.value });
+    }
+
+    async place(params: PlaceParams): Promise<Hash> {
+        const data = encodeFunctionData({
+            abi: CELL_ABI,
+            functionName: 'place',
+            args: [params.tokenId, params.buildingType],
+        });
+        this.logger.info('submitting place', {
+            cell: params.cell,
+            tokenId: params.tokenId.toString(),
+            buildingType: params.buildingType,
+        });
+        return this.contracts.send({ to: params.cell, data, value: null });
+    }
+
+    async demolish(params: DemolishParams): Promise<Hash> {
+        const data = encodeFunctionData({
+            abi: CELL_ABI,
+            functionName: 'demolish',
+            args: [params.tokenId],
+        });
+        this.logger.info('submitting demolish', { cell: params.cell, tokenId: params.tokenId.toString() });
+        return this.contracts.send({ to: params.cell, data, value: null });
+    }
+
+    async startMining(params: StartMiningParams): Promise<Hash> {
+        const data = encodeFunctionData({
+            abi: CELL_ABI,
+            functionName: 'startMining',
+            args: [params.tokenId, params.target],
+        });
+        this.logger.info('submitting startMining', {
+            cell: params.cell,
+            tokenId: params.tokenId.toString(),
+            target: params.target,
+        });
+        return this.contracts.send({ to: params.cell, data, value: null });
+    }
+
+    async startCraft(params: StartCraftParams): Promise<Hash> {
+        const data = encodeFunctionData({
+            abi: CELL_ABI,
+            functionName: 'startCraft',
+            args: [params.tokenId, params.recipeId, params.batches],
+        });
+        this.logger.info('submitting startCraft', {
+            cell: params.cell,
+            tokenId: params.tokenId.toString(),
+            recipeId: params.recipeId.toString(),
+            batches: params.batches,
+        });
+        return this.contracts.send({ to: params.cell, data, value: null });
+    }
+
+    async claim(params: ClaimParams): Promise<Hash> {
+        const data = encodeFunctionData({
+            abi: CELL_ABI,
+            functionName: 'claim',
+            args: [params.tokenId],
+        });
+        this.logger.info('submitting claim', { cell: params.cell, tokenId: params.tokenId.toString() });
+        return this.contracts.send({ to: params.cell, data, value: null });
     }
 }

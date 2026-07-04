@@ -15,11 +15,10 @@ export function registerGetMiningStatusTool(server: McpServer, context: AppConte
             let header: string;
             if (status.active && status.targetResourceId !== null) {
                 const { resources } = await context.appConfig.load();
-                const depleted = status.depositRemaining === 0 ? ' Deposit depleted.' : '';
+                const depleted = status.depositRemaining === '0' ? ' Deposit depleted.' : '';
                 header =
-                    `Cell ${status.tokenId} mining ${resourceLabel(resources, status.targetResourceId)} ` +
-                    `(tier ${status.tier ?? 1}): ${status.minedAmount} unclaimed, ${status.depositRemaining} left in ` +
-                    `deposit.${depleted}`;
+                    `Cell ${status.tokenId} mining ${resourceLabel(resources, status.targetResourceId)}: ` +
+                    `~${status.claimable} claimable now, ${status.depositRemaining} left in deposit.${depleted}`;
             } else {
                 header = `Cell ${status.tokenId} has no active mining (no extractor, or the deposit is depleted).`;
             }

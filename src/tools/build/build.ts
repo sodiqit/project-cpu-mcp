@@ -14,18 +14,22 @@ export function registerBuildTool(server: McpServer, context: AppContext): void 
         });
         const { resources } = await context.appConfig.load();
 
-        const approve = result.approveTxHash !== null ? `approve tx ${result.approveTxHash}, ` : '';
         const what =
             result.targetResourceId !== null
                 ? `extractor mining ${resourceLabel(resources, result.targetResourceId)}`
                 : 'hub';
+        const approve = result.approveTxHash !== null ? `approve tx ${result.approveTxHash}; ` : '';
+        const placed = result.alreadyBuilt
+            ? `${result.buildingType} already in place`
+            : `build tx ${result.buildTxHash} (paid ${cpuFromWei(result.buildCostWei)} $CPU)`;
+        const mining = result.miningTxHash !== null ? `; mining started (tx ${result.miningTxHash})` : '';
         const followUp =
             result.targetResourceId !== null
-                ? `Mining starts automatically — track it with get_mining_status ${result.tokenId}.`
+                ? `Track it with get_mining_status ${result.tokenId}.`
                 : `Inspect it with get_cell ${result.tokenId}.`;
         const header =
-            `Built ${what} on cell ${result.tokenId} (paid ${cpuFromWei(result.cpuAmount)} $CPU): ${approve}build tx ` +
-            `${result.txHash} confirmed in block ${result.blockNumber}. The building settles shortly. ${followUp}`;
+            `Built ${what} on cell ${result.tokenId}: ${approve}${placed}${mining}. ` +
+            `The building settles on the map shortly. ${followUp}`;
 
         return {
             content: [

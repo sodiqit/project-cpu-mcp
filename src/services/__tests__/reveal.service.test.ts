@@ -52,6 +52,21 @@ class FakeCellClient implements ICellClient {
         this.requests.push(params);
         return REQUEST_HASH;
     }
+    async place(): Promise<Hash> {
+        return REQUEST_HASH;
+    }
+    async demolish(): Promise<Hash> {
+        return REQUEST_HASH;
+    }
+    async startMining(): Promise<Hash> {
+        return REQUEST_HASH;
+    }
+    async startCraft(): Promise<Hash> {
+        return REQUEST_HASH;
+    }
+    async claim(): Promise<Hash> {
+        return REQUEST_HASH;
+    }
 }
 
 class FakeContractClient implements IContractClient {

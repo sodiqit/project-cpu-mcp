@@ -142,27 +142,6 @@ export enum BuildingType {
     Hub = 'hub',
 }
 
-/** `POST /api/v1/build` request body. */
-export interface BuildRequest {
-    tokenId: string;
-    network: string;
-    buildingType: BuildingType;
-    /** Resource id an extractor mines (must have an active deposit on the cell); null for a hub. */
-    targetResourceId: number | null;
-}
-
-/** The signed build intent — the EIP-712 `SpendCpu` signature to submit to `GameSettlement.spendCpu`. */
-export interface BuildSignatureResponse {
-    signId: number;
-    tokenId: string;
-    /** $CPU cost in wei. Build is always paid. */
-    cpuAmount: string;
-    deadline: string;
-    v: number;
-    r: string;
-    s: string;
-}
-
 /** `POST /api/v1/cpu/withdraw` request body. `amount` is whole wCPU units (e.g. `"100"`). */
 export interface WithdrawRequest {
     tokenId: string;
@@ -185,35 +164,6 @@ export interface WithdrawSignatureResponse {
 /** `GET /api/v1/cpu/withdraw/pending` — the caller's in-flight withdraw, or null. */
 export interface PendingWithdrawResponse {
     pending: WithdrawSignatureResponse | null;
-}
-
-/** `GET /api/v1/mining/:tokenId` — lazily-computed extraction status of a cell. */
-export interface MiningStatusResponse {
-    tokenId: string;
-    /** An extractor mining job exists on the cell. */
-    active: boolean;
-    targetResourceId: number | null;
-    tier: number | null;
-    /** Mining cursor as unix seconds; null when inactive. */
-    startAt: number | null;
-    /** Accrued-but-unclaimed units, clamped to the remaining deposit; 0 when inactive. */
-    minedAmount: number;
-    /** Target deposit amount left; 0 when inactive/depleted. */
-    depositRemaining: number;
-}
-
-/** `POST /api/v1/mining/:tokenId/claim` — result of banking the accrued resource (off-chain). */
-export interface ClaimResponse {
-    tokenId: string;
-    resourceId: number;
-    /** Units banked by this claim; 0 is a valid no-op (nothing accrued / depleted). */
-    claimedAmount: number;
-    /** Resource balance on the cell after the claim. */
-    balanceAmount: number;
-    /** Deposit amount left after the claim. */
-    depositRemaining: number;
-    /** The target deposit reached 0. */
-    depleted: boolean;
 }
 
 export interface TransportCoord {
@@ -255,73 +205,6 @@ export interface DeliveriesResponse {
     serverTime: number;
     version: number;
     deliveries: Array<DeliveryResponse>;
-}
-
-/** A paid process stays `pending` until its on-chain payment settles. */
-export enum CraftProcessStatus {
-    Pending = 'pending',
-    Active = 'active',
-}
-
-/** `POST /api/v1/craft/:tokenId/start` request body. */
-export interface StartCraftRequest {
-    recipeId: CraftRecipeId;
-    batches: number;
-    network: string;
-}
-
-/** Free branch of `POST /api/v1/craft/:tokenId/start` — started immediately. */
-export interface StartCraftResponse {
-    uuid: string;
-    tokenId: string;
-    recipeId: CraftRecipeId;
-    batches: number;
-    startAt: number;
-    endsAt: number;
-    debitedInputs: Array<CraftStackView>;
-}
-
-/** Paid branch — the EIP-712 `SpendCpu` signature to submit to `GameSettlement.spendCpu`. */
-export interface PaidCraftSignatureResponse {
-    uuid: string;
-    signId: number;
-    tokenId: string;
-    recipeId: CraftRecipeId;
-    batches: number;
-    status: CraftProcessStatus;
-    /** $CPU cost in wei. */
-    cpuAmount: string;
-    deadline: string;
-    v: number;
-    r: string;
-    s: string;
-    debitedInputs: Array<CraftStackView>;
-}
-
-/** `GET /api/v1/craft/:tokenId` — one craft process on a cell. */
-export interface CraftProcessStatusResponse {
-    uuid: string;
-    tokenId: string;
-    recipeId: CraftRecipeId;
-    batches: number;
-    status: CraftProcessStatus;
-    claimedBatches: number;
-    completedBatches: number;
-    claimableBatches: number;
-    claimableOutputs: Array<CraftStackView>;
-    /** null while `pending` (timer not started). */
-    startAt: number | null;
-    endsAt: number | null;
-    nextBatchAt: number | null;
-    isFinished: boolean;
-}
-
-/** `POST /api/v1/craft/:tokenId/claim`. */
-export interface ClaimCraftResponse {
-    tokenId: string;
-    /** `[]` when nothing matured — still a success. */
-    claimed: Array<CraftStackView>;
-    processes: Array<CraftProcessStatusResponse>;
 }
 
 // ---- Trade (lot marketplace) ----

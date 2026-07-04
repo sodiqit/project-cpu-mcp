@@ -1,8 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it } from 'vitest';
 
+import { BuildingType } from '../../../api/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
-import { type CellInspection, NeighborRelation } from '../../../map/types.js';
+import { type CellInspection, CellProcessKind, NeighborRelation } from '../../../map/types.js';
 import type { AppContext } from '../../../types.js';
 import { registerGetCellTool } from '../get-cell/get-cell.js';
 
@@ -43,11 +44,11 @@ const inspection: CellInspection = {
         y: 0,
         owner: '0xrival',
         revealCount: 1,
-        resources: [{ resourceId: 3, deposit: '100', balance: '0' }],
-        building: { type: 'extractor', targetResourceId: 3 },
+        revealPending: false,
+        resources: [{ resourceId: 3, deposit: '100', balance: '0', strength: 3 }],
+        building: { type: BuildingType.Extractor, buildFinishAt: null },
         transitFeePerUnit: null,
-        mining: { targetResourceId: 3, tier: 1, startAt: 1700 },
-        crafting: [],
+        process: { kind: CellProcessKind.Mining, resource: 3, rate: 10, startAt: 1700 },
         updated: 10,
         neighbors: [{ x: 1, y: 0, tokenId: 'mine', relation: NeighborRelation.Owned }],
     },
@@ -63,16 +64,16 @@ describe('get_cell tool', () => {
             cell: {
                 tokenId: string;
                 resources: Array<{ resourceId: number; resourceName: string }>;
-                building: { targetResourceName: string | null } | null;
-                mining: { targetResourceName: string } | null;
+                building: { type: string } | null;
+                process: { kind: string; resourceName: string } | null;
             };
             distanceFromMine: number;
         };
         expect(parsed.cell.tokenId).toBe('7');
         expect(parsed.distanceFromMine).toBe(2);
         expect(parsed.cell.resources[0]?.resourceName).toBe('Silica');
-        expect(parsed.cell.building?.targetResourceName).toBe('Silica');
-        expect(parsed.cell.mining?.targetResourceName).toBe('Silica');
+        expect(parsed.cell.building?.type).toBe('extractor');
+        expect(parsed.cell.process?.resourceName).toBe('Silica');
     });
 
     it('throws when the cell is not in the map', async () => {

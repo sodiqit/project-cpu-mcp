@@ -65,9 +65,6 @@ async function main(): Promise<void> {
     const contracts = new ContractClient({ wallet, logger: logger.child('contract'), retry: null });
     const cellClient = new CellClient({ contracts, logger: logger.child('cell') });
     const transportClient = new TransportClient({ contracts, logger: logger.child('transport:client') });
-    const build = new BuildService({ api, wallet, appConfig, allowance, logger: logger.child('build') });
-    const craft = new CraftService({ api, wallet, appConfig, allowance, logger: logger.child('craft') });
-    const mining = new MiningService({ api, logger: logger.child('mining') });
     const transport = new TransportService({
         api,
         wallet,
@@ -93,6 +90,35 @@ async function main(): Promise<void> {
         reconnectGraceMs: DEFAULT_RECONNECT_GRACE_MS,
     });
     const mapReader = new MapReader({ store, status: mapSync });
+
+    const build = new BuildService({
+        wallet,
+        appConfig,
+        allowance,
+        cellClient,
+        contracts,
+        mapReader,
+        logger: logger.child('build'),
+    });
+
+    const mining = new MiningService({
+        wallet,
+        appConfig,
+        cellClient,
+        contracts,
+        mapReader,
+        logger: logger.child('mining'),
+    });
+
+    const craft = new CraftService({
+        wallet,
+        appConfig,
+        allowance,
+        cellClient,
+        contracts,
+        mapReader,
+        logger: logger.child('craft'),
+    });
 
     const reveal = new RevealService({
         wallet,

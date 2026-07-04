@@ -1,16 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it } from 'vitest';
 
-import {
-    type ClaimCraftResponse,
-    type CraftProcessStatusResponse,
-    CraftCategory,
-    CraftProcessStatus,
-    CraftRecipeId,
-    type RecipeView,
-} from '../../../api/types.js';
+import { CraftCategory, CraftRecipeId, type RecipeView } from '../../../api/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
-import { type CraftResult, CraftResultKind } from '../../../services/types.js';
+import type { CraftClaimResult, CraftStartResult, CraftStatusResult } from '../../../services/types.js';
 import type { AppContext } from '../../../types.js';
 import { TxStatus } from '../../../wallet/types.js';
 import { registerClaimCraftTool } from '../claim/claim-craft.js';
@@ -66,49 +59,44 @@ function capture(register: (server: McpServer, context: AppContext) => void, con
     return captured;
 }
 
-function craftHarness(outcome: CraftResult): Handler {
-    const craft = { craft: async (): Promise<CraftResult> => outcome };
+function craftHarness(outcome: CraftStartResult): Handler {
+    const craft = { craft: async (): Promise<CraftStartResult> => outcome };
     const context = { craft, appConfig: appConfigStub, logger: new NoopLogger() } as unknown as AppContext;
     return capture(registerCraftTool, context);
 }
 
 describe('craft tool', () => {
-    it('summarizes a free craft with the consumed inputs', async () => {
+    it('summarizes a free craft', async () => {
         const result = await craftHarness({
-            kind: CraftResultKind.Free,
-            uuid: 'u1',
             tokenId: '42',
             recipeId: CraftRecipeId.GeneratePower,
             batches: 2,
-            startAt: 1000,
-            endsAt: 1060,
-            debitedInputs: [{ resourceId: 6, amount: 10 }],
+            costCpuWei: '0',
+            approveTxHash: null,
+            txHash: `0x${'1'.repeat(64)}`,
+            status: TxStatus.Success,
+            blockNumber: '100',
         })({ tokenId: '42', recipeId: CraftRecipeId.GeneratePower, batches: 2 });
 
         const header = result.content[0]?.text ?? '';
-        expect(header).toMatch(/Free craft started/i);
-        expect(header).toMatch(/10 Coal \(#6\)/);
+        expect(header).toMatch(/Craft started/i);
+        expect(header).toMatch(/2× generate_power \(free\)/);
         expect(header).toMatch(/claim_craft 42/);
     });
 
-    it('summarizes a paid craft with the $CPU cost and tx hash', async () => {
+    it('summarizes a paid craft with the $CPU cost and approve tx', async () => {
         const result = await craftHarness({
-            kind: CraftResultKind.Paid,
-            uuid: 'u2',
-            signId: 7,
             tokenId: '42',
             recipeId: CraftRecipeId.ForgeWcpu,
             batches: 1,
-            cpuAmount: '100000000000000000000',
-            txHash: `0x${'1'.repeat(64)}`,
+            costCpuWei: '100000000000000000000',
             approveTxHash: `0x${'c'.repeat(64)}`,
+            txHash: `0x${'1'.repeat(64)}`,
             status: TxStatus.Success,
             blockNumber: '100',
-            debitedInputs: [{ resourceId: 100, amount: 50 }],
         })({ tokenId: '42', recipeId: CraftRecipeId.ForgeWcpu, batches: 1 });
 
         const header = result.content[0]?.text ?? '';
-        expect(header).toMatch(/Paid craft/i);
         expect(header).toMatch(/100 \$CPU/);
         expect(header).toMatch(/approve tx/);
         expect(header).toMatch(/get_craft_status 42/);
@@ -116,7 +104,7 @@ describe('craft tool', () => {
 
     it('propagates service errors', async () => {
         const craft = {
-            craft: async (): Promise<CraftResult> => {
+            craft: async (): Promise<CraftStartResult> => {
                 throw new Error('craftRejected');
             },
         };
@@ -143,62 +131,79 @@ describe('list_recipes tool', () => {
 });
 
 describe('get_craft_status tool', () => {
-    it('summarizes an active process with claimable output', async () => {
-        const processes: Array<CraftProcessStatusResponse> = [
-            {
-                uuid: 'u1',
-                tokenId: '42',
-                recipeId: CraftRecipeId.GeneratePower,
-                batches: 2,
-                status: CraftProcessStatus.Active,
-                claimedBatches: 0,
-                completedBatches: 1,
-                claimableBatches: 1,
-                claimableOutputs: [{ resourceId: 101, amount: 10 }],
-                startAt: 1000,
-                endsAt: 1060,
-                nextBatchAt: 1060,
-                isFinished: false,
-            },
-        ];
-        const craft = { getStatus: async (): Promise<Array<CraftProcessStatusResponse>> => processes };
+    it('summarizes an active process with claimable batches', async () => {
+        const status: CraftStatusResult = {
+            tokenId: '42',
+            active: true,
+            recipeId: CraftRecipeId.GeneratePower,
+            batches: 2,
+            claimedBatches: 0,
+            maturedBatches: 1,
+            claimableBatches: 1,
+            startAt: 1000,
+            durationSec: 30,
+        };
+        const craft = { getStatus: async (): Promise<CraftStatusResult> => status };
         const context = { craft, appConfig: appConfigStub, logger: new NoopLogger() } as unknown as AppContext;
         const handler = capture(registerGetCraftStatusTool, context);
 
         const result = await handler({ tokenId: '42' });
         const header = result.content[0]?.text ?? '';
-        expect(header).toMatch(/1\/2 batches done/);
-        expect(header).toMatch(/1 claimable now \(10 Power \(#101\)\)/);
+        expect(header).toMatch(/1\/2 batches matured/);
+        expect(header).toMatch(/1 claimable now/);
     });
 
-    it('reports an empty cell', async () => {
-        const craft = { getStatus: async (): Promise<Array<CraftProcessStatusResponse>> => [] };
+    it('reports a cell with no active craft', async () => {
+        const status: CraftStatusResult = {
+            tokenId: '42',
+            active: false,
+            recipeId: null,
+            batches: 0,
+            claimedBatches: 0,
+            maturedBatches: 0,
+            claimableBatches: 0,
+            startAt: null,
+            durationSec: null,
+        };
+        const craft = { getStatus: async (): Promise<CraftStatusResult> => status };
         const context = { craft, appConfig: appConfigStub, logger: new NoopLogger() } as unknown as AppContext;
         const handler = capture(registerGetCraftStatusTool, context);
 
         const result = await handler({ tokenId: '42' });
-        expect(result.content[0]?.text).toMatch(/no craft processes/i);
+        expect(result.content[0]?.text).toMatch(/no active craft/i);
     });
 });
 
 describe('claim_craft tool', () => {
     it('reports the claimed resources', async () => {
-        const claim: ClaimCraftResponse = {
+        const claim: CraftClaimResult = {
             tokenId: '42',
-            claimed: [{ resourceId: 101, amount: 20 }],
-            processes: [],
+            recipeId: CraftRecipeId.GeneratePower,
+            batches: 1,
+            outputs: [{ resourceId: 101, amount: '20' }],
+            txHash: `0x${'1'.repeat(64)}`,
+            status: TxStatus.Success,
+            blockNumber: '100',
         };
-        const craft = { claim: async (): Promise<ClaimCraftResponse> => claim };
+        const craft = { claim: async (): Promise<CraftClaimResult> => claim };
         const context = { craft, appConfig: appConfigStub, logger: new NoopLogger() } as unknown as AppContext;
         const handler = capture(registerClaimCraftTool, context);
 
         const result = await handler({ tokenId: '42' });
-        expect(result.content[0]?.text).toMatch(/Claimed 20 Power \(#101\) on cell 42/);
+        expect(result.content[0]?.text).toMatch(/Claimed 1 batch\(es\) → 20 Power \(#101\)/);
     });
 
     it('reports a no-op claim when nothing matured', async () => {
-        const claim: ClaimCraftResponse = { tokenId: '42', claimed: [], processes: [] };
-        const craft = { claim: async (): Promise<ClaimCraftResponse> => claim };
+        const claim: CraftClaimResult = {
+            tokenId: '42',
+            recipeId: null,
+            batches: 0,
+            outputs: [],
+            txHash: `0x${'1'.repeat(64)}`,
+            status: TxStatus.Success,
+            blockNumber: '100',
+        };
+        const craft = { claim: async (): Promise<CraftClaimResult> => claim };
         const context = { craft, appConfig: appConfigStub, logger: new NoopLogger() } as unknown as AppContext;
         const handler = capture(registerClaimCraftTool, context);
 

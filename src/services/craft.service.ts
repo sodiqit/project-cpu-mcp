@@ -1,181 +1,188 @@
-import { isAddress, type Address } from 'viem';
+import { isAddress, parseEther, parseEventLogs, type Address, type Log } from 'viem';
 
-import { describeApiError } from './reveal.helpers.js';
-import { settleSpend } from './settlement.helpers.js';
-import {
-    type CraftInput,
-    type CraftResult,
-    CraftResultKind,
-    type CraftServiceOptions,
-    type IAllowanceService,
-    type IAppConfig,
-    type PaidCraftResult,
+import { recipeNameFromUint64, recipeNameToUint64 } from './cell.utils.js';
+import type {
+    AppConfig,
+    CraftClaimResult,
+    CraftInput,
+    CraftOutput,
+    CraftServiceOptions,
+    CraftStartResult,
+    CraftStatusResult,
+    IAllowanceService,
+    IAppConfig,
+    ICellClient,
 } from './types.js';
-import type { ApiClient } from '../api/client.js';
-import {
-    type ClaimCraftResponse,
-    type CraftProcessStatusResponse,
-    HttpStatus,
-    type PaidCraftSignatureResponse,
-    type StartCraftRequest,
-    type StartCraftResponse,
-} from '../api/types.js';
+import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
-import { errorMessage } from '../utils/error.utils.js';
-import { formatUnixSeconds } from '../utils/format.utils.js';
-import type { WalletManager, WalletProvider } from '../wallet/types.js';
+import { CellProcessKind, type RevealCellReader } from '../map/types.js';
+import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
 
-/**
- * Crafting refines/forges resources on a cell. Free recipes start the timer immediately; the paid
- * forge escrows inputs and returns a `spendCpu` signature settled exactly like build. A craft
- * signature cannot be re-fetched, so the paid path submits atomically — a failed payment leaves a
- * pending escrow that is auto-refunded shortly after the signature deadline, with no resume.
- */
 export class CraftService {
-    private readonly api: ApiClient;
     private readonly wallet: WalletProvider;
     private readonly appConfig: IAppConfig;
     private readonly allowance: IAllowanceService;
+    private readonly cellClient: ICellClient;
+    private readonly contracts: IContractClient;
+    private readonly mapReader: RevealCellReader;
     private readonly logger: ILogger;
 
     constructor(options: CraftServiceOptions) {
-        this.api = options.api;
         this.wallet = options.wallet;
         this.appConfig = options.appConfig;
         this.allowance = options.allowance;
+        this.cellClient = options.cellClient;
+        this.contracts = options.contracts;
+        this.mapReader = options.mapReader;
         this.logger = options.logger;
     }
 
-    async craft(input: CraftInput): Promise<CraftResult> {
+    async craft(input: CraftInput): Promise<CraftStartResult> {
         const config = await this.appConfig.load();
+        const wallet = this.wallet.get();
+        this.assertChain(config, wallet);
+
+        const cell = this.requireCell(config);
+        const recipe = config.recipes.find((r) => r.id === input.recipeId);
+        if (recipe === undefined) {
+            throw new Error(`Recipe ${input.recipeId} is not available on network ${config.network}.`);
+        }
+
+        const totalCostWei = parseEther(recipe.costCpu) * BigInt(input.batches);
+        let approveTxHash = null;
+        if (totalCostWei > 0n) {
+            const cpuToken = this.requireCpuToken(config);
+            approveTxHash = await this.allowance.ensureAllowance(cpuToken, cell, totalCostWei);
+        }
 
         this.logger.info('starting craft', {
             tokenId: input.tokenId,
             recipeId: input.recipeId,
             batches: input.batches,
+            costCpuWei: totalCostWei.toString(),
         });
-        const response = await this.api.authenticatedRequest<StartCraftResponse | PaidCraftSignatureResponse>(
-            `/api/v1/craft/${input.tokenId}/start`,
-            {
-                method: 'POST',
-                body: {
-                    recipeId: input.recipeId,
-                    batches: input.batches,
-                    network: config.network,
-                } satisfies StartCraftRequest,
-            },
-        );
+        const txHash = await this.cellClient.startCraft({
+            cell,
+            tokenId: BigInt(input.tokenId),
+            recipeId: recipeNameToUint64(input.recipeId),
+            batches: input.batches,
+        });
+        const confirmed = await this.contracts.confirm(txHash, 'Craft transaction');
 
-        if (response.status !== HttpStatus.Ok) {
-            if (response.status === HttpStatus.Conflict) {
-                throw new Error(
-                    `Craft rejected (HTTP 409): ${describeApiError(response.data)}. A prior paid craft on cell ` +
-                        `${input.tokenId} is still escrowed awaiting payment — it is auto-refunded shortly after ` +
-                        `its signature deadline; retry then.`,
-                );
-            }
-            throw new Error(`Craft request failed (HTTP ${response.status}): ${describeApiError(response.data)}`);
+        return {
+            tokenId: input.tokenId,
+            recipeId: input.recipeId,
+            batches: input.batches,
+            costCpuWei: totalCostWei.toString(),
+            approveTxHash,
+            txHash: confirmed.txHash,
+            status: confirmed.status,
+            blockNumber: confirmed.blockNumber,
+        };
+    }
+
+    async claim(tokenId: string): Promise<CraftClaimResult> {
+        const config = await this.appConfig.load();
+        const wallet = this.wallet.get();
+        this.assertChain(config, wallet);
+
+        const cell = this.requireCell(config);
+        this.logger.info('claiming craft outputs', { tokenId });
+        const txHash = await this.cellClient.claim({ cell, tokenId: BigInt(tokenId) });
+        const confirmed = await this.contracts.confirm(txHash, 'Craft claim');
+        const claimed = this.decodeClaimed(confirmed.logs, cell);
+
+        return {
+            tokenId,
+            recipeId: claimed !== null ? recipeNameFromUint64(claimed.recipeId) : null,
+            batches: claimed?.batches ?? 0,
+            outputs: claimed?.outputs ?? [],
+            txHash: confirmed.txHash,
+            status: confirmed.status,
+            blockNumber: confirmed.blockNumber,
+        };
+    }
+
+    async getStatus(tokenId: string): Promise<CraftStatusResult> {
+        await this.mapReader.refresh();
+        const state = this.mapReader.readRevealCell(tokenId);
+        if (state === null) {
+            throw new Error(`Cell ${tokenId} is not in the current map.`);
         }
 
-        if (!('signId' in response.data)) {
-            const free = response.data;
-            this.logger.info('free craft started', { tokenId: input.tokenId, uuid: free.uuid });
+        const process = state.process;
+        if (process === null || process.kind !== CellProcessKind.Craft) {
             return {
-                kind: CraftResultKind.Free,
-                uuid: free.uuid,
-                tokenId: free.tokenId,
-                recipeId: free.recipeId,
-                batches: free.batches,
-                startAt: free.startAt,
-                endsAt: free.endsAt,
-                debitedInputs: free.debitedInputs,
+                tokenId,
+                active: false,
+                recipeId: null,
+                batches: 0,
+                claimedBatches: 0,
+                maturedBatches: 0,
+                claimableBatches: 0,
+                startAt: null,
+                durationSec: null,
             };
         }
 
-        const sig = response.data;
-        const wallet = this.wallet.get();
+        const nowSec = Math.floor(Date.now() / 1000);
+        const elapsed = Math.max(0, nowSec - process.startAt);
+        const matured =
+            process.durationSec > 0
+                ? Math.min(process.batches, Math.floor(elapsed / process.durationSec))
+                : process.batches;
+        const claimableBatches = Math.max(0, matured - process.claimedBatches);
 
+        return {
+            tokenId,
+            active: true,
+            recipeId: process.recipeId,
+            batches: process.batches,
+            claimedBatches: process.claimedBatches,
+            maturedBatches: matured,
+            claimableBatches,
+            startAt: process.startAt,
+            durationSec: process.durationSec,
+        };
+    }
+
+    private decodeClaimed(
+        logs: Array<Log>,
+        cell: Address,
+    ): { recipeId: bigint; batches: number; outputs: Array<CraftOutput> } | null {
+        const events = parseEventLogs({ abi: CELL_ABI, eventName: 'CraftClaimed', logs });
+        const event = events.find((e) => e.address.toLowerCase() === cell.toLowerCase());
+        if (event === undefined) {
+            return null;
+        }
+        const outputs = event.args.outputResources.map((resourceId, i) => ({
+            resourceId,
+            amount: (event.args.outputAmounts[i] ?? 0n).toString(),
+        }));
+        return { recipeId: event.args.recipeId, batches: event.args.batches, outputs };
+    }
+
+    private assertChain(config: AppConfig, wallet: WalletManager): void {
         if (config.chainId !== wallet.getChainId()) {
             throw new Error(
                 `Chain mismatch: the chain config is chainId ${config.chainId} but the wallet is on ${wallet.getChainId()}. Check NETWORK.`,
             );
         }
+    }
+
+    private requireCell(config: AppConfig): Address {
+        const cell = config.contracts.cell;
+        if (!isAddress(cell, { strict: false })) {
+            throw new Error(`Cell contract is not configured for network ${config.network}; cannot craft.`);
+        }
+        return cell;
+    }
+
+    private requireCpuToken(config: AppConfig): Address {
         const cpuToken = config.contracts.cpuToken;
         if (!isAddress(cpuToken, { strict: false })) {
             throw new Error(`$CPU token is not configured for network ${config.network}; cannot pay for craft.`);
         }
-
-        try {
-            return await this.submit(wallet, config.contracts.gameSettlement, cpuToken, input, sig);
-        } catch (error) {
-            throw new Error(
-                `Craft signature issued (signId ${sig.signId}) but the on-chain payment did not complete: ` +
-                    `${errorMessage(error)}. The inputs stay escrowed on cell ${input.tokenId} past the signature ` +
-                    `deadline ${formatUnixSeconds(Number(sig.deadline))}, then they are auto-refunded — retry the craft after ` +
-                    `that.`,
-            );
-        }
-    }
-
-    private async submit(
-        wallet: WalletManager,
-        gameSettlement: Address,
-        cpuToken: Address,
-        input: CraftInput,
-        sig: PaidCraftSignatureResponse,
-    ): Promise<PaidCraftResult> {
-        this.logger.info('submitting craft tx', { tokenId: input.tokenId, gameSettlement, cpuAmount: sig.cpuAmount });
-        const settlement = await settleSpend({
-            wallet,
-            allowance: this.allowance,
-            gameSettlement,
-            cpuToken,
-            functionName: 'spendCpu',
-            sig,
-            revertLabel: 'Craft transaction',
-        });
-
-        this.logger.info('craft payment confirmed', {
-            tokenId: input.tokenId,
-            txHash: settlement.txHash,
-            signId: sig.signId,
-        });
-        return {
-            kind: CraftResultKind.Paid,
-            uuid: sig.uuid,
-            signId: sig.signId,
-            tokenId: sig.tokenId,
-            recipeId: sig.recipeId,
-            batches: sig.batches,
-            cpuAmount: sig.cpuAmount,
-            debitedInputs: sig.debitedInputs,
-            ...settlement,
-        };
-    }
-
-    /** Public read — server-computed progress for every craft process on a cell. */
-    async getStatus(tokenId: string): Promise<Array<CraftProcessStatusResponse>> {
-        const response = await this.api.request<Array<CraftProcessStatusResponse>>(`/api/v1/craft/${tokenId}`);
-        if (response.status !== HttpStatus.Ok) {
-            throw new Error(
-                `Failed to get craft status for cell ${tokenId} (HTTP ${response.status}): ${describeApiError(response.data)}`,
-            );
-        }
-        return response.data;
-    }
-
-    /** Owner-only claim-all — banks every matured batch on the cell into its resource balance. */
-    async claim(tokenId: string): Promise<ClaimCraftResponse> {
-        this.logger.info('claiming craft outputs', { tokenId });
-        const response = await this.api.authenticatedRequest<ClaimCraftResponse>(`/api/v1/craft/${tokenId}/claim`, {
-            method: 'POST',
-            body: null,
-        });
-        if (response.status !== HttpStatus.Ok) {
-            throw new Error(
-                `Craft claim failed for cell ${tokenId} (HTTP ${response.status}): ${describeApiError(response.data)}`,
-            );
-        }
-        return response.data;
+        return cpuToken;
     }
 }

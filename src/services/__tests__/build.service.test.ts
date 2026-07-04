@@ -1,148 +1,148 @@
-import { decodeFunctionData } from 'viem';
+import { decodeFunctionData, parseEther, type Hex } from 'viem';
 import { describe, expect, it } from 'vitest';
 
-import { BuildingType, type BuildSignatureResponse } from '../../api/types.js';
-import { GAME_SETTLEMENT_ABI } from '../../contracts/game-settlement.abi.js';
+import { BuildingType } from '../../api/types.js';
+import { CELL_ABI } from '../../contracts/cell.abi.js';
+import { makeCell } from '../../map/__tests__/fixtures.js';
+import { CellProcessKind } from '../../map/types.js';
 import { TxStatus } from '../../wallet/types.js';
 import { BuildService } from '../build.service.js';
 import type { BuildInput } from '../types.js';
 import {
     APPROVE_HASH,
+    CELL,
     CPU_TOKEN,
-    GAME_SETTLEMENT,
-    type Harness,
-    type HarnessOptions,
+    type FakeContractClient,
+    makeCellHarness,
     makeConfig,
-    makeHarness,
-    R,
-    S,
+    WALLET_ADDRESS,
 } from './service-fakes.js';
 
 const EXTRACTOR: BuildInput = { tokenId: '42', buildingType: BuildingType.Extractor, targetResourceId: 3 };
 
-function makeSig(overrides: Partial<BuildSignatureResponse> = {}): BuildSignatureResponse {
-    return { signId: 7, tokenId: '42', cpuAmount: '2000', deadline: '1700', v: 27, r: R, s: S, ...overrides };
+function makeService(opts: Parameters<typeof makeCellHarness>[1] = {}) {
+    return makeCellHarness((deps) => new BuildService(deps), opts);
 }
 
-function makeService(opts: HarnessOptions): Harness<BuildService> {
-    return makeHarness((deps) => new BuildService(deps), opts);
+function decodeSent(
+    contracts: FakeContractClient,
+    index: number,
+): { functionName: string; args: ReadonlyArray<unknown> } {
+    const tx = contracts.sent[index];
+    if (tx === undefined) {
+        throw new Error(`expected a tx at index ${index}`);
+    }
+    return decodeFunctionData({ abi: CELL_ABI, data: tx.data as Hex });
 }
 
 describe('BuildService', () => {
-    it('ensures the $CPU allowance, encodes spendCpu, and returns the confirmed build', async () => {
-        const { service, api, wallet, allowance } = makeService({
-            response: { status: 200, data: makeSig() },
-            approve: APPROVE_HASH,
-        });
+    it('approves $CPU to the Cell, places the extractor, then starts mining', async () => {
+        const { service, contracts, allowance } = makeService({ approve: APPROVE_HASH });
 
         const result = await service.build(EXTRACTOR);
 
-        expect(api.calls[0]?.path).toBe('/api/v1/build');
-        expect(api.calls[0]?.body).toEqual({
-            tokenId: '42',
-            network: 'ethereum',
-            buildingType: 'extractor',
-            targetResourceId: 3,
-        });
-        expect(allowance.calls).toEqual([{ token: CPU_TOKEN, spender: GAME_SETTLEMENT, needed: 2000n }]);
+        expect(allowance.calls).toEqual([{ token: CPU_TOKEN, spender: CELL, needed: parseEther('2000') }]);
+        expect(contracts.sent).toHaveLength(2);
+        expect(contracts.sent[0]?.to).toBe(CELL);
 
-        expect(wallet.sent).toHaveLength(1);
-        const sent = wallet.sent[0];
-        if (sent === undefined) {
-            throw new Error('expected one tx');
-        }
-        expect(sent.to).toBe(GAME_SETTLEMENT);
-        const decoded = decodeFunctionData({ abi: GAME_SETTLEMENT_ABI, data: sent.data });
-        expect(decoded.functionName).toBe('spendCpu');
-        expect(decoded.args).toEqual([7n, 42n, 2000n, 1700n, 27, R, S]);
+        const place = decodeSent(contracts, 0);
+        expect(place.functionName).toBe('place');
+        expect(place.args).toEqual([42n, 1]);
+
+        const mining = decodeSent(contracts, 1);
+        expect(mining.functionName).toBe('startMining');
+        expect(mining.args).toEqual([42n, 3]);
 
         expect(result.approveTxHash).toBe(APPROVE_HASH);
-        expect(result.buildingType).toBe(BuildingType.Extractor);
-        expect(result.targetResourceId).toBe(3);
-        expect(result.status).toBe(TxStatus.Success);
-        expect(result.blockNumber).toBe('100');
+        expect(result.buildTxHash).not.toBeNull();
+        expect(result.miningTxHash).not.toBeNull();
+        expect(result.alreadyBuilt).toBe(false);
+        expect(result.buildCostWei).toBe(parseEther('2000').toString());
     });
 
-    it('builds a hub with a null target resource', async () => {
-        const { service, api, wallet } = makeService({
-            response: { status: 200, data: makeSig({ cpuAmount: '5000' }) },
-        });
+    it('builds a hub with a null target and sends no mining tx', async () => {
+        const { service, contracts, allowance } = makeService();
 
         const result = await service.build({ tokenId: '42', buildingType: BuildingType.Hub, targetResourceId: null });
 
-        expect(api.calls[0]?.body).toEqual({
-            tokenId: '42',
-            network: 'ethereum',
-            buildingType: 'hub',
-            targetResourceId: null,
-        });
-        const sent = wallet.sent[0];
-        if (sent === undefined) {
-            throw new Error('expected one tx');
-        }
-        const decoded = decodeFunctionData({ abi: GAME_SETTLEMENT_ABI, data: sent.data });
-        expect(decoded.functionName).toBe('spendCpu');
-        expect(result.buildingType).toBe(BuildingType.Hub);
-        expect(result.targetResourceId).toBeNull();
+        expect(allowance.calls[0]?.needed).toBe(parseEther('5000'));
+        expect(contracts.sent).toHaveLength(1);
+        const place = decodeSent(contracts, 0);
+        expect(place.functionName).toBe('place');
+        expect(place.args).toEqual([42n, 2]);
+        expect(result.miningTxHash).toBeNull();
     });
 
-    it('reports no approve tx when the allowance already covered the cost', async () => {
-        const { service, allowance } = makeService({ response: { status: 200, data: makeSig() }, approve: null });
+    it('skips place and only starts mining when the extractor is already built', async () => {
+        const cell = makeCell({
+            tokenId: '42',
+            owner: WALLET_ADDRESS,
+            building: { type: BuildingType.Extractor, buildFinishAt: null },
+        });
+        const { service, contracts, allowance } = makeService({ cell });
 
         const result = await service.build(EXTRACTOR);
 
+        expect(allowance.calls).toHaveLength(0);
+        expect(contracts.sent).toHaveLength(1);
+        expect(decodeSent(contracts, 0).functionName).toBe('startMining');
+        expect(result.alreadyBuilt).toBe(true);
+        expect(result.buildTxHash).toBeNull();
+        expect(result.buildCostWei).toBe('0');
+    });
+
+    it('reports no approve tx when the allowance already covered the cost', async () => {
+        const { service, allowance } = makeService({ approve: null });
+        const result = await service.build(EXTRACTOR);
         expect(allowance.calls).toHaveLength(1);
         expect(result.approveTxHash).toBeNull();
     });
 
-    it('refuses before reserving the intent when $CPU is not configured', async () => {
-        const { service, api, wallet, allowance } = makeService({
-            response: { status: 200, data: makeSig() },
-            config: makeConfig(''),
-        });
+    it('refuses when $CPU is not configured', async () => {
+        const { service, contracts, allowance } = makeService({ config: makeConfig('') });
         await expect(service.build(EXTRACTOR)).rejects.toThrow(/not configured/i);
-        expect(api.calls).toHaveLength(0);
-        expect(wallet.sent).toHaveLength(0);
+        expect(contracts.sent).toHaveLength(0);
         expect(allowance.calls).toHaveLength(0);
     });
 
-    it('wraps an on-chain revert with retry guidance (signId + deadline)', async () => {
-        const { service } = makeService({ response: { status: 200, data: makeSig() }, receipts: [TxStatus.Reverted] });
-        const error = await service.build(EXTRACTOR).catch((e: unknown) => e);
-        expect(error).toBeInstanceOf(Error);
-        const message = (error as Error).message;
-        expect(message).toMatch(/reverted/i);
-        expect(message).toMatch(/re-run build/i);
-        expect(message).toMatch(/signId 7/);
-        expect(message).toMatch(/valid until 1970-01-01/);
+    it('rejects a build on a cell owned by someone else', async () => {
+        const cell = makeCell({ tokenId: '42', owner: '0xother' });
+        const { service, contracts } = makeService({ cell });
+        await expect(service.build(EXTRACTOR)).rejects.toThrow(/do not own/i);
+        expect(contracts.sent).toHaveLength(0);
     });
 
-    it('wraps an approve failure with retry guidance and sends no build tx', async () => {
-        const { service, wallet } = makeService({
-            response: { status: 200, data: makeSig() },
-            approve: new Error('Approve transaction reverted on-chain (tx 0xabc).'),
+    it('rejects a build while a process is active', async () => {
+        const cell = makeCell({
+            tokenId: '42',
+            owner: WALLET_ADDRESS,
+            process: { kind: CellProcessKind.Mining, resource: 3, rate: 10, startAt: 1 },
         });
-        await expect(service.build(EXTRACTOR)).rejects.toThrow(/approve transaction reverted/i);
-        await expect(service.build(EXTRACTOR)).rejects.toThrow(/re-run build/i);
-        expect(wallet.sent).toHaveLength(0);
+        const { service, contracts } = makeService({ cell });
+        await expect(service.build(EXTRACTOR)).rejects.toThrow(/active .*process/i);
+        expect(contracts.sent).toHaveLength(0);
     });
 
-    it('surfaces an API error and sends no transaction', async () => {
-        const { service, wallet, allowance } = makeService({
-            response: { status: 409, data: { message: 'NotCellOwner' } },
-        });
-        await expect(service.build(EXTRACTOR)).rejects.toThrow(/NotCellOwner/);
-        expect(wallet.sent).toHaveLength(0);
-        expect(allowance.calls).toHaveLength(0);
+    it('wraps an on-chain revert of the place', async () => {
+        const { service } = makeService({ receipts: [TxStatus.Reverted] });
+        await expect(service.build(EXTRACTOR)).rejects.toThrow(/build transaction reverted/i);
     });
 
     it('refuses when the wallet chainId does not match the chain config', async () => {
-        const { service, api, wallet } = makeService({
-            response: { status: 200, data: makeSig() },
-            walletChainId: 8453,
-        });
+        const { service, contracts } = makeService({ walletChainId: 8453 });
         await expect(service.build(EXTRACTOR)).rejects.toThrow(/chain mismatch/i);
-        expect(api.calls).toHaveLength(0);
-        expect(wallet.sent).toHaveLength(0);
+        expect(contracts.sent).toHaveLength(0);
+    });
+
+    it('demolishes a building', async () => {
+        const cell = makeCell({ tokenId: '42', owner: WALLET_ADDRESS });
+        const { service, contracts } = makeService({ cell });
+
+        const result = await service.demolish({ tokenId: '42' });
+
+        expect(contracts.sent).toHaveLength(1);
+        expect(decodeSent(contracts, 0).functionName).toBe('demolish');
+        expect(result.status).toBe(TxStatus.Success);
+        expect(result.blockNumber).toBe('100');
     });
 });
