@@ -28,11 +28,10 @@ import { registerListLotsTool } from './tools/trade/list-lots/list-lots.js';
 import { registerListMyLotsTool } from './tools/trade/list-mine/list-my-lots.js';
 import { registerGetMarketsTool } from './tools/trade/markets/get-markets.js';
 import { registerQuoteBuyTool } from './tools/trade/quote-buy/quote-buy.js';
-import { registerGetPendingTransportsTool } from './tools/transport/get-pending/get-pending-transports.js';
+import { registerFinalizeDeliveryTool } from './tools/transport/finalize/finalize-delivery.js';
 import { registerGetTransportStatusTool } from './tools/transport/get-status/get-transport-status.js';
 import { registerListMyTransportsTool } from './tools/transport/list-mine/list-my-transports.js';
 import { registerQuoteTransportTool } from './tools/transport/quote/quote-transport.js';
-import { registerResumeTransportTool } from './tools/transport/resume/resume-transport.js';
 import { registerTransportTool } from './tools/transport/transport.js';
 import { registerWithdrawTool } from './tools/withdraw/withdraw.js';
 import type { AppContext } from './types.js';
@@ -49,10 +48,10 @@ const SERVER_INSTRUCTIONS = [
     'Act on a cell you own with `reveal`, which surfaces its resource deposits on-chain.',
     'Place a building with `build` — an `extractor` (paid in $CPU, auto-settled on-chain) starts mining its',
     'target resource automatically; read accrual with `get_mining_status` and bank it with `claim_mining`.',
-    'Move resources between cells with `transport` (preview cost first with `quote_transport`); a route',
-    'through a foreign Hub is paid in $CPU and auto-settled on-chain. Track shipments with',
-    '`get_transport_status` / `list_my_transports`; finish an interrupted payment with',
-    '`get_pending_transports` + `resume_transport`.',
+    'Move resources between cells with `transport` (preview cost first with `quote_transport`) — one on-chain',
+    'move that debits the source, pays the $CPU transit fee for any foreign Hub on the route, and escrows a',
+    'time-delayed delivery. Track deliveries with `get_transport_status` / `list_my_transports`; a delivery is',
+    'credited to the target only after it arrives and you call `finalize_delivery`.',
     'Refine and forge resources with `craft` — discover recipes via `list_recipes` (the `forge_wcpu` recipe',
     'is paid in $CPU and auto-settled on-chain, the rest are free); read progress with `get_craft_status` and',
     'bank matured batches with `claim_craft`.',
@@ -69,7 +68,7 @@ const SERVER_INSTRUCTIONS = [
     'and act with `create_lot` (list goods), `buy_lot` (preview cost first with `quote_buy`), and `cancel_lot`',
     '— paid routes auto-settle on-chain; track your lots with `list_my_lots`.',
     'Check spendable $CPU and gas with `get_balance` before any paid action.',
-    'Paid actions (transport, trade, craft forge, withdraw) escrow at signing; if a payment is interrupted and',
+    'Paid actions (trade, craft forge, withdraw) escrow at signing; if a payment is interrupted and',
     'its signature lapses, the escrow is refunded automatically within about a minute — do not try to free it',
     'manually, and note that starting the same action again while one is still pending is rejected.',
     'Swap between native ETH and $CPU on the token pool with `swap` (preview first with `quote_swap`);',
@@ -96,8 +95,7 @@ export async function createServer(context: AppContext): Promise<void> {
     registerTransportTool(server, context);
     registerListMyTransportsTool(server, context);
     registerGetTransportStatusTool(server, context);
-    registerGetPendingTransportsTool(server, context);
-    registerResumeTransportTool(server, context);
+    registerFinalizeDeliveryTool(server, context);
     registerGetMarketsTool(server, context);
     registerListLotsTool(server, context);
     registerGetLotTool(server, context);

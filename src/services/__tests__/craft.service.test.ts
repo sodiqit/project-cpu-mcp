@@ -129,7 +129,7 @@ describe('CraftService', () => {
         expect(message).toMatch(/reverted/i);
         expect(message).toMatch(/auto-refund/i);
         expect(message).toMatch(/signId 7/);
-        expect(message).toMatch(/1700/);
+        expect(message).toMatch(/deadline 1970-01-01/);
     });
 
     it('refuses a paid craft when $CPU is not configured and sends no tx', async () => {

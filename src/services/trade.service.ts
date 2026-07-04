@@ -39,6 +39,7 @@ import {
 } from '../api/types.js';
 import type { ILogger } from '../logger/types.js';
 import { errorMessage } from '../utils/error.utils.js';
+import { formatUnixSeconds } from '../utils/format.utils.js';
 import type { WalletManager, WalletProvider } from '../wallet/types.js';
 
 /**
@@ -217,7 +218,7 @@ export class TradeService {
         } catch (error) {
             throw new Error(
                 `Paid ${action} on lot ${data.lotId} was signed but the on-chain payment did not complete: ` +
-                    `${errorMessage(error)}. The signature is valid until ${data.deadline} (unix seconds); the ` +
+                    `${errorMessage(error)}. The signature is valid until ${formatUnixSeconds(Number(data.deadline))}; the ` +
                     `reservation is reconciled automatically a short while after the deadline — wait for it to ` +
                     `clear, then re-run the action (re-running while it is still pending is rejected).`,
             );

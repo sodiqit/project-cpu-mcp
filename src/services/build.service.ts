@@ -7,6 +7,7 @@ import type { ApiClient } from '../api/client.js';
 import { type BuildRequest, type BuildSignatureResponse, HttpStatus } from '../api/types.js';
 import type { ILogger } from '../logger/types.js';
 import { errorMessage } from '../utils/error.utils.js';
+import { formatUnixSeconds } from '../utils/format.utils.js';
 import type { WalletManager, WalletProvider } from '../wallet/types.js';
 
 export class BuildService {
@@ -71,7 +72,7 @@ export class BuildService {
         } catch (error) {
             throw new Error(
                 `Build signature issued (signId ${sig.signId}) but the on-chain payment did not complete: ` +
-                    `${errorMessage(error)}. The signature is valid until ${sig.deadline} (unix seconds) — re-run ` +
+                    `${errorMessage(error)}. The signature is valid until ${formatUnixSeconds(Number(sig.deadline))} — re-run ` +
                     `build with the same arguments to retry (the server reissues the same signature).`,
             );
         }

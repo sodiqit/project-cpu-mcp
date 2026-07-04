@@ -46,6 +46,8 @@ export class AppConfigService implements IAppConfig {
                 gameSettlement: data.contracts.gameSettlement,
                 cpuHook: data.contracts.cpuHook,
                 cell: data.contracts.cell,
+                cellLens: data.contracts.cellLens,
+                transport: data.contracts.transport,
             },
             resources: data.resources ?? {},
             recipes: data.recipes ?? [],

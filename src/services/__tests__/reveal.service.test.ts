@@ -70,7 +70,7 @@ class FakeContractClient implements IContractClient {
         if (this.reverts) {
             throw new Error(`${revertLabel} reverted on-chain (tx ${hash}).`);
         }
-        return { txHash: hash, status: TxStatus.Success, blockNumber: '100' };
+        return { txHash: hash, status: TxStatus.Success, blockNumber: '100', logs: [] };
     }
 }
 

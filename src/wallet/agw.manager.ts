@@ -72,6 +72,7 @@ export class AgwWalletManager implements WalletManager {
             status: receipt.status === 'success' ? TxStatus.Success : TxStatus.Reverted,
             transactionHash: receipt.transactionHash,
             blockNumber: receipt.blockNumber,
+            logs: receipt.logs,
         };
     }
 

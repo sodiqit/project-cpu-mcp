@@ -22,6 +22,7 @@ import {
 } from '../api/types.js';
 import type { ILogger } from '../logger/types.js';
 import { errorMessage } from '../utils/error.utils.js';
+import { formatUnixSeconds } from '../utils/format.utils.js';
 import type { WalletManager, WalletProvider } from '../wallet/types.js';
 
 /**
@@ -110,7 +111,7 @@ export class CraftService {
             throw new Error(
                 `Craft signature issued (signId ${sig.signId}) but the on-chain payment did not complete: ` +
                     `${errorMessage(error)}. The inputs stay escrowed on cell ${input.tokenId} past the signature ` +
-                    `deadline ${sig.deadline} (unix seconds), then they are auto-refunded — retry the craft after ` +
+                    `deadline ${formatUnixSeconds(Number(sig.deadline))}, then they are auto-refunded — retry the craft after ` +
                     `that.`,
             );
         }

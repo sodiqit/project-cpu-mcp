@@ -48,6 +48,7 @@ export class ContractClient implements IContractClient {
             txHash: receipt.transactionHash,
             status: receipt.status,
             blockNumber: receipt.blockNumber.toString(),
+            logs: receipt.logs,
         };
     }
 }

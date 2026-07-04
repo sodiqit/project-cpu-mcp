@@ -79,15 +79,25 @@ describe('ContractClient', () => {
 
     it('confirms a successful receipt', async () => {
         const c = client({
-            waitForReceipt: async (hash) => ({ status: TxStatus.Success, transactionHash: hash, blockNumber: 100n }),
+            waitForReceipt: async (hash) => ({
+                status: TxStatus.Success,
+                transactionHash: hash,
+                blockNumber: 100n,
+                logs: [],
+            }),
         });
         const confirmed = await c.confirm(HASH, 'Reveal request');
-        expect(confirmed).toEqual({ txHash: HASH, status: TxStatus.Success, blockNumber: '100' });
+        expect(confirmed).toEqual({ txHash: HASH, status: TxStatus.Success, blockNumber: '100', logs: [] });
     });
 
     it('throws when the receipt reverted', async () => {
         const c = client({
-            waitForReceipt: async (hash) => ({ status: TxStatus.Reverted, transactionHash: hash, blockNumber: 7n }),
+            waitForReceipt: async (hash) => ({
+                status: TxStatus.Reverted,
+                transactionHash: hash,
+                blockNumber: 7n,
+                logs: [],
+            }),
         });
         await expect(c.confirm(HASH, 'Reveal request')).rejects.toThrow(/Reveal request reverted/);
     });
@@ -100,7 +110,7 @@ describe('ContractClient', () => {
                 if (calls < 2) {
                     throw new Error('timeout');
                 }
-                return { status: TxStatus.Success, transactionHash: hash, blockNumber: 5n };
+                return { status: TxStatus.Success, transactionHash: hash, blockNumber: 5n, logs: [] };
             },
         });
         const confirmed = await c.confirm(HASH, 'Reveal request');

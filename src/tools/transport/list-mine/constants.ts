@@ -1,5 +1,5 @@
 export const LIST_MY_TRANSPORTS_DESCRIPTION = [
-    'List your own transports (newest first), optionally filtered by status (in_transit, delivered,',
-    'awaiting_payment, cancelled, reverted). Each entry includes live progress. Use this to monitor your',
-    'shipments, or to recover a transport jobId you no longer have — the map does not carry jobIds.',
+    'List your deliveries (the ones you paid for), optionally filtered: all, in_transit, delivered, or',
+    'ready_to_finalize. Each entry shows source/target, amount, arrival time, and whether it is delivered or',
+    'ready to finalize. Use it to find deliveries to complete with `finalize_delivery`.',
 ].join(' ');

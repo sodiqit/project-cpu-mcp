@@ -1,9 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { TRANSPORT_DESCRIPTION } from './constants.js';
-import { summarizeFree, summarizePaid } from './format.utils.js';
+import { summarizeTransport } from './format.utils.js';
 import { transportInputSchema } from './types.js';
-import { TransportResultKind } from '../../services/types.js';
 import type { AppContext } from '../../types.js';
 
 export function registerTransportTool(server: McpServer, context: AppContext): void {
@@ -18,14 +17,10 @@ export function registerTransportTool(server: McpServer, context: AppContext): v
             });
 
             const { resources } = await context.appConfig.load();
-            const header =
-                result.kind === TransportResultKind.Paid
-                    ? summarizePaid(result, resources)
-                    : summarizeFree(result, resources);
 
             return {
                 content: [
-                    { type: 'text', text: header },
+                    { type: 'text', text: summarizeTransport(result, resources) },
                     { type: 'text', text: JSON.stringify(result) },
                 ],
             };
