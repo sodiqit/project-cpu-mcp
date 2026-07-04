@@ -181,6 +181,12 @@ export interface BuildResult {
     alreadyBuilt: boolean;
 }
 
+export interface BuildPlacement {
+    buildTxHash: Hash | null;
+    approveTxHash: Hash | null;
+    buildCostWei: string;
+}
+
 export interface DemolishInput {
     tokenId: string;
 }
