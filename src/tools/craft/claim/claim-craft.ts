@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { CLAIM_CRAFT_DESCRIPTION } from './constants.js';
 import type { AppContext } from '../../../types.js';
-import { summarizeClaim } from '../format.utils.js';
+import { summarizeCraftClaim } from '../format.utils.js';
 import { craftCellInputSchema } from '../types.js';
 
 export function registerClaimCraftTool(server: McpServer, context: AppContext): void {
@@ -15,7 +15,7 @@ export function registerClaimCraftTool(server: McpServer, context: AppContext): 
 
             return {
                 content: [
-                    { type: 'text', text: summarizeClaim(result, resources) },
+                    { type: 'text', text: summarizeCraftClaim(result, resources) },
                     { type: 'text', text: JSON.stringify(result) },
                 ],
             };

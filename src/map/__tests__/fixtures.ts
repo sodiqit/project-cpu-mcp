@@ -7,11 +7,11 @@ export function makeCell(overrides: Partial<CellState> = {}): CellState {
         y: 0,
         owner: '0xowner',
         revealCount: 0,
+        revealPending: false,
         resources: [],
         building: null,
         transitFeePerUnit: null,
-        mining: null,
-        crafting: [],
+        process: null,
         updated: 1,
         ...overrides,
     };

@@ -1,10 +1,14 @@
-import type { Address, Hash, Hex } from 'viem';
+import type { Address, Hash, Hex, Log } from 'viem';
 
 import type { ApiClient } from '../../api/client.js';
+import { BuildingType, CraftCategory, CraftRecipeId } from '../../api/types.js';
 import { Network } from '../../config/types.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import type { ILogger } from '../../logger/types.js';
+import type { CellState, RevealCellReader } from '../../map/types.js';
 import {
+    type ConfirmedTx,
+    type IContractClient,
     type ReadContractParams,
     type TransactionRequest,
     type TxReceipt,
@@ -12,7 +16,8 @@ import {
     type WalletManager,
     type WalletProvider,
 } from '../../wallet/types.js';
-import type { AppConfig, IAllowanceService, IAppConfig } from '../types.js';
+import { CellClient } from '../cell.client.js';
+import type { AppConfig, IAllowanceService, IAppConfig, ICellClient } from '../types.js';
 
 /**
  * Shared in-memory doubles for the paid-action services (build / reveal / transport / craft), which
@@ -45,8 +50,32 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
             transport: TRANSPORT,
         },
         resources: { 3: 'Silica' },
-        recipes: [],
-        buildings: [],
+        recipes: [
+            {
+                id: CraftRecipeId.GeneratePower,
+                name: 'Generate Power',
+                category: CraftCategory.Refine,
+                tier: 2,
+                inputs: [],
+                outputs: [],
+                durationSec: 60,
+                costCpu: '0',
+            },
+            {
+                id: CraftRecipeId.ForgeWcpu,
+                name: 'CPU Forge',
+                category: CraftCategory.Forge,
+                tier: 5,
+                inputs: [],
+                outputs: [],
+                durationSec: 3600,
+                costCpu: '100',
+            },
+        ],
+        buildings: [
+            { type: BuildingType.Extractor, name: 'Extractor', buildCost: '2000' },
+            { type: BuildingType.Hub, name: 'Hub', buildCost: '5000' },
+        ],
         reveal: { firstFree: true, reRevealCost: '0' },
     };
 }
@@ -179,4 +208,93 @@ export function makeHarness<T>(create: (opts: PaidServiceOptions) => T, opts: Ha
         logger: new NoopLogger(),
     });
     return { service, api, wallet, allowance };
+}
+
+export class FakeContractClient implements IContractClient {
+    public readonly sent: Array<TransactionRequest> = [];
+    public readonly reads: Array<ReadContractParams> = [];
+    private confirmIndex = 0;
+
+    constructor(
+        private readonly receipts: Array<TxStatus> = [],
+        private readonly logsByConfirm: Array<Array<Log>> = [],
+    ) {}
+
+    async read<T>(params: ReadContractParams): Promise<T> {
+        this.reads.push(params);
+        return undefined as T;
+    }
+    async send(tx: TransactionRequest): Promise<Hash> {
+        this.sent.push(tx);
+        return `0x${String(this.sent.length).padStart(64, '0')}` as Hash;
+    }
+    async confirm(hash: Hash, revertLabel: string): Promise<ConfirmedTx> {
+        const status = this.receipts[this.confirmIndex] ?? TxStatus.Success;
+        const logs = this.logsByConfirm[this.confirmIndex] ?? [];
+        this.confirmIndex += 1;
+        if (status === TxStatus.Reverted) {
+            throw new Error(`${revertLabel} reverted on-chain (tx ${hash}).`);
+        }
+        return { txHash: hash, status, blockNumber: '100', logs };
+    }
+}
+
+export class FakeMapReader implements RevealCellReader {
+    public refreshed = 0;
+    constructor(private readonly cell: CellState | null = null) {}
+    readRevealCell(): CellState | null {
+        return this.cell;
+    }
+    async refresh(): Promise<void> {
+        this.refreshed += 1;
+    }
+}
+
+export interface CellServiceDeps {
+    wallet: WalletProvider;
+    appConfig: IAppConfig;
+    allowance: IAllowanceService;
+    cellClient: ICellClient;
+    contracts: IContractClient;
+    mapReader: RevealCellReader;
+    logger: ILogger;
+}
+
+export type CellHarnessOptions = Partial<{
+    receipts: Array<TxStatus>;
+    logs: Array<Array<Log>>;
+    walletChainId: number;
+    config: AppConfig;
+    approve: Hash | null | Error;
+    cell: CellState | null;
+}>;
+
+export interface CellHarness<T> {
+    service: T;
+    wallet: FakeWallet;
+    allowance: FakeAllowance;
+    contracts: FakeContractClient;
+    cellClient: CellClient;
+    mapReader: FakeMapReader;
+}
+
+export function makeCellHarness<T>(
+    create: (deps: CellServiceDeps) => T,
+    opts: CellHarnessOptions = {},
+): CellHarness<T> {
+    const wallet = new FakeWallet(opts.walletChainId ?? 1);
+    const allowance = new FakeAllowance(opts.approve ?? null);
+    const contracts = new FakeContractClient(opts.receipts ?? [], opts.logs ?? []);
+    const cellClient = new CellClient({ contracts, logger: new NoopLogger() });
+    const mapReader = new FakeMapReader(opts.cell ?? null);
+    const service = create({
+        wallet,
+        appConfig: new FakeAppConfig(opts.config ?? makeConfig()),
+        allowance,
+        cellClient,
+        contracts,
+        mapReader,
+        logger: new NoopLogger(),
+    });
+    return { service, wallet, allowance, contracts, cellClient, mapReader };
 }

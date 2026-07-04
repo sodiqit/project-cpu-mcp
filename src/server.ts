@@ -5,6 +5,7 @@ import pkg from '../package.json' with { type: 'json' };
 import { registerGetBalanceTool } from './tools/account/get-balance/get-balance.js';
 import { registerAuthenticateTool } from './tools/authenticate.js';
 import { registerBuildTool } from './tools/build/build.js';
+import { registerDemolishTool } from './tools/build/demolish.js';
 import { registerGetGameConfigTool } from './tools/config/get-game-config/get-game-config.js';
 import { registerClaimCraftTool } from './tools/craft/claim/claim-craft.js';
 import { registerCraftTool } from './tools/craft/craft.js';
@@ -85,6 +86,7 @@ export async function createServer(context: AppContext): Promise<void> {
     registerGetChangesTool(server, context);
     registerRevealTool(server, context);
     registerBuildTool(server, context);
+    registerDemolishTool(server, context);
     registerListRecipesTool(server, context);
     registerCraftTool(server, context);
     registerGetCraftStatusTool(server, context);

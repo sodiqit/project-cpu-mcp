@@ -15,3 +15,7 @@ export const buildInputSchema = {
                 'Must be null for a hub.',
         ),
 };
+
+export const demolishInputSchema = {
+    tokenId: z.string().describe('The tokenId of a cell you own whose building to remove.'),
+};

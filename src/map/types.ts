@@ -1,36 +1,46 @@
 import { z } from 'zod';
 
 import type { MapStore } from './store.js';
+import { BuildingType } from '../api/types.js';
 import type { ILogger } from '../logger/types.js';
 
-// Wire schemas validated at the network edge, so malformed payloads are rejected before they reach
-// the store. Units that the types can't express: `version`/`updated` are epoch MILLISECONDS,
-// `serverTime`/`startAt` are unix SECONDS, amounts are decimal strings, `x`/`y` are axial hex.
+export enum CellProcessKind {
+    Mining = 'mining',
+    Craft = 'craft',
+}
+
 export const cellResourceSchema = z.object({
     resourceId: z.number(),
     deposit: z.string(),
     balance: z.string(),
+    strength: z.number().nullable().default(null),
 });
 
 export const cellBuildingViewSchema = z.object({
-    type: z.string(),
-    targetResourceId: z.number().nullable(),
+    type: z.nativeEnum(BuildingType),
+    buildFinishAt: z.number().nullable(),
 });
 
-export const cellMiningViewSchema = z.object({
-    targetResourceId: z.number(),
-    tier: z.number(),
+export const cellProcessMiningViewSchema = z.object({
+    kind: z.literal(CellProcessKind.Mining),
+    resource: z.number(),
+    rate: z.number(),
     startAt: z.number(),
 });
 
-export const cellCraftViewSchema = z.object({
-    uuid: z.string(),
+export const cellProcessCraftViewSchema = z.object({
+    kind: z.literal(CellProcessKind.Craft),
     recipeId: z.string(),
     batches: z.number(),
     claimedBatches: z.number(),
-    status: z.string(),
-    startAt: z.number().nullable(),
+    durationSec: z.number(),
+    startAt: z.number(),
 });
+
+export const cellProcessViewSchema = z.discriminatedUnion('kind', [
+    cellProcessMiningViewSchema,
+    cellProcessCraftViewSchema,
+]);
 
 export const cellStateSchema = z.object({
     tokenId: z.string(),
@@ -38,14 +48,11 @@ export const cellStateSchema = z.object({
     y: z.number(),
     owner: z.string(),
     revealCount: z.number(),
+    revealPending: z.boolean().default(false),
     resources: z.array(cellResourceSchema),
-    building: cellBuildingViewSchema.nullable(),
-    // Per-unit $CPU a foreign mover pays to route through this cell (decimal string); populated for
-    // Hubs, null otherwise. Lets the agent rank hubs by cost without a per-route quote. Defaults to
-    // null so a client that updates before the server ships the field still parses cells.
+    building: cellBuildingViewSchema.nullable().default(null),
     transitFeePerUnit: z.string().nullable().default(null),
-    mining: cellMiningViewSchema.nullable(),
-    crafting: z.array(cellCraftViewSchema),
+    process: cellProcessViewSchema.nullable().default(null),
     updated: z.number(),
 });
 
@@ -57,8 +64,9 @@ export const mapSnapshotResponseSchema = z.object({
 
 export type CellResource = z.infer<typeof cellResourceSchema>;
 export type CellBuildingView = z.infer<typeof cellBuildingViewSchema>;
-export type CellMiningView = z.infer<typeof cellMiningViewSchema>;
-export type CellCraftView = z.infer<typeof cellCraftViewSchema>;
+export type CellProcessMiningView = z.infer<typeof cellProcessMiningViewSchema>;
+export type CellProcessCraftView = z.infer<typeof cellProcessCraftViewSchema>;
+export type CellProcessView = z.infer<typeof cellProcessViewSchema>;
 export type CellState = z.infer<typeof cellStateSchema>;
 export type MapSnapshotResponse = z.infer<typeof mapSnapshotResponseSchema>;
 

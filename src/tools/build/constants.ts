@@ -1,14 +1,21 @@
 export const BUILD_DESCRIPTION = [
     'Place a building on a revealed Land cell you own. Requires a session — call `authenticate` first.',
-    'Two types: `extractor` (mines a resource deposit — pass the `targetResourceId` of a resource that has',
-    'an active deposit on the cell) and `hub` (trade — pass `targetResourceId: null`). Build always costs',
-    '$CPU, which this tool auto-approves once (a one-time unbounded allowance) before submitting the on-chain',
-    'payment and waiting for its confirmation. The building is applied by the indexer a few seconds later; an',
-    'extractor then starts mining automatically — track it with `get_mining_status`. Inspect the cell with',
-    '`get_cell`.',
-    'A cell holds one building. An `extractor` may be rebuilt only on a cell whose target resource is fully',
-    'depleted (claimed to zero): the new extractor — which must target a resource that still has an active',
-    'deposit — replaces the old one. Otherwise the build is rejected (the existing building isn’t replaceable).',
-    'A `hub` can only go on a cell that was never built on. A build already awaiting payment on the cell blocks',
-    'a different one — pay or let it lapse first (an identical re-request just resumes it).',
+    'Two types: `extractor` (mines a resource deposit — pass the `targetResourceId` of a resource that has an',
+    'active deposit on the cell) and `hub` (trade — pass `targetResourceId: null`). Build costs $CPU, which this',
+    'tool auto-approves once (a one-time unbounded allowance to the Cell contract) before sending the on-chain',
+    'place and waiting for its confirmation. An `extractor` then starts mining its target in a second',
+    'transaction — track it with `get_mining_status`. The new state appears on the map shortly after; inspect',
+    'it with `get_cell`.',
+    'A cell holds one building; to change to a different building, `demolish` it first. Re-running build on a',
+    'cell that already has the requested building skips the place and just (re)starts mining the target, so an',
+    'interrupted build is safe to retry. To switch an extractor to a different resource, deplete the current',
+    'one (claim it to zero so the process ends), then run build again with the new `targetResourceId`.',
+].join(' ');
+
+export const DEMOLISH_DESCRIPTION = [
+    'Remove the building from a Land cell you own, clearing it for a different building. Requires a session —',
+    'call `authenticate` first. The cell must have no active mining or craft process (claim or finish it',
+    'first); a `hub` can only be demolished when it is not mid-route or anchoring open trade lots. Deposits and',
+    'warehouse balances are preserved. Sends the on-chain demolish and waits for confirmation; the cleared',
+    'state appears on the map shortly after.',
 ].join(' ');

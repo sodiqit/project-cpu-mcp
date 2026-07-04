@@ -5,7 +5,6 @@ import { BuildingType } from '../../../api/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
 import type { BuildResult } from '../../../services/types.js';
 import type { AppContext } from '../../../types.js';
-import { TxStatus } from '../../../wallet/types.js';
 import { registerBuildTool } from '../build.js';
 
 interface ToolResult {
@@ -45,14 +44,13 @@ function harness(outcome: BuildResult | Error): Handler {
 
 const extractorResult: BuildResult = {
     tokenId: '42',
-    signId: 7,
     buildingType: BuildingType.Extractor,
     targetResourceId: 3,
-    txHash: '0xbuild',
+    buildCostWei: '2000000000000000000000',
     approveTxHash: '0xapprove',
-    status: TxStatus.Success,
-    cpuAmount: '2000000000000000000000', // 2000 $CPU in wei
-    blockNumber: '100',
+    buildTxHash: '0xbuild',
+    miningTxHash: '0xmine',
+    alreadyBuilt: false,
 };
 
 describe('build tool', () => {
@@ -67,6 +65,7 @@ describe('build tool', () => {
         expect(header).toMatch(/Silica \(#3\)/);
         expect(header).toMatch(/approve tx 0xapprove/);
         expect(header).toMatch(/2000 \$CPU/);
+        expect(header).toMatch(/mining started \(tx 0xmine\)/);
         expect(header).toMatch(/get_mining_status 42/);
 
         const parsed = JSON.parse(result.content[1]?.text ?? '{}') as BuildResult;
@@ -79,7 +78,8 @@ describe('build tool', () => {
             buildingType: BuildingType.Hub,
             targetResourceId: null,
             approveTxHash: null,
-            cpuAmount: '5000000000000000000000',
+            buildCostWei: '5000000000000000000000',
+            miningTxHash: null,
         })({ tokenId: '42', buildingType: BuildingType.Hub, targetResourceId: null });
 
         const header = result.content[0]?.text ?? '';
@@ -87,6 +87,20 @@ describe('build tool', () => {
         expect(header).toMatch(/5000 \$CPU/);
         expect(header).toMatch(/get_cell 42/);
         expect(header).not.toMatch(/approve/i);
+    });
+
+    it('notes when the building was already in place', async () => {
+        const result = await harness({
+            ...extractorResult,
+            approveTxHash: null,
+            buildTxHash: null,
+            buildCostWei: '0',
+            alreadyBuilt: true,
+        })({ tokenId: '42', buildingType: BuildingType.Extractor, targetResourceId: 3 });
+
+        const header = result.content[0]?.text ?? '';
+        expect(header).toMatch(/already in place/);
+        expect(header).toMatch(/mining started/);
     });
 
     it('propagates service errors', async () => {

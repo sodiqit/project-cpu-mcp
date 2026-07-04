@@ -2,6 +2,7 @@ import { HEX_NEIGHBOR_OFFSETS } from './constants.js';
 import {
     type CellState,
     cellStateSchema,
+    CellProcessKind,
     type MapCellStatusCounts,
     type MapQuery,
     MapReadiness,
@@ -125,8 +126,8 @@ function countStatuses(cells: Array<CellState>): MapCellStatusCounts {
     let crafting = 0;
 
     for (const cell of cells) {
-        const isMining = cell.mining !== null;
-        const isCrafting = cell.crafting.length > 0;
+        const isMining = cell.process?.kind === CellProcessKind.Mining;
+        const isCrafting = cell.process?.kind === CellProcessKind.Craft;
         if (isMining) {
             mining += 1;
         }

@@ -9,7 +9,7 @@ import {
     parseCellState,
     summarizeMap,
 } from '../map.utils.js';
-import { type CellState, MapReadiness, MapScope, type MapQuery, NeighborRelation } from '../types.js';
+import { type CellState, CellProcessKind, MapReadiness, MapScope, type MapQuery, NeighborRelation } from '../types.js';
 import { makeCell } from './fixtures.js';
 
 function query(overrides: Partial<MapQuery>): MapQuery {
@@ -79,11 +79,16 @@ describe('buildResourceIndex', () => {
             makeCell({
                 tokenId: '1',
                 resources: [
-                    { resourceId: 1, deposit: '10', balance: '5' },
-                    { resourceId: 2, deposit: '0', balance: '3' },
+                    { resourceId: 1, deposit: '10', balance: '5', strength: 3 },
+                    { resourceId: 2, deposit: '0', balance: '3', strength: null },
                 ],
             }),
-            makeCell({ tokenId: '2', x: 1, y: 0, resources: [{ resourceId: 1, deposit: '0', balance: '7' }] }),
+            makeCell({
+                tokenId: '2',
+                x: 1,
+                y: 0,
+                resources: [{ resourceId: 1, deposit: '0', balance: '7', strength: null }],
+            }),
         ];
 
         const index = buildResourceIndex(cells);
@@ -143,14 +148,29 @@ describe('summarizeMap', () => {
 
     it('counts statuses and depleted deposits over owned cells', () => {
         const ownedCells = [
-            makeCell({ tokenId: 'm', revealCount: 1, mining: { targetResourceId: 1, tier: 1, startAt: 1 } }),
+            makeCell({
+                tokenId: 'm',
+                revealCount: 1,
+                process: { kind: CellProcessKind.Mining, resource: 1, rate: 1, startAt: 1 },
+            }),
             makeCell({
                 tokenId: 'c',
                 revealCount: 1,
-                crafting: [{ uuid: 'u', recipeId: 'r', batches: 1, claimedBatches: 0, status: 'active', startAt: 1 }],
+                process: {
+                    kind: CellProcessKind.Craft,
+                    recipeId: 'r',
+                    batches: 1,
+                    claimedBatches: 0,
+                    durationSec: 60,
+                    startAt: 1,
+                },
             }),
             makeCell({ tokenId: 'i', revealCount: 1 }),
-            makeCell({ tokenId: 'd', revealCount: 1, resources: [{ resourceId: 1, deposit: '0', balance: '0' }] }),
+            makeCell({
+                tokenId: 'd',
+                revealCount: 1,
+                resources: [{ resourceId: 1, deposit: '0', balance: '0', strength: null }],
+            }),
         ];
 
         const summary = summarizeMap({ ...base, ownedCells });

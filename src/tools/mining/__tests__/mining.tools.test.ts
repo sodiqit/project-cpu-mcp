@@ -1,9 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it } from 'vitest';
 
-import type { ClaimResponse, MiningStatusResponse } from '../../../api/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
+import type { MiningClaimResult, MiningStatusResult } from '../../../services/types.js';
 import type { AppContext } from '../../../types.js';
+import { TxStatus } from '../../../wallet/types.js';
 import { registerClaimMiningTool } from '../claim/claim-mining.js';
 import { registerGetMiningStatusTool } from '../get-status/get-mining-status.js';
 
@@ -31,9 +32,9 @@ function capture(register: (server: McpServer, context: AppContext) => void, con
     return captured;
 }
 
-function statusHarness(outcome: MiningStatusResponse | Error): Handler {
+function statusHarness(outcome: MiningStatusResult | Error): Handler {
     const mining = {
-        getStatus: async (): Promise<MiningStatusResponse> => {
+        getStatus: async (): Promise<MiningStatusResult> => {
             if (outcome instanceof Error) {
                 throw outcome;
             }
@@ -44,9 +45,9 @@ function statusHarness(outcome: MiningStatusResponse | Error): Handler {
     return capture(registerGetMiningStatusTool, context);
 }
 
-function claimHarness(outcome: ClaimResponse | Error): Handler {
+function claimHarness(outcome: MiningClaimResult | Error): Handler {
     const mining = {
-        claim: async (): Promise<ClaimResponse> => {
+        claim: async (): Promise<MiningClaimResult> => {
             if (outcome instanceof Error) {
                 throw outcome;
             }
@@ -63,18 +64,18 @@ describe('get_mining_status tool', () => {
             tokenId: '42',
             active: true,
             targetResourceId: 3,
-            tier: 1,
+            rate: 10,
             startAt: 1700,
-            minedAmount: 120,
-            depositRemaining: 500,
+            claimable: '120',
+            depositRemaining: '500',
         })({ tokenId: '42' });
 
         const header = result.content[0]?.text ?? '';
         expect(header).toMatch(/Silica \(#3\)/);
-        expect(header).toMatch(/120 unclaimed/);
+        expect(header).toMatch(/120 claimable/);
         expect(header).toMatch(/500 left/);
 
-        const parsed = JSON.parse(result.content[1]?.text ?? '{}') as MiningStatusResponse;
+        const parsed = JSON.parse(result.content[1]?.text ?? '{}') as MiningStatusResult;
         expect(parsed.targetResourceId).toBe(3);
     });
 
@@ -83,10 +84,10 @@ describe('get_mining_status tool', () => {
             tokenId: '42',
             active: false,
             targetResourceId: null,
-            tier: null,
+            rate: null,
             startAt: null,
-            minedAmount: 0,
-            depositRemaining: 0,
+            claimable: '0',
+            depositRemaining: '0',
         })({ tokenId: '42' });
 
         expect(result.content[0]?.text).toMatch(/no active mining/i);
@@ -94,33 +95,32 @@ describe('get_mining_status tool', () => {
 });
 
 describe('claim_mining tool', () => {
-    it('reports the claimed amount and new balance', async () => {
+    it('reports the claimed amount', async () => {
         const result = await claimHarness({
             tokenId: '42',
             resourceId: 3,
-            claimedAmount: 120,
-            balanceAmount: 620,
-            depositRemaining: 380,
-            depleted: false,
+            claimedAmount: '120',
+            txHash: '0xmine',
+            status: TxStatus.Success,
+            blockNumber: '100',
         })({ tokenId: '42' });
 
         const header = result.content[0]?.text ?? '';
         expect(header).toMatch(/Claimed 120 Silica \(#3\)/);
-        expect(header).toMatch(/balance now 620/);
-        expect(header).toMatch(/380 left/);
+        expect(header).toMatch(/block 100/);
     });
 
     it('reports a no-op claim when nothing has accrued', async () => {
         const result = await claimHarness({
             tokenId: '42',
-            resourceId: 3,
-            claimedAmount: 0,
-            balanceAmount: 0,
-            depositRemaining: 0,
-            depleted: true,
+            resourceId: null,
+            claimedAmount: '0',
+            txHash: '0xmine',
+            status: TxStatus.Success,
+            blockNumber: '100',
         })({ tokenId: '42' });
 
-        expect(result.content[0]?.text).toMatch(/nothing to claim/i);
+        expect(result.content[0]?.text).toMatch(/nothing newly accrued/i);
     });
 
     it('propagates service errors', async () => {

@@ -1,7 +1,6 @@
-import type { ClaimCraftResponse, CraftProcessStatusResponse, CraftStackView, RecipeView } from '../../api/types.js';
-import { CraftProcessStatus } from '../../api/types.js';
-import type { FreeCraftResult, PaidCraftResult } from '../../services/types.js';
-import { cpuFromWei, formatUnixSeconds, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
+import type { CraftStackView, RecipeView } from '../../api/types.js';
+import type { CraftClaimResult, CraftStartResult, CraftStatusResult } from '../../services/types.js';
+import { cpuFromWei, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
 
 function formatStacks(stacks: Array<CraftStackView>, resources: ResourceNames): string {
     if (stacks.length === 0) {
@@ -37,52 +36,31 @@ export function summarizeRecipes(recipes: Array<RecipeView>, resources: Resource
         .join('\n');
 }
 
-export function summarizeFreeCraft(r: FreeCraftResult, resources: ResourceNames): string {
-    return (
-        `Free craft started on cell ${r.tokenId}: ${r.batches}× ${r.recipeId}, consumes ` +
-        `${formatStacks(r.debitedInputs, resources)}, ready by ${formatUnixSeconds(r.endsAt)}. Bank it with claim_craft ${r.tokenId}.`
-    );
-}
-
-export function summarizePaidCraft(r: PaidCraftResult, resources: ResourceNames): string {
+export function summarizeCraftStart(r: CraftStartResult): string {
     const approve = r.approveTxHash !== null ? `approve tx ${r.approveTxHash}, ` : '';
+    const cost = r.costCpuWei === '0' ? 'free' : `${cpuFromWei(r.costCpuWei)} $CPU`;
     return (
-        `Paid craft on cell ${r.tokenId}: ${r.batches}× ${r.recipeId} (${cpuFromWei(r.cpuAmount)} $CPU), consumes ` +
-        `${formatStacks(r.debitedInputs, resources)}. ${approve}craft tx ${r.txHash} confirmed in block ` +
-        `${r.blockNumber}. The timer starts once the indexer settles — check get_craft_status ${r.tokenId}.`
+        `Craft started on cell ${r.tokenId}: ${r.batches}× ${r.recipeId} (${cost}). ${approve}craft tx ${r.txHash} ` +
+        `confirmed in block ${r.blockNumber}. Batches mature over time — check get_craft_status ${r.tokenId} and bank ` +
+        `matured ones with claim_craft ${r.tokenId}.`
     );
 }
 
-export function summarizeCraftStatus(processes: Array<CraftProcessStatusResponse>, resources: ResourceNames): string {
-    if (processes.length === 0) {
-        return 'No craft processes on this cell.';
+export function summarizeCraftStatus(s: CraftStatusResult): string {
+    if (!s.active) {
+        return `Cell ${s.tokenId} has no active craft.`;
     }
-    return processes
-        .map((p) => {
-            if (p.status === CraftProcessStatus.Pending) {
-                return `${p.recipeId}: pending payment — timer not started`;
-            }
-            const claimable =
-                p.claimableBatches > 0
-                    ? `, ${p.claimableBatches} claimable now (${formatStacks(p.claimableOutputs, resources)})`
-                    : '';
-            const when = p.isFinished
-                ? 'finished'
-                : p.nextBatchAt !== null
-                  ? `next batch ${formatUnixSeconds(p.nextBatchAt)}`
-                  : p.endsAt !== null
-                    ? `done ${formatUnixSeconds(p.endsAt)}`
-                    : 'in progress';
-            return `${p.recipeId}: ${p.completedBatches}/${p.batches} batches done${claimable}, ${when}`;
-        })
-        .join('\n');
+    const claimable = s.claimableBatches > 0 ? `, ${s.claimableBatches} claimable now` : '';
+    return (
+        `Cell ${s.tokenId} crafting ${s.recipeId}: ${s.maturedBatches}/${s.batches} batches matured ` +
+        `(${s.claimedBatches} already claimed)${claimable}.`
+    );
 }
 
-export function summarizeClaim(claim: ClaimCraftResponse, resources: ResourceNames): string {
-    const running = claim.processes.filter((p) => !p.isFinished).length;
-    const tail = running > 0 ? ` ${running} process(es) still running.` : '';
-    if (claim.claimed.length === 0) {
-        return `Nothing matured yet on cell ${claim.tokenId}.${tail}`;
+export function summarizeCraftClaim(r: CraftClaimResult, resources: ResourceNames): string {
+    if (r.outputs.length === 0) {
+        return `Nothing matured yet to claim on cell ${r.tokenId} (tx ${r.txHash}).`;
     }
-    return `Claimed ${formatStacks(claim.claimed, resources)} on cell ${claim.tokenId}.${tail}`;
+    const outs = r.outputs.map((o) => `${o.amount} ${resourceLabel(resources, o.resourceId)}`).join(' + ');
+    return `Claimed ${r.batches} batch(es) → ${outs} on cell ${r.tokenId}: tx ${r.txHash} confirmed in block ${r.blockNumber}.`;
 }

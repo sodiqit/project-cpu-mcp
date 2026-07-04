@@ -13,13 +13,13 @@ export function registerClaimMiningTool(server: McpServer, context: AppContext):
             const result = await context.mining.claim(args.tokenId);
             const { resources } = await context.appConfig.load();
 
-            const depleted = result.depleted ? ' Deposit depleted.' : '';
+            const claimed = BigInt(result.claimedAmount);
             const header =
-                result.claimedAmount > 0
+                claimed > 0n && result.resourceId !== null
                     ? `Claimed ${result.claimedAmount} ${resourceLabel(resources, result.resourceId)} from cell ` +
-                      `${result.tokenId}. Cell balance now ${result.balanceAmount}; ${result.depositRemaining} left ` +
-                      `in deposit.${depleted}`
-                    : `Nothing to claim on cell ${result.tokenId} yet (${result.depositRemaining} left in deposit).`;
+                      `${result.tokenId}: tx ${result.txHash} confirmed in block ${result.blockNumber}.`
+                    : `Nothing newly accrued to claim on cell ${result.tokenId} (tx ${result.txHash}); mining keeps ` +
+                      `running until the deposit is depleted.`;
 
             return {
                 content: [

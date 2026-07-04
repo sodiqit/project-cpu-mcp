@@ -22,7 +22,7 @@ describe('MapReader', () => {
                 tokenId: '1',
                 owner: '0xme',
                 updated: 50,
-                resources: [{ resourceId: 1, deposit: '10', balance: '0' }],
+                resources: [{ resourceId: 1, deposit: '10', balance: '0', strength: null }],
             }),
             makeCell({ tokenId: '2', x: 1, owner: '0xrival', updated: 40 }),
         ]);

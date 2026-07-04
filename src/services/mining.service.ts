@@ -1,45 +1,102 @@
-import { describeApiError } from './reveal.helpers.js';
-import type { MiningServiceOptions } from './types.js';
-import type { ApiClient } from '../api/client.js';
-import { type ClaimResponse, HttpStatus, type MiningStatusResponse } from '../api/types.js';
-import type { ILogger } from '../logger/types.js';
+import { isAddress, parseEventLogs, type Address, type Log } from 'viem';
 
-/**
- * Mining is fully off-chain: an extractor accrues its target resource lazily and the owner banks it.
- * Status is a public read; claim is an owner-only POST. Neither path touches the wallet or the chain.
- */
+import type { MiningClaimResult, MiningServiceOptions, MiningStatusResult, IAppConfig, ICellClient } from './types.js';
+import { CELL_ABI } from '../contracts/cell.abi.js';
+import type { ILogger } from '../logger/types.js';
+import { CellProcessKind, type RevealCellReader } from '../map/types.js';
+import type { IContractClient, WalletProvider } from '../wallet/types.js';
+
 export class MiningService {
-    private readonly api: ApiClient;
+    private readonly wallet: WalletProvider;
+    private readonly appConfig: IAppConfig;
+    private readonly cellClient: ICellClient;
+    private readonly contracts: IContractClient;
+    private readonly mapReader: RevealCellReader;
     private readonly logger: ILogger;
 
     constructor(options: MiningServiceOptions) {
-        this.api = options.api;
+        this.wallet = options.wallet;
+        this.appConfig = options.appConfig;
+        this.cellClient = options.cellClient;
+        this.contracts = options.contracts;
+        this.mapReader = options.mapReader;
         this.logger = options.logger;
     }
 
-    /** Public read — lazily-computed accrual for any cell (no auth, works for any tokenId). */
-    async getStatus(tokenId: string): Promise<MiningStatusResponse> {
-        const response = await this.api.request<MiningStatusResponse>(`/api/v1/mining/${tokenId}`);
-        if (response.status !== HttpStatus.Ok) {
-            throw new Error(
-                `Failed to get mining status for cell ${tokenId} (HTTP ${response.status}): ${describeApiError(response.data)}`,
-            );
+    async getStatus(tokenId: string): Promise<MiningStatusResult> {
+        await this.mapReader.refresh();
+        const state = this.mapReader.readRevealCell(tokenId);
+        if (state === null) {
+            throw new Error(`Cell ${tokenId} is not in the current map.`);
         }
-        return response.data;
+
+        const process = state.process;
+        if (process === null || process.kind !== CellProcessKind.Mining) {
+            return {
+                tokenId,
+                active: false,
+                targetResourceId: null,
+                rate: null,
+                startAt: null,
+                claimable: '0',
+                depositRemaining: '0',
+            };
+        }
+
+        const deposit = state.resources.find((r) => r.resourceId === process.resource)?.deposit ?? '0';
+        const nowSec = BigInt(Math.floor(Date.now() / 1000));
+        const startAt = BigInt(process.startAt);
+        const elapsed = nowSec > startAt ? nowSec - startAt : 0n;
+        const accrued = BigInt(process.rate) * elapsed;
+        const depositRemaining = BigInt(deposit);
+        const claimable = accrued < depositRemaining ? accrued : depositRemaining;
+
+        return {
+            tokenId,
+            active: true,
+            targetResourceId: process.resource,
+            rate: process.rate,
+            startAt: process.startAt,
+            claimable: claimable.toString(),
+            depositRemaining: deposit,
+        };
     }
 
-    /** Owner-only off-chain claim — banks accrued units into the cell's balance and resets the cursor. */
-    async claim(tokenId: string): Promise<ClaimResponse> {
-        this.logger.info('claiming mined resources', { tokenId });
-        const response = await this.api.authenticatedRequest<ClaimResponse>(`/api/v1/mining/${tokenId}/claim`, {
-            method: 'POST',
-            body: null,
-        });
-        if (response.status !== HttpStatus.Ok) {
+    async claim(tokenId: string): Promise<MiningClaimResult> {
+        const config = await this.appConfig.load();
+        const wallet = this.wallet.get();
+        if (config.chainId !== wallet.getChainId()) {
             throw new Error(
-                `Mining claim failed for cell ${tokenId} (HTTP ${response.status}): ${describeApiError(response.data)}`,
+                `Chain mismatch: the chain config is chainId ${config.chainId} but the wallet is on ${wallet.getChainId()}. Check NETWORK.`,
             );
         }
-        return response.data;
+
+        const cell = config.contracts.cell;
+        if (!isAddress(cell, { strict: false })) {
+            throw new Error(`Cell contract is not configured for network ${config.network}; cannot claim.`);
+        }
+
+        this.logger.info('claiming mined resources', { tokenId });
+        const txHash = await this.cellClient.claim({ cell, tokenId: BigInt(tokenId) });
+        const confirmed = await this.contracts.confirm(txHash, 'Mining claim');
+        const mined = this.decodeMined(confirmed.logs, cell);
+
+        return {
+            tokenId,
+            resourceId: mined?.resource ?? null,
+            claimedAmount: (mined?.amount ?? 0n).toString(),
+            txHash: confirmed.txHash,
+            status: confirmed.status,
+            blockNumber: confirmed.blockNumber,
+        };
+    }
+
+    private decodeMined(logs: Array<Log>, cell: Address): { resource: number; amount: bigint } | null {
+        const events = parseEventLogs({ abi: CELL_ABI, eventName: 'ResourceMined', logs });
+        const event = events.find((e) => e.address.toLowerCase() === cell.toLowerCase());
+        if (event === undefined) {
+            return null;
+        }
+        return { resource: event.args.resource, amount: event.args.amount };
     }
 }
