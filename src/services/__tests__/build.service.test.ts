@@ -114,7 +114,7 @@ describe('BuildService', () => {
         expect(message).toMatch(/reverted/i);
         expect(message).toMatch(/re-run build/i);
         expect(message).toMatch(/signId 7/);
-        expect(message).toMatch(/1700/);
+        expect(message).toMatch(/valid until 1970-01-01/);
     });
 
     it('wraps an approve failure with retry guidance and sends no build tx', async () => {
