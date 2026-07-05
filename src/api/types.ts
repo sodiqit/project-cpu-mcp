@@ -69,7 +69,6 @@ export interface ServerHealthView {
 export interface AppContractsConfig {
     land: string;
     cpuToken: string;
-    gameSettlement: string;
     cpuHook: string;
     cell: string;
     cellLens: string;
@@ -141,30 +140,6 @@ export interface AppConfigResponse {
 export enum BuildingType {
     Extractor = 'extractor',
     Hub = 'hub',
-}
-
-/** `POST /api/v1/cpu/withdraw` request body. `amount` is whole wCPU units (e.g. `"100"`). */
-export interface WithdrawRequest {
-    tokenId: string;
-    network: string;
-    amount: string;
-}
-
-/** The signed withdraw intent — the EIP-712 `WithdrawCpu` signature to submit to `GameSettlement.withdrawCpu`. */
-export interface WithdrawSignatureResponse {
-    signId: number;
-    tokenId: string;
-    /** wCPU debited / $CPU minted, in wei (1:1). */
-    amount: string;
-    deadline: string;
-    v: number;
-    r: string;
-    s: string;
-}
-
-/** `GET /api/v1/cpu/withdraw/pending` — the caller's in-flight withdraw, or null. */
-export interface PendingWithdrawResponse {
-    pending: WithdrawSignatureResponse | null;
 }
 
 export interface TransportCoord {

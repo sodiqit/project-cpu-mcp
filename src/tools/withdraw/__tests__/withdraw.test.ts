@@ -1,5 +1,4 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { parseEther } from 'viem';
 import { describe, expect, it } from 'vitest';
 
 import { NoopLogger } from '../../../logger/noop.logger.js';
@@ -41,28 +40,20 @@ function harness(outcome: WithdrawResult | Error): Handler {
 
 const result: WithdrawResult = {
     tokenId: '42',
-    signId: 5,
-    amount: parseEther('100').toString(),
+    amount: '100',
     txHash: '0xwithdraw',
-    approveTxHash: null,
     status: TxStatus.Success,
     blockNumber: '100',
-    resumed: false,
 };
 
 describe('withdraw tool', () => {
-    it('reports a fresh withdraw with the minted $CPU amount', async () => {
+    it('reports the withdraw with the minted $CPU amount', async () => {
         const out = await harness(result)({ tokenId: '42', amount: '100' });
         expect(out.content[0]?.text).toMatch(/Withdrew from cell 42/);
         expect(out.content[0]?.text).toMatch(/100 \$CPU/);
         expect(out.content[0]?.text).toMatch(/0xwithdraw/);
         const parsed = JSON.parse(out.content[1]?.text ?? '{}') as WithdrawResult;
-        expect(parsed.resumed).toBe(false);
-    });
-
-    it('frames a resumed withdraw differently', async () => {
-        const out = await harness({ ...result, resumed: true })({ tokenId: '42', amount: '100' });
-        expect(out.content[0]?.text).toMatch(/Finished the pending withdraw from cell 42/);
+        expect(parsed.amount).toBe('100');
     });
 
     it('propagates service errors', async () => {

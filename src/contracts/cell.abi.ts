@@ -80,6 +80,16 @@ export const CELL_ABI = [
         stateMutability: 'nonpayable',
     },
     {
+        type: 'function',
+        name: 'withdrawCpu',
+        inputs: [
+            { name: 'tokenId', type: 'uint256', internalType: 'uint256' },
+            { name: 'amount', type: 'uint64', internalType: 'uint64' },
+        ],
+        outputs: [],
+        stateMutability: 'nonpayable',
+    },
+    {
         type: 'event',
         name: 'BuildingPlaced',
         inputs: [
@@ -145,6 +155,17 @@ export const CELL_ABI = [
             { name: 'batches', type: 'uint32', indexed: false, internalType: 'uint32' },
             { name: 'outputResources', type: 'uint16[]', indexed: false, internalType: 'uint16[]' },
             { name: 'outputAmounts', type: 'uint64[]', indexed: false, internalType: 'uint64[]' },
+        ],
+        anonymous: false,
+    },
+    {
+        type: 'event',
+        name: 'CpuWithdrawn',
+        inputs: [
+            { name: 'tokenId', type: 'uint256', indexed: true, internalType: 'uint256' },
+            { name: 'to', type: 'address', indexed: true, internalType: 'address' },
+            { name: 'amount', type: 'uint64', indexed: false, internalType: 'uint64' },
+            { name: 'cpuMinted', type: 'uint256', indexed: false, internalType: 'uint256' },
         ],
         anonymous: false,
     },

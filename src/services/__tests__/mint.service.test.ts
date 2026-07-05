@@ -87,7 +87,6 @@ function makeConfig(contracts: Partial<AppContracts> = {}): AppConfig {
         contracts: {
             land: LAND,
             cpuToken: '',
-            gameSettlement: zeroAddress,
             cpuHook: '',
             cell: '',
             cellLens: '',

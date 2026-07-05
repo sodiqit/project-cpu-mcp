@@ -1,13 +1,18 @@
 import { z } from 'zod';
 
+import { WITHDRAW_MAX_UNITS } from './constants.js';
+
 export const withdrawInputSchema = {
     tokenId: z.string().describe('The tokenId of a cell you own holding wCPU to cash out.'),
     amount: z
         .string()
-        .regex(/^\d+(\.\d+)?$/, 'amount must be a positive number of wCPU in whole units (e.g. "100")')
+        .regex(/^\d+$/, 'amount must be a whole number of wCPU units (e.g. "100")')
+        .refine((v) => {
+            const units = BigInt(v);
+            return units > 0n && units <= WITHDRAW_MAX_UNITS;
+        }, `amount must be greater than 0 and at most ${WITHDRAW_MAX_UNITS.toString()}`)
         .describe(
             'How much wCPU (resource id 1) to convert to on-chain $CPU, 1:1, in whole units (e.g. "100"). ' +
-                'Must be greater than 0 and at most 1,000,000 per withdraw. ' +
-                'See the cell’s wCPU balance with get_cell.',
+                'Must be greater than 0 and at most the cell’s wCPU balance. See it with get_cell.',
         ),
 };
