@@ -23,7 +23,13 @@ import {
     type TradeServiceOptions,
 } from './types.js';
 import type { ApiClient } from '../api/client.js';
-import { HttpStatus, type LotState, type LotView, type MarketResourceSummary } from '../api/types.js';
+import {
+    HttpStatus,
+    type LotState,
+    type LotView,
+    type MarketResourceSummary,
+    type TransportCoord,
+} from '../api/types.js';
 import { TRADE_ABI } from '../contracts/trade.abi.js';
 import type { ILogger } from '../logger/types.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
@@ -65,8 +71,7 @@ export class TradeService {
         const trade = this.resolveTrade(config);
         const transport = this.resolveTransport(config);
 
-        const xs = input.chain.map((c) => BigInt(c.x));
-        const ys = input.chain.map((c) => BigInt(c.y));
+        const { xs, ys } = toAxialArrays(input.chain);
         const value = BigInt(input.value);
         const price = parseEther(input.pricePerUnit);
 
@@ -130,8 +135,7 @@ export class TradeService {
         const value = BigInt(input.value);
         const saleWei = value * parseEther(lot.pricePerUnit);
 
-        const destXs = input.chain.map((c) => BigInt(c.x));
-        const destYs = input.chain.map((c) => BigInt(c.y));
+        const { xs: destXs, ys: destYs } = toAxialArrays(input.chain);
 
         this.logger.info('buying lot', { lotId: input.lotId, value: input.value, network: config.network });
 
@@ -191,8 +195,7 @@ export class TradeService {
         const lot = await this.getLot(input.lotId);
         const remaining = BigInt(lot.remaining);
 
-        const returnXs = input.chain.map((c) => BigInt(c.x));
-        const returnYs = input.chain.map((c) => BigInt(c.y));
+        const { xs: returnXs, ys: returnYs } = toAxialArrays(input.chain);
 
         this.logger.info('cancelling lot', { lotId: input.lotId, network: config.network });
 
@@ -247,11 +250,12 @@ export class TradeService {
 
         if (input.chain !== null) {
             const transport = this.resolveTransport(config);
+            const { xs, ys } = toAxialArrays(input.chain);
             const quote = await this.transportClient.quoteRoute({
                 transport,
                 from: wallet.getAddress(),
-                xs: input.chain.map((c) => BigInt(c.x)),
-                ys: input.chain.map((c) => BigInt(c.y)),
+                xs,
+                ys,
                 res: lot.resourceId,
                 amount: value,
             });
@@ -395,6 +399,11 @@ export class TradeService {
         }
         return { config, wallet };
     }
+}
+
+/** Split a coordinate chain into the parallel `int256[]` x / y arrays the Trade and Transport calls take. */
+function toAxialArrays(chain: Array<TransportCoord>): { xs: Array<bigint>; ys: Array<bigint> } {
+    return { xs: chain.map((c) => BigInt(c.x)), ys: chain.map((c) => BigInt(c.y)) };
 }
 
 /** Serialise a query object to `?a=1&b=2`, dropping null fields and URL-encoding values. */
