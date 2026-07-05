@@ -48,6 +48,7 @@ export class AppConfigService implements IAppConfig {
                 cell: data.contracts.cell,
                 cellLens: data.contracts.cellLens,
                 transport: data.contracts.transport,
+                trade: data.contracts.trade,
             },
             resources: data.resources ?? {},
             recipes: data.recipes ?? [],

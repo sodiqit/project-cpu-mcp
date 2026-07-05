@@ -92,6 +92,7 @@ function makeConfig(contracts: Partial<AppContracts> = {}): AppConfig {
             cell: '',
             cellLens: '',
             transport: '',
+            trade: '',
             ...contracts,
         },
         resources: {},

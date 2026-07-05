@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { CREATE_LOT_DESCRIPTION } from './constants.js';
 import type { AppContext } from '../../../types.js';
-import { summarizeLotResult } from '../format.utils.js';
+import { summarizeCreateLot } from '../format.utils.js';
 import { createLotInputSchema } from '../types.js';
 
 export function registerCreateLotTool(server: McpServer, context: AppContext): void {
@@ -16,10 +16,11 @@ export function registerCreateLotTool(server: McpServer, context: AppContext): v
                 value: args.value,
                 pricePerUnit: args.pricePerUnit,
             });
+            const { resources } = await context.appConfig.load();
 
             return {
                 content: [
-                    { type: 'text', text: summarizeLotResult(result) },
+                    { type: 'text', text: summarizeCreateLot(result, resources) },
                     { type: 'text', text: JSON.stringify(result) },
                 ],
             };

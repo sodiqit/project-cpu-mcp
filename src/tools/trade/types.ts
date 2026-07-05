@@ -45,11 +45,9 @@ export const cancelLotInputSchema = {
     chain: z
         .array(coord)
         .min(2)
-        .nullable()
-        .default(null)
         .describe(
-            '[hub, ...waypoints, destination] for the return shipment — REQUIRED to cancel an OPEN lot. DRAFT lots ' +
-                'cannot be cancelled manually (they auto-revert once their signature lapses).',
+            '[hub, ...waypoints, destination] for the return shipment — first node is the lot Hub, last is your ' +
+                'own revealed cell where the unsold units return. A route through a foreign Hub is paid in $CPU.',
         ),
 };
 

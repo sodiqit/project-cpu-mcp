@@ -1,15 +1,15 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it } from 'vitest';
 
-import { type LotView, type MarketResourceSummary, LotState, type TradeQuoteResponse } from '../../../api/types.js';
+import { type LotView, type MarketResourceSummary, LotState } from '../../../api/types.js';
 import { Network } from '../../../config/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
-import {
-    type BalanceResult,
-    type FreeLotResult,
-    LotAction,
-    LotResultKind,
-    type PaidLotResult,
+import type {
+    BalanceResult,
+    BuyLotResult,
+    CancelLotResult,
+    CreateLotResult,
+    TradeQuote,
 } from '../../../services/types.js';
 import type { AppContext } from '../../../types.js';
 import { TxStatus } from '../../../wallet/types.js';
@@ -30,7 +30,6 @@ interface ToolResult {
 type Register = (server: McpServer, context: AppContext) => void;
 
 const RESOURCES = { 3: 'Silica' };
-const HUB = '0x4444444444444444444444444444444444444444';
 
 function capture(register: Register, contextPartial: Record<string, unknown>): (args: never) => Promise<ToolResult> {
     const appConfig = { load: async () => ({ resources: RESOURCES }) };
@@ -48,27 +47,46 @@ function capture(register: Register, contextPartial: Record<string, unknown>): (
     return captured;
 }
 
-const freeLot: FreeLotResult = {
-    kind: LotResultKind.Free,
-    action: LotAction.Create,
-    lotId: 'lot-1',
-    state: LotState.Delivering,
+const createResult: CreateLotResult = {
+    lotId: '7',
+    hubTokenId: '20',
+    resourceId: 3,
+    value: '100',
+    pricePerUnit: '0.5',
+    deliveryId: '123',
     arrivalAt: 1704,
+    feeWei: '0',
+    txHash: '0xcreate',
+    approveTxHash: null,
+    status: TxStatus.Success,
+    blockNumber: '100',
 };
 
-const paidBuy: PaidLotResult = {
-    kind: LotResultKind.Paid,
-    action: LotAction.Buy,
-    lotId: 'lot-1',
-    signId: 9,
-    state: LotState.Open,
-    tokenId: '20',
-    totalAmount: '10000000000000000000',
-    burnAmount: '1000000000000000000',
-    recipients: [HUB],
-    payouts: ['9000000000000000000'],
+const cancelResult: CancelLotResult = {
+    lotId: '7',
+    resourceId: 3,
+    returned: '80',
+    feeWei: '0',
+    deliveryId: '123',
+    arrivalAt: 1704,
+    txHash: '0xcancel',
+    approveTxHash: null,
+    status: TxStatus.Success,
+    blockNumber: '100',
+};
+
+const buyResult: BuyLotResult = {
+    lotId: '7',
+    resourceId: 3,
+    value: '10',
+    saleWei: '5000000000000000000',
+    remaining: '90',
+    feeWei: '0',
+    deliveryId: '123',
+    arrivalAt: 1704,
     txHash: '0xbuy',
-    approveTxHash: '0xapprove',
+    approveSaleTxHash: '0xapprove',
+    approveTransitTxHash: null,
     status: TxStatus.Success,
     blockNumber: '100',
 };
@@ -87,6 +105,7 @@ const lot: LotView = {
     state: LotState.Open,
     distanceFromCenter: 3,
     createdAt: 1700,
+    updated: 1700,
 };
 
 const market: MarketResourceSummary = {
@@ -104,29 +123,31 @@ const market: MarketResourceSummary = {
 };
 
 describe('create_lot / cancel_lot tools', () => {
-    it('reports a free create', async () => {
-        const handler = capture(registerCreateLotTool, { trade: { createLot: async () => freeLot } });
+    it('summarizes a create with the lot, delivery and finalize hint', async () => {
+        const handler = capture(registerCreateLotTool, { trade: { createLot: async () => createResult } });
         const result = await handler({ chain: [], resourceId: 3, value: '100', pricePerUnit: '0.5' } as never);
-        expect(result.content[0]?.text).toMatch(/Free create on lot lot-1/);
-        expect(result.content[0]?.text).toMatch(/delivering/);
+        expect(result.content[0]?.text).toMatch(/Listed lot 7/);
+        expect(result.content[0]?.text).toMatch(/Silica \(#3\)/);
+        expect(result.content[0]?.text).toMatch(/finalize_delivery on 123/);
+        expect(result.content[0]?.text).toMatch(/create tx 0xcreate/);
     });
 
-    it('reports a free cancel', async () => {
-        const handler = capture(registerCancelLotTool, {
-            trade: { cancelLot: async () => ({ ...freeLot, action: LotAction.Cancel, state: LotState.Reverted }) },
-        });
-        const result = await handler({ lotId: 'lot-1', chain: null } as never);
-        expect(result.content[0]?.text).toMatch(/Free cancel on lot lot-1/);
+    it('summarizes a cancel with the returned units and finalize hint', async () => {
+        const handler = capture(registerCancelLotTool, { trade: { cancelLot: async () => cancelResult } });
+        const result = await handler({ lotId: '7', chain: [] } as never);
+        expect(result.content[0]?.text).toMatch(/Cancelled lot 7/);
+        expect(result.content[0]?.text).toMatch(/finalize_delivery on 123/);
+        expect(result.content[0]?.text).toMatch(/cancel tx 0xcancel/);
     });
 });
 
 describe('buy_lot tool', () => {
-    it('reports a paid buy with the approve and buy tx', async () => {
-        const handler = capture(registerBuyLotTool, { trade: { buyLot: async () => paidBuy } });
-        const result = await handler({ lotId: 'lot-1', chain: [], value: '100' } as never);
-        expect(result.content[0]?.text).toMatch(/Paid buy on lot lot-1/);
-        expect(result.content[0]?.text).toMatch(/10 \$CPU/);
-        expect(result.content[0]?.text).toMatch(/approve tx 0xapprove/);
+    it('reports a buy with the sale approve and buy tx', async () => {
+        const handler = capture(registerBuyLotTool, { trade: { buyLot: async () => buyResult } });
+        const result = await handler({ lotId: '7', chain: [], value: '10' } as never);
+        expect(result.content[0]?.text).toMatch(/Bought 10 Silica/);
+        expect(result.content[0]?.text).toMatch(/for 5 \$CPU/);
+        expect(result.content[0]?.text).toMatch(/sale approve 0xapprove/);
         expect(result.content[0]?.text).toMatch(/buy tx 0xbuy/);
     });
 
@@ -134,41 +155,54 @@ describe('buy_lot tool', () => {
         const handler = capture(registerBuyLotTool, {
             trade: {
                 buyLot: async () => {
-                    throw new Error('LotNotBuyable');
+                    throw new Error('LotNotOpen');
                 },
             },
         });
-        await expect(handler({ lotId: 'lot-1', chain: [], value: '100' } as never)).rejects.toThrow(/LotNotBuyable/);
+        await expect(handler({ lotId: '7', chain: [], value: '10' } as never)).rejects.toThrow(/LotNotOpen/);
     });
 });
 
 describe('quote_buy tool', () => {
     it('summarizes a routed buy quote', async () => {
-        const quote: TradeQuoteResponse = {
-            lotId: 'lot-1',
+        const quote: TradeQuote = {
+            lotId: '7',
             resourceId: 3,
-            sellerAddress: '0xseller',
             pricePerUnit: '0.5',
             value: '100',
             remaining: '80',
             routed: true,
+            saleWei: '50000000000000000000',
+            transitFeeWei: '5000000000000000000',
+            totalWei: '55000000000000000000',
             totalDistance: 4,
-            totalTimeSec: 8,
-            fee: {
-                total: '55',
-                burn: '1',
-                recipients: ['0xseller', HUB],
-                payouts: ['50', '4'],
-                totalWei: '55000000000000000000',
-                burnWei: '1000000000000000000',
-                payoutsWei: ['50000000000000000000', '4000000000000000000'],
-            },
+            arrivalAt: 1704,
         };
         const handler = capture(registerQuoteBuyTool, { trade: { quoteBuy: async () => quote } });
-        const result = await handler({ lotId: 'lot-1', value: '100', chain: [] } as never);
-        expect(result.content[0]?.text).toMatch(/Buy quote for lot lot-1/);
+        const result = await handler({ lotId: '7', value: '100', chain: [] } as never);
+        expect(result.content[0]?.text).toMatch(/Buy quote for lot 7/);
         expect(result.content[0]?.text).toMatch(/Silica \(#3\)/);
-        expect(result.content[0]?.text).toMatch(/Total 55 \$CPU/);
+        expect(result.content[0]?.text).toMatch(/55 \$CPU total/);
+    });
+
+    it('summarizes a seller-only estimate', async () => {
+        const quote: TradeQuote = {
+            lotId: '7',
+            resourceId: 3,
+            pricePerUnit: '0.5',
+            value: '100',
+            remaining: '80',
+            routed: false,
+            saleWei: '50000000000000000000',
+            transitFeeWei: null,
+            totalWei: '50000000000000000000',
+            totalDistance: null,
+            arrivalAt: null,
+        };
+        const handler = capture(registerQuoteBuyTool, { trade: { quoteBuy: async () => quote } });
+        const result = await handler({ lotId: '7', value: '100', chain: null } as never);
+        expect(result.content[0]?.text).toMatch(/Seller-only estimate for lot 7/);
+        expect(result.content[0]?.text).toMatch(/50 \$CPU/);
     });
 });
 

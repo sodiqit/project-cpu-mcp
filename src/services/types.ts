@@ -7,7 +7,6 @@ import type {
     CraftRecipeId,
     LotAvailability,
     LotSort,
-    LotState,
     RecipeView,
     RevealCostView,
     TransportCoord,
@@ -42,6 +41,8 @@ export interface AppContracts {
     cell: string;
     cellLens: string;
     transport: string;
+    /** The lot marketplace; empty until configured. Validate with `isAddress` before a trade write. */
+    trade: string;
 }
 
 /** Chain + contract addresses for the configured network, loaded from the game API. */
@@ -357,12 +358,6 @@ export interface FinalizeResult {
     blockNumber: string;
 }
 
-export interface Payable {
-    gameSettlement: Address;
-    cpuToken: Address;
-    totalAmount: bigint;
-}
-
 export interface CraftServiceOptions {
     wallet: WalletProvider;
     appConfig: IAppConfig;
@@ -424,6 +419,10 @@ export interface TradeServiceOptions {
     wallet: WalletProvider;
     appConfig: IAppConfig;
     allowance: IAllowanceService;
+    contracts: IContractClient;
+    tradeClient: ITradeClient;
+    /** Reused for the transit-fee quote — every trade write routes goods through Transport. */
+    transportClient: ITransportClient;
     logger: ILogger;
 }
 
@@ -444,9 +443,8 @@ export interface BuyLotInput {
 
 export interface CancelLotInput {
     lotId: string;
-    /** `[hub, …waypoints, sellerDest]` for an OPEN lot's return shipment. DRAFT lots can't be cancelled
-     *  manually (they auto-revert), so a null chain only ever yields a rejection. */
-    chain: Array<TransportCoord> | null;
+    /** `[hub, …waypoints, sellerDest]` — the return shipment that routes the unsold remainder home. */
+    chain: Array<TransportCoord>;
 }
 
 export interface QuoteBuyInput {
@@ -483,48 +481,121 @@ export interface MarketsQuery {
     radius: number | null;
 }
 
-export enum LotResultKind {
-    Free = 'free',
-    Paid = 'paid',
+export interface TradeClientOptions {
+    contracts: IContractClient;
+    logger: ILogger;
 }
 
-/** Which write produced a lot result — drives the on-chain settlement function and the summary text. */
-export enum LotAction {
-    Create = 'create',
-    Buy = 'buy',
-    Cancel = 'cancel',
+export interface CreateLotParams {
+    trade: Address;
+    xs: Array<bigint>;
+    ys: Array<bigint>;
+    res: number;
+    /** Units to list. */
+    value: bigint;
+    /** Asking price per unit, in $CPU wei. */
+    price: bigint;
+    maxFee: bigint;
 }
 
-/** A free create / cancel that settled off-chain — nothing was spent on-chain. */
-export interface FreeLotResult {
-    kind: LotResultKind.Free;
-    action: LotAction;
+export interface BuyLotParams {
+    trade: Address;
+    lotId: bigint;
+    value: bigint;
+    destXs: Array<bigint>;
+    destYs: Array<bigint>;
+    maxFee: bigint;
+}
+
+export interface CancelLotParams {
+    trade: Address;
+    lotId: bigint;
+    returnXs: Array<bigint>;
+    returnYs: Array<bigint>;
+    maxFee: bigint;
+}
+
+/** Sends the three Trade writes — implemented by TradeClient. Lot reads come from the game API. */
+export interface ITradeClient {
+    createLot(params: CreateLotParams): Promise<Hash>;
+    buy(params: BuyLotParams): Promise<Hash>;
+    cancel(params: CancelLotParams): Promise<Hash>;
+}
+
+/**
+ * A confirmed `create_lot`: the lot is `DELIVERING` until its escrow arrives at the hub and a
+ * `finalize_delivery` on `deliveryId` opens it.
+ */
+export interface CreateLotResult {
     lotId: string;
-    state: LotState;
+    hubTokenId: string;
+    resourceId: number;
+    value: string;
+    pricePerUnit: string;
+    deliveryId: string;
     arrivalAt: number;
-}
-
-/** A paid create / buy / cancel whose on-chain payment was submitted and confirmed. */
-export interface PaidLotResult {
-    kind: LotResultKind.Paid;
-    action: LotAction;
-    lotId: string;
-    signId: number;
-    state: LotState;
-    tokenId: string;
-    /** On-chain amounts in wei. */
-    totalAmount: string;
-    burnAmount: string;
-    recipients: Array<string>;
-    payouts: Array<string>;
+    /** Transit fee quoted for the routing, in wei. */
+    feeWei: string;
     txHash: Hash;
-    /** Present only when a $CPU approve was needed before the payment. */
+    /** Transport-fee approve, when the route crossed a foreign hub. */
     approveTxHash: Hash | null;
     status: TxStatus;
     blockNumber: string;
 }
 
-export type LotResult = FreeLotResult | PaidLotResult;
+/** A confirmed `buy_lot`: goods ship to the buyer's cell and land after `finalize_delivery`. */
+export interface BuyLotResult {
+    lotId: string;
+    resourceId: number;
+    value: string;
+    /** value × pricePerUnit, in $CPU wei. */
+    saleWei: string;
+    /** Units left on the lot after this buy (0 = sold out). */
+    remaining: string;
+    feeWei: string;
+    deliveryId: string;
+    arrivalAt: number;
+    txHash: Hash;
+    /** $CPU approve for the sale (spender: Trade). */
+    approveSaleTxHash: Hash | null;
+    /** $CPU approve for the transit fee (spender: Transport), when the route crossed a foreign hub. */
+    approveTransitTxHash: Hash | null;
+    status: TxStatus;
+    blockNumber: string;
+}
+
+/** A confirmed `cancel_lot`: the unsold remainder ships home and lands after `finalize_delivery`. */
+export interface CancelLotResult {
+    lotId: string;
+    resourceId: number;
+    /** Units returned to the seller. */
+    returned: string;
+    feeWei: string;
+    deliveryId: string;
+    arrivalAt: number;
+    txHash: Hash;
+    approveTxHash: Hash | null;
+    status: TxStatus;
+    blockNumber: string;
+}
+
+/** A non-destructive buy preview. `routed` = a route was supplied, so the transit fee is included. */
+export interface TradeQuote {
+    lotId: string;
+    resourceId: number;
+    pricePerUnit: string;
+    value: string;
+    remaining: string;
+    routed: boolean;
+    /** value × pricePerUnit, in $CPU wei. */
+    saleWei: string;
+    /** Transit fee in wei, or null for a seller-only estimate. */
+    transitFeeWei: string | null;
+    /** saleWei + transitFeeWei, in wei — the exact $CPU buy_lot would charge. */
+    totalWei: string;
+    totalDistance: number | null;
+    arrivalAt: number | null;
+}
 
 // ---- Swap (Uniswap v4 ETH/$CPU pool) ----
 

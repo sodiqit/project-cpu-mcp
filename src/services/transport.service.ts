@@ -1,5 +1,6 @@
-import { isAddress, parseEventLogs, type Address, type Hash, type Log } from 'viem';
+import { isAddress, type Address, type Hash } from 'viem';
 
+import { decodeDeliveryScheduled } from './delivery.helpers.js';
 import { describeApiError } from './reveal.helpers.js';
 import { TRANSPORT_MAX_FEE_BUFFER_PERCENT } from './transport.constants.js';
 import {
@@ -17,7 +18,6 @@ import {
 } from './types.js';
 import type { ApiClient } from '../api/client.js';
 import { HttpStatus, type DeliveriesResponse, type DeliveryResponse } from '../api/types.js';
-import { TRANSPORT_ABI } from '../contracts/transport.abi.js';
 import type { ILogger } from '../logger/types.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
 
@@ -67,7 +67,7 @@ export class TransportService {
 
         const txHash = await this.transportClient.move({ ...route, maxFee });
         const confirmed = await this.contracts.confirm(txHash, 'Transport move');
-        const scheduled = this.decodeScheduled(confirmed.logs, route.transport);
+        const scheduled = decodeDeliveryScheduled(confirmed.logs, route.transport);
 
         this.logger.info('transport move confirmed', {
             deliveryId: scheduled.deliveryId.toString(),
@@ -171,27 +171,6 @@ export class TransportService {
             throw new Error(`$CPU token is not configured for network ${config.network}; cannot pay the transit fee.`);
         }
         return this.allowance.ensureAllowance(cpuToken, transport, maxFee);
-    }
-
-    private decodeScheduled(
-        logs: Array<Log>,
-        transport: Address,
-    ): { deliveryId: bigint; sourceId: bigint; targetId: bigint; arrivalAt: bigint } {
-        const events = parseEventLogs({
-            abi: TRANSPORT_ABI,
-            eventName: 'DeliveryScheduled',
-            logs,
-        });
-        const event = events.find((e) => e.address.toLowerCase() === transport.toLowerCase());
-        if (event === undefined) {
-            throw new Error('Transport move confirmed but no DeliveryScheduled event was emitted.');
-        }
-        return {
-            deliveryId: event.args.deliveryId,
-            sourceId: event.args.sourceId,
-            targetId: event.args.targetId,
-            arrivalAt: event.args.arrivalAt,
-        };
     }
 
     private async fetchDeliveries(query: string): Promise<Array<DeliveryResponse>> {

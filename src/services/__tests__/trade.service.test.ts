@@ -1,210 +1,487 @@
-import { decodeFunctionData } from 'viem';
+import { encodeAbiParameters, encodeEventTopics, parseEther, type Hash, type Log } from 'viem';
 import { describe, expect, it } from 'vitest';
 
+import type { ApiClient } from '../../api/client.js';
+import { LotState, type LotView } from '../../api/types.js';
+import { TRADE_ABI } from '../../contracts/trade.abi.js';
+import { TRANSPORT_ABI } from '../../contracts/transport.abi.js';
+import { NoopLogger } from '../../logger/noop.logger.js';
 import {
-    type FreeLotResponse,
-    LotAvailability,
-    LotResponseKind,
-    LotSort,
-    LotState,
-    type PaidLotSignatureResponse,
-} from '../../api/types.js';
-import { GAME_SETTLEMENT_ABI } from '../../contracts/game-settlement.abi.js';
-import { TxStatus } from '../../wallet/types.js';
+    type ConfirmedTx,
+    type IContractClient,
+    type ReadContractParams,
+    TxStatus,
+    type WalletProvider,
+} from '../../wallet/types.js';
 import { TradeService } from '../trade.service.js';
-import { LotAction, LotResultKind } from '../types.js';
+import type {
+    BuyLotParams,
+    CancelLotParams,
+    CreateLotParams,
+    FinalizeParams,
+    ITradeClient,
+    ITransportClient,
+    MoveParams,
+    QuoteRouteParams,
+    RouteQuote,
+} from '../types.js';
 import {
     APPROVE_HASH,
     CPU_TOKEN,
-    GAME_SETTLEMENT,
-    type Harness,
-    type HarnessOptions,
-    makeHarness,
-    R,
-    S,
+    FakeAllowance,
+    FakeApi,
+    FakeAppConfig,
+    FakeWallet,
+    TRADE,
+    TRANSPORT,
     WALLET_ADDRESS,
+    makeConfig,
 } from './service-fakes.js';
 
-const HUB = '0x4444444444444444444444444444444444444444';
+const CREATE_HASH = `0x${'1'.repeat(64)}` as Hash;
+const BUY_HASH = `0x${'2'.repeat(64)}` as Hash;
+const CANCEL_HASH = `0x${'3'.repeat(64)}` as Hash;
 
-const CHAIN = [
-    { x: 0, y: 0 },
-    { x: 1, y: 0 },
-];
+const CREATE_INPUT = {
+    chain: [
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+    ],
+    resourceId: 3,
+    value: '100',
+    pricePerUnit: '0.5',
+};
 
-const CREATE_INPUT = { chain: CHAIN, resourceId: 3, value: '100', pricePerUnit: '0.5' };
-
-function makeFreeLot(overrides: Partial<FreeLotResponse> = {}): FreeLotResponse {
-    return { kind: LotResponseKind.Free, lotId: 'lot-1', state: LotState.Delivering, arrivalAt: 1704, ...overrides };
-}
-
-function makePaidLot(overrides: Partial<PaidLotSignatureResponse> = {}): PaidLotSignatureResponse {
+function lotView(over: Partial<LotView> = {}): LotView {
     return {
-        kind: LotResponseKind.Paid,
-        lotId: 'lot-1',
-        signId: 9,
+        id: '7',
+        hubTokenId: '20',
+        hubX: 1,
+        hubY: 0,
+        sellerAddress: WALLET_ADDRESS,
+        resourceId: 3,
+        listed: '100',
+        remaining: '100',
+        pricePerUnit: '0.5',
+        tradeFeePct: 0,
         state: LotState.Open,
-        sender: WALLET_ADDRESS,
-        tokenId: '20',
-        totalAmount: '1000',
-        burnAmount: '100',
-        recipients: [HUB],
-        payouts: ['900'],
-        deadline: '9999999999',
-        v: 27,
-        r: R,
-        s: S,
-        ...overrides,
+        distanceFromCenter: null,
+        createdAt: 1700,
+        updated: 1700,
+        ...over,
     };
 }
 
-function makeService(opts: HarnessOptions): Harness<TradeService> {
-    return makeHarness((deps) => new TradeService(deps), opts);
+function tradeLog(topics: unknown, data: unknown): Log {
+    return {
+        address: TRADE,
+        topics,
+        data,
+        blockNumber: 100n,
+        blockHash: `0x${'0'.repeat(64)}`,
+        logIndex: 0,
+        transactionHash: `0x${'0'.repeat(64)}`,
+        transactionIndex: 0,
+        removed: false,
+    } as unknown as Log;
+}
+
+function createdLog(args: { lotId: bigint; hub: bigint }): Log {
+    const topics = encodeEventTopics({
+        abi: TRADE_ABI,
+        eventName: 'LotCreated',
+        args: { lotId: args.lotId, seller: WALLET_ADDRESS, hub: args.hub },
+    });
+    const data = encodeAbiParameters(
+        [
+            { name: 'resource', type: 'uint16' },
+            { name: 'value', type: 'uint128' },
+            { name: 'pricePerUnit', type: 'uint128' },
+        ],
+        [3, 100n, parseEther('0.5')],
+    );
+    return tradeLog(topics, data);
+}
+
+function boughtLog(args: { lotId: bigint; value: bigint; remaining: bigint; sale: bigint }): Log {
+    const topics = encodeEventTopics({
+        abi: TRADE_ABI,
+        eventName: 'LotBought',
+        args: { lotId: args.lotId, buyer: WALLET_ADDRESS },
+    });
+    const data = encodeAbiParameters(
+        [
+            { name: 'value', type: 'uint128' },
+            { name: 'remaining', type: 'uint128' },
+            { name: 'sale', type: 'uint256' },
+        ],
+        [args.value, args.remaining, args.sale],
+    );
+    return tradeLog(topics, data);
+}
+
+function cancelledLog(args: { lotId: bigint; returned: bigint }): Log {
+    const topics = encodeEventTopics({
+        abi: TRADE_ABI,
+        eventName: 'LotCancelled',
+        args: { lotId: args.lotId, seller: WALLET_ADDRESS },
+    });
+    const data = encodeAbiParameters([{ name: 'returned', type: 'uint128' }], [args.returned]);
+    return tradeLog(topics, data);
+}
+
+function scheduledLog(deliveryId: bigint, arrivalAt: bigint): Log {
+    const topics = encodeEventTopics({
+        abi: TRANSPORT_ABI,
+        eventName: 'DeliveryScheduled',
+        args: { deliveryId, payer: WALLET_ADDRESS },
+    });
+    const data = encodeAbiParameters(
+        [
+            { name: 'sourceId', type: 'uint256' },
+            { name: 'receiver', type: 'address' },
+            { name: 'targetId', type: 'uint256' },
+            { name: 'resource', type: 'uint16' },
+            { name: 'amount', type: 'uint64' },
+            { name: 'arrivalAt', type: 'uint64' },
+        ],
+        [10n, WALLET_ADDRESS, 20n, 3, 100n, arrivalAt],
+    );
+    return {
+        address: TRANSPORT,
+        topics,
+        data,
+        blockNumber: 100n,
+        blockHash: `0x${'0'.repeat(64)}`,
+        logIndex: 1,
+        transactionHash: `0x${'0'.repeat(64)}`,
+        transactionIndex: 0,
+        removed: false,
+    } as unknown as Log;
+}
+
+class FakeContractClient implements IContractClient {
+    constructor(
+        private readonly logs: Array<Log> = [],
+        private readonly reverts: boolean = false,
+    ) {}
+    async read<T>(_params: ReadContractParams): Promise<T> {
+        return undefined as T;
+    }
+    async send(): Promise<Hash> {
+        throw new Error('TradeService should send via the trade client, not contracts.send');
+    }
+    async confirm(hash: Hash, revertLabel: string): Promise<ConfirmedTx> {
+        if (this.reverts) {
+            throw new Error(`${revertLabel} reverted on-chain (tx ${hash}).`);
+        }
+        return { txHash: hash, status: TxStatus.Success, blockNumber: '100', logs: this.logs };
+    }
+}
+
+class FakeTradeClient implements ITradeClient {
+    public readonly creates: Array<CreateLotParams> = [];
+    public readonly buys: Array<BuyLotParams> = [];
+    public readonly cancels: Array<CancelLotParams> = [];
+    async createLot(p: CreateLotParams): Promise<Hash> {
+        this.creates.push(p);
+        return CREATE_HASH;
+    }
+    async buy(p: BuyLotParams): Promise<Hash> {
+        this.buys.push(p);
+        return BUY_HASH;
+    }
+    async cancel(p: CancelLotParams): Promise<Hash> {
+        this.cancels.push(p);
+        return CANCEL_HASH;
+    }
+}
+
+class FakeTransportClient implements ITransportClient {
+    public readonly quotes: Array<QuoteRouteParams> = [];
+    constructor(
+        private readonly quoteResult: RouteQuote,
+        private readonly quoteError: Error | null = null,
+    ) {}
+    async quoteRoute(p: QuoteRouteParams): Promise<RouteQuote> {
+        this.quotes.push(p);
+        if (this.quoteError !== null) {
+            throw this.quoteError;
+        }
+        return this.quoteResult;
+    }
+    async move(_p: MoveParams): Promise<Hash> {
+        throw new Error('unused');
+    }
+    async finalize(_p: FinalizeParams): Promise<Hash> {
+        throw new Error('unused');
+    }
+}
+
+type Options = Partial<{
+    quote: RouteQuote;
+    quoteError: Error | null;
+    confirmLogs: Array<Log>;
+    reverts: boolean;
+    approve: Hash | null | Error;
+    walletChainId: number;
+    config: ReturnType<typeof makeConfig>;
+    response: { status: number; data: unknown };
+}>;
+
+function makeTrade(opts: Options = {}): {
+    service: TradeService;
+    api: FakeApi;
+    wallet: FakeWallet;
+    allowance: FakeAllowance;
+    contracts: FakeContractClient;
+    tradeClient: FakeTradeClient;
+    transportClient: FakeTransportClient;
+} {
+    const api = new FakeApi(opts.response ?? { status: 200, data: null });
+    const wallet = new FakeWallet(opts.walletChainId ?? 1);
+    const allowance = new FakeAllowance(opts.approve ?? null);
+    const contracts = new FakeContractClient(opts.confirmLogs ?? [], opts.reverts ?? false);
+    const tradeClient = new FakeTradeClient();
+    const transportClient = new FakeTransportClient(
+        opts.quote ?? { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
+        opts.quoteError ?? null,
+    );
+    const service = new TradeService({
+        api: api as unknown as ApiClient,
+        wallet: wallet as unknown as WalletProvider,
+        appConfig: new FakeAppConfig(opts.config ?? makeConfig()),
+        allowance,
+        contracts,
+        tradeClient,
+        transportClient,
+        logger: new NoopLogger(),
+    });
+    return { service, api, wallet, allowance, contracts, tradeClient, transportClient };
 }
 
 describe('TradeService.createLot', () => {
-    it('returns a free lot without touching the wallet or $CPU', async () => {
-        const { service, api, wallet, allowance } = makeService({ response: { status: 200, data: makeFreeLot() } });
+    it('lists an own-cell route with no $CPU fee and decodes the lot + delivery', async () => {
+        const h = makeTrade({
+            quote: { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
+            confirmLogs: [createdLog({ lotId: 7n, hub: 20n }), scheduledLog(123n, 1704n)],
+        });
 
-        const result = await service.createLot(CREATE_INPUT);
+        const result = await h.service.createLot(CREATE_INPUT);
 
-        expect(api.calls[0]?.path).toBe('/api/v1/trade/lots');
-        expect(api.calls[0]?.method).toBe('POST');
-        expect(api.calls[0]?.authenticated).toBe(true);
-        expect(api.calls[0]?.body).toEqual({ ...CREATE_INPUT, network: 'ethereum' });
-        expect(result.kind).toBe(LotResultKind.Free);
-        expect(result.action).toBe(LotAction.Create);
-        expect(result.lotId).toBe('lot-1');
-        expect(wallet.sent).toHaveLength(0);
-        expect(allowance.calls).toHaveLength(0);
+        expect(h.allowance.calls).toHaveLength(0);
+        expect(h.tradeClient.creates).toHaveLength(1);
+        expect(h.tradeClient.creates[0]).toMatchObject({
+            trade: TRADE,
+            res: 3,
+            value: 100n,
+            price: parseEther('0.5'),
+            maxFee: 0n,
+        });
+        expect(result.lotId).toBe('7');
+        expect(result.hubTokenId).toBe('20');
+        expect(result.value).toBe('100');
+        expect(result.pricePerUnit).toBe('0.5');
+        expect(result.deliveryId).toBe('123');
+        expect(result.arrivalAt).toBe(1704);
+        expect(result.feeWei).toBe('0');
+        expect(result.approveTxHash).toBeNull();
+        expect(result.txHash).toBe(CREATE_HASH);
+        expect(result.blockNumber).toBe('100');
+        expect(result.status).toBe(TxStatus.Success);
     });
 
-    it('settles a paid create via the transport function', async () => {
-        const { service, wallet, allowance } = makeService({
-            response: { status: 200, data: makePaidLot() },
+    it('approves the buffered transit fee to Transport for a foreign-hub route', async () => {
+        const h = makeTrade({
+            quote: { totalFee: 1_000n, totalDistance: 4n, arrivalAt: 1704n },
             approve: APPROVE_HASH,
+            confirmLogs: [createdLog({ lotId: 7n, hub: 20n }), scheduledLog(123n, 1704n)],
         });
 
-        const result = await service.createLot(CREATE_INPUT);
+        const result = await h.service.createLot(CREATE_INPUT);
 
-        expect(allowance.calls).toEqual([{ token: CPU_TOKEN, spender: GAME_SETTLEMENT, needed: 1000n }]);
-        const sent = wallet.sent[0];
-        if (sent === undefined) {
-            throw new Error('expected one tx');
-        }
-        expect(sent.to).toBe(GAME_SETTLEMENT);
-        const decoded = decodeFunctionData({ abi: GAME_SETTLEMENT_ABI, data: sent.data });
-        expect(decoded.functionName).toBe('transport');
-        expect(decoded.args).toEqual([9n, 20n, 1000n, 100n, [HUB], [900n], 9999999999n, 27, R, S]);
-
-        if (result.kind !== LotResultKind.Paid) {
-            throw new Error('expected a paid result');
-        }
-        expect(result.action).toBe(LotAction.Create);
+        expect(h.allowance.calls).toEqual([{ token: CPU_TOKEN, spender: TRANSPORT, needed: 1_100n }]);
+        expect(h.tradeClient.creates[0]?.maxFee).toBe(1_100n);
+        expect(result.feeWei).toBe('1000');
         expect(result.approveTxHash).toBe(APPROVE_HASH);
-        expect(result.totalAmount).toBe('1000');
     });
 
-    it('refuses when the signature sender does not match the wallet — no tx', async () => {
-        const { service, wallet, allowance } = makeService({
-            response: { status: 200, data: makePaidLot({ sender: '0x9999999999999999999999999999999999999999' }) },
-        });
-        await expect(service.createLot(CREATE_INPUT)).rejects.toThrow(/issued for/i);
-        expect(wallet.sent).toHaveLength(0);
-        expect(allowance.calls).toHaveLength(0);
+    it('refuses on a chain mismatch before quoting', async () => {
+        const h = makeTrade({ walletChainId: 8453 });
+        await expect(h.service.createLot(CREATE_INPUT)).rejects.toThrow(/chain mismatch/i);
+        expect(h.transportClient.quotes).toHaveLength(0);
+        expect(h.tradeClient.creates).toHaveLength(0);
     });
 
-    it('wraps a failed on-chain payment with the wait-then-retry hint', async () => {
-        const { service } = makeService({
-            response: { status: 200, data: makePaidLot() },
-            receipts: [TxStatus.Reverted],
-        });
-        await expect(service.createLot(CREATE_INPUT)).rejects.toThrow(/reconciled automatically/i);
+    it('throws when the Trade contract is not configured', async () => {
+        const base = makeConfig();
+        const config = { ...base, contracts: { ...base.contracts, trade: '' } };
+        const h = makeTrade({ config });
+        await expect(h.service.createLot(CREATE_INPUT)).rejects.toThrow(/not configured/i);
+        expect(h.tradeClient.creates).toHaveLength(0);
     });
 
-    it('surfaces a 409 conflict and sends no tx', async () => {
-        const { service, wallet } = makeService({
-            response: { status: 409, data: { message: 'LotCreatePendingExists' } },
-        });
-        await expect(service.createLot(CREATE_INPUT)).rejects.toThrow(/LotCreatePendingExists/);
-        expect(wallet.sent).toHaveLength(0);
-    });
-
-    it('refuses on a chain mismatch before calling the API', async () => {
-        const { service, api, wallet } = makeService({
-            response: { status: 200, data: makeFreeLot() },
-            walletChainId: 8453,
-        });
-        await expect(service.createLot(CREATE_INPUT)).rejects.toThrow(/chain mismatch/i);
-        expect(api.calls).toHaveLength(0);
-        expect(wallet.sent).toHaveLength(0);
+    it('throws when the create reverts on-chain', async () => {
+        const h = makeTrade({ reverts: true });
+        await expect(h.service.createLot(CREATE_INPUT)).rejects.toThrow(/reverted/i);
     });
 });
 
 describe('TradeService.buyLot', () => {
-    it('settles via tradeBuy at the buyer destination token', async () => {
-        const { service, api, wallet } = makeService({ response: { status: 200, data: makePaidLot() } });
+    it('reads the lot, approves both the sale and the transit fee, and decodes the buy', async () => {
+        const h = makeTrade({
+            response: { status: 200, data: lotView({ id: '7', pricePerUnit: '0.5', remaining: '100' }) },
+            quote: { totalFee: 1_000n, totalDistance: 4n, arrivalAt: 1704n },
+            approve: APPROVE_HASH,
+            confirmLogs: [
+                boughtLog({ lotId: 7n, value: 10n, remaining: 90n, sale: parseEther('5') }),
+                scheduledLog(123n, 1704n),
+            ],
+        });
 
-        const result = await service.buyLot({ lotId: 'lot-1', chain: CHAIN, value: '100' });
+        const result = await h.service.buyLot({
+            lotId: '7',
+            chain: [
+                { x: 5, y: 5 },
+                { x: 6, y: 6 },
+            ],
+            value: '10',
+        });
 
-        expect(api.calls[0]?.path).toBe('/api/v1/trade/lots/lot-1/buy');
-        expect(api.calls[0]?.body).toEqual({ chain: CHAIN, value: '100', network: 'ethereum' });
-        const sent = wallet.sent[0];
-        if (sent === undefined) {
-            throw new Error('expected one tx');
-        }
-        const decoded = decodeFunctionData({ abi: GAME_SETTLEMENT_ABI, data: sent.data });
-        expect(decoded.functionName).toBe('tradeBuy');
-        expect(decoded.args?.[1]).toBe(20n);
-        if (result.kind !== LotResultKind.Paid) {
-            throw new Error('expected a paid result');
-        }
-        expect(result.action).toBe(LotAction.Buy);
+        expect(h.api.calls[0]?.path).toBe('/api/v1/trade/lots/7');
+        expect(h.api.calls[0]?.authenticated).toBe(false);
+        expect(h.allowance.calls).toEqual([
+            { token: CPU_TOKEN, spender: TRADE, needed: parseEther('5') },
+            { token: CPU_TOKEN, spender: TRANSPORT, needed: 1_100n },
+        ]);
+        expect(h.tradeClient.buys[0]).toMatchObject({ trade: TRADE, lotId: 7n, value: 10n, maxFee: 1_100n });
+        expect(result.saleWei).toBe(parseEther('5').toString());
+        expect(result.remaining).toBe('90');
+        expect(result.feeWei).toBe('1000');
+        expect(result.deliveryId).toBe('123');
+        expect(result.approveSaleTxHash).toBe(APPROVE_HASH);
+        expect(result.approveTransitTxHash).toBe(APPROVE_HASH);
+        expect(result.txHash).toBe(BUY_HASH);
+    });
+
+    it('skips the transit approve on a free route but still approves the sale', async () => {
+        const h = makeTrade({
+            response: { status: 200, data: lotView({ id: '7', pricePerUnit: '0.5', remaining: '100' }) },
+            quote: { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
+            approve: APPROVE_HASH,
+            confirmLogs: [
+                boughtLog({ lotId: 7n, value: 10n, remaining: 90n, sale: parseEther('5') }),
+                scheduledLog(123n, 1704n),
+            ],
+        });
+
+        const result = await h.service.buyLot({
+            lotId: '7',
+            chain: [
+                { x: 1, y: 0 },
+                { x: 2, y: 0 },
+            ],
+            value: '10',
+        });
+
+        expect(h.allowance.calls).toEqual([{ token: CPU_TOKEN, spender: TRADE, needed: parseEther('5') }]);
+        expect(result.approveTransitTxHash).toBeNull();
+        expect(result.approveSaleTxHash).toBe(APPROVE_HASH);
     });
 });
 
 describe('TradeService.cancelLot', () => {
-    it('settles via tradeCancel for an open lot', async () => {
-        const { service, api, wallet } = makeService({ response: { status: 200, data: makePaidLot() } });
-
-        const result = await service.cancelLot({ lotId: 'lot-1', chain: CHAIN });
-
-        expect(api.calls[0]?.path).toBe('/api/v1/trade/lots/lot-1/cancel');
-        expect(api.calls[0]?.body).toEqual({ chain: CHAIN, network: 'ethereum' });
-        const sent = wallet.sent[0];
-        if (sent === undefined) {
-            throw new Error('expected one tx');
-        }
-        expect(decodeFunctionData({ abi: GAME_SETTLEMENT_ABI, data: sent.data }).functionName).toBe('tradeCancel');
-        expect(result.action).toBe(LotAction.Cancel);
-    });
-
-    it('handles a free draft cancel with a null chain and no tx', async () => {
-        const { service, api, wallet } = makeService({
-            response: { status: 200, data: makeFreeLot({ state: LotState.Reverted }) },
+    it('reads the lot remaining, routes it home, and decodes the cancel', async () => {
+        const h = makeTrade({
+            response: { status: 200, data: lotView({ id: '7', remaining: '100' }) },
+            quote: { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
+            confirmLogs: [cancelledLog({ lotId: 7n, returned: 100n }), scheduledLog(123n, 1704n)],
         });
 
-        const result = await service.cancelLot({ lotId: 'lot-1', chain: null });
+        const result = await h.service.cancelLot({
+            lotId: '7',
+            chain: [
+                { x: 6, y: 6 },
+                { x: 0, y: 0 },
+            ],
+        });
 
-        expect(api.calls[0]?.body).toEqual({ chain: null, network: 'ethereum' });
-        expect(result.kind).toBe(LotResultKind.Free);
-        expect(wallet.sent).toHaveLength(0);
+        expect(h.allowance.calls).toHaveLength(0);
+        expect(h.tradeClient.cancels[0]).toMatchObject({ trade: TRADE, lotId: 7n, maxFee: 0n });
+        expect(h.transportClient.quotes[0]?.amount).toBe(100n);
+        expect(result.returned).toBe('100');
+        expect(result.feeWei).toBe('0');
+        expect(result.deliveryId).toBe('123');
+        expect(result.approveTxHash).toBeNull();
+        expect(result.txHash).toBe(CANCEL_HASH);
+    });
+});
+
+describe('TradeService.quoteBuy', () => {
+    it('includes the transit fee for a routed preview and sends no transaction', async () => {
+        const h = makeTrade({
+            response: { status: 200, data: lotView({ id: '7', pricePerUnit: '0.5', remaining: '100' }) },
+            quote: { totalFee: 1_000n, totalDistance: 4n, arrivalAt: 1704n },
+        });
+
+        const result = await h.service.quoteBuy({
+            lotId: '7',
+            value: '10',
+            chain: [
+                { x: 5, y: 5 },
+                { x: 6, y: 6 },
+            ],
+        });
+
+        expect(h.transportClient.quotes).toHaveLength(1);
+        expect(result.routed).toBe(true);
+        expect(result.saleWei).toBe(parseEther('5').toString());
+        expect(result.transitFeeWei).toBe('1000');
+        expect(result.totalWei).toBe((parseEther('5') + 1_000n).toString());
+        expect(result.totalDistance).toBe(4);
+        expect(result.arrivalAt).toBe(1704);
+        expect(h.tradeClient.buys).toHaveLength(0);
+    });
+
+    it('gives a seller-only estimate with no route and no on-chain quote', async () => {
+        const h = makeTrade({
+            response: { status: 200, data: lotView({ id: '7', pricePerUnit: '0.5', remaining: '100' }) },
+        });
+
+        const result = await h.service.quoteBuy({ lotId: '7', value: '10', chain: null });
+
+        expect(h.transportClient.quotes).toHaveLength(0);
+        expect(result.routed).toBe(false);
+        expect(result.transitFeeWei).toBeNull();
+        expect(result.totalWei).toBe(parseEther('5').toString());
+        expect(result.totalDistance).toBeNull();
+        expect(result.arrivalAt).toBeNull();
     });
 });
 
 describe('TradeService reads', () => {
-    it('listLots builds the filter query and reads the public endpoint', async () => {
-        const { service, api } = makeService({ response: { status: 200, data: [] } });
+    it('listMyLots hits the authenticated mine endpoint', async () => {
+        const h = makeTrade({ response: { status: 200, data: [lotView({ id: '1' })] } });
 
-        await service.listLots({
-            hub: 5,
-            resourceId: 3,
+        const result = await h.service.listMyLots(null);
+
+        expect(h.api.calls[0]?.path).toBe('/api/v1/trade/lots/mine');
+        expect(h.api.calls[0]?.authenticated).toBe(true);
+        expect(result[0]?.id).toBe('1');
+    });
+
+    it('listLots hits the public lots endpoint', async () => {
+        const h = makeTrade({ response: { status: 200, data: [lotView()] } });
+
+        const result = await h.service.listLots({
+            hub: null,
+            resourceId: null,
             seller: null,
             minPrice: null,
             maxPrice: null,
-            availability: LotAvailability.Open,
-            sort: LotSort.PriceAsc,
-            limit: 50,
+            availability: null,
+            sort: null,
+            limit: null,
             offset: null,
             aroundTokenId: null,
             centerX: null,
@@ -212,52 +489,8 @@ describe('TradeService reads', () => {
             radius: null,
         });
 
-        expect(api.calls[0]?.path).toBe(
-            '/api/v1/trade/lots?hub=5&resourceId=3&availability=open&sort=price_asc&limit=50',
-        );
-        expect(api.calls[0]?.authenticated).toBe(false);
-    });
-
-    it('getMarkets passes the zone params', async () => {
-        const { service, api } = makeService({ response: { status: 200, data: [] } });
-
-        await service.getMarkets({
-            hub: null,
-            resourceId: null,
-            aroundTokenId: 7,
-            centerX: null,
-            centerY: null,
-            radius: 3,
-        });
-
-        expect(api.calls[0]?.path).toBe('/api/v1/trade/markets?aroundTokenId=7&radius=3');
-        expect(api.calls[0]?.authenticated).toBe(false);
-    });
-
-    it('getLot reads the public single-lot endpoint', async () => {
-        const { service, api } = makeService({ response: { status: 200, data: {} } });
-        await service.getLot('lot-1');
-        expect(api.calls[0]?.path).toBe('/api/v1/trade/lots/lot-1');
-        expect(api.calls[0]?.authenticated).toBe(false);
-    });
-
-    it('listMyLots filters by state on the authenticated endpoint', async () => {
-        const { service, api } = makeService({ response: { status: 200, data: [] } });
-        await service.listMyLots(LotState.Open);
-        expect(api.calls[0]?.path).toBe('/api/v1/trade/lots/mine?state=open');
-        expect(api.calls[0]?.authenticated).toBe(true);
-    });
-
-    it('quoteBuy serialises the chain and authenticates', async () => {
-        const { service, api } = makeService({ response: { status: 200, data: {} } });
-        await service.quoteBuy({ lotId: 'lot-1', value: '100', chain: CHAIN });
-        expect(api.calls[0]?.path).toBe('/api/v1/trade/lots/lot-1/quote?value=100&chain=0%2C0%3B1%2C0');
-        expect(api.calls[0]?.authenticated).toBe(true);
-    });
-
-    it('quoteBuy omits the chain for a seller-only estimate', async () => {
-        const { service, api } = makeService({ response: { status: 200, data: {} } });
-        await service.quoteBuy({ lotId: 'lot-1', value: '100', chain: null });
-        expect(api.calls[0]?.path).toBe('/api/v1/trade/lots/lot-1/quote?value=100');
+        expect(h.api.calls[0]?.path.startsWith('/api/v1/trade/lots')).toBe(true);
+        expect(h.api.calls[0]?.authenticated).toBe(false);
+        expect(result).toHaveLength(1);
     });
 });

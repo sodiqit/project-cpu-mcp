@@ -33,6 +33,7 @@ function makeResponse(overrides: Partial<AppConfigResponse> = {}): AppConfigResp
             cell: CELL,
             cellLens: '0x6666666666666666666666666666666666666666',
             transport: '0x7777777777777777777777777777777777777777',
+            trade: '0x8888888888888888888888888888888888888888',
             ...overrides.contracts,
         },
         resources: { 3: 'Silica' },
@@ -112,6 +113,7 @@ describe('AppConfigService', () => {
                     cell: '',
                     cellLens: '',
                     transport: '',
+                    trade: '',
                 },
             }),
         });
