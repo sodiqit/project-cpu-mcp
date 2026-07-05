@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { BUY_LOT_DESCRIPTION } from './constants.js';
 import type { AppContext } from '../../../types.js';
-import { summarizeLotResult } from '../format.utils.js';
+import { summarizeBuyLot } from '../format.utils.js';
 import { buyLotInputSchema } from '../types.js';
 
 export function registerBuyLotTool(server: McpServer, context: AppContext): void {
@@ -15,10 +15,11 @@ export function registerBuyLotTool(server: McpServer, context: AppContext): void
                 chain: args.chain,
                 value: args.value,
             });
+            const { resources } = await context.appConfig.load();
 
             return {
                 content: [
-                    { type: 'text', text: summarizeLotResult(result) },
+                    { type: 'text', text: summarizeBuyLot(result, resources) },
                     { type: 'text', text: JSON.stringify(result) },
                 ],
             };

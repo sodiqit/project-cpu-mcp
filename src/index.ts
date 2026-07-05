@@ -23,6 +23,7 @@ import { MiningService } from './services/mining.service.js';
 import { MintService } from './services/mint.service.js';
 import { RevealService } from './services/reveal.service.js';
 import { SwapService } from './services/swap.service.js';
+import { TradeClient } from './services/trade.client.js';
 import { TradeService } from './services/trade.service.js';
 import { TransportClient } from './services/transport.client.js';
 import { TransportService } from './services/transport.service.js';
@@ -65,6 +66,7 @@ async function main(): Promise<void> {
     const contracts = new ContractClient({ wallet, logger: logger.child('contract'), retry: null });
     const cellClient = new CellClient({ contracts, logger: logger.child('cell') });
     const transportClient = new TransportClient({ contracts, logger: logger.child('transport:client') });
+    const tradeClient = new TradeClient({ contracts, logger: logger.child('trade:client') });
     const transport = new TransportService({
         api,
         wallet,
@@ -74,7 +76,16 @@ async function main(): Promise<void> {
         transportClient,
         logger: logger.child('transport'),
     });
-    const trade = new TradeService({ api, wallet, appConfig, allowance, logger: logger.child('trade') });
+    const trade = new TradeService({
+        api,
+        wallet,
+        appConfig,
+        allowance,
+        contracts,
+        tradeClient,
+        transportClient,
+        logger: logger.child('trade'),
+    });
     const swap = new SwapService({ wallet, appConfig, allowance, logger: logger.child('swap') });
     const mint = new MintService({ wallet, appConfig, logger: logger.child('mint') });
     const balance = new BalanceService({ wallet, appConfig, logger: logger.child('balance') });

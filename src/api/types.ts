@@ -74,6 +74,7 @@ export interface AppContractsConfig {
     cell: string;
     cellLens: string;
     transport: string;
+    trade: string;
 }
 
 export enum CraftCategory {
@@ -171,17 +172,6 @@ export interface TransportCoord {
     y: number;
 }
 
-/** Transit-fee preview — human-readable CPU (`*`) plus the on-chain wei (`*Wei`) the paid branch submits. */
-export interface TransportQuoteFee {
-    total: string;
-    burn: string;
-    recipients: Array<string>;
-    payouts: Array<string>;
-    totalWei: string;
-    burnWei: string;
-    payoutsWei: Array<string>;
-}
-
 export enum DeliveryTargetKind {
     Cell = 'cell',
     Lot = 'lot',
@@ -209,21 +199,12 @@ export interface DeliveriesResponse {
 
 // ---- Trade (lot marketplace) ----
 
-/** Lifecycle of a lot. */
+/** Lifecycle of a lot — mirrors the Trade contract, projected by the game API. */
 export enum LotState {
-    Draft = 'draft',
     Delivering = 'delivering',
     Open = 'open',
-    CancelPending = 'cancel_pending',
-    Cancelling = 'cancelling',
+    Sold = 'sold',
     Cancelled = 'cancelled',
-    Reverted = 'reverted',
-}
-
-/** Discriminator for the free (off-chain) vs paid (on-chain signature) lot responses. */
-export enum LotResponseKind {
-    Free = 'free',
-    Paid = 'paid',
 }
 
 /** Discovery availability filter — `incoming` = paid & en route (DELIVERING). */
@@ -238,61 +219,6 @@ export enum LotSort {
     Recent = 'recent',
     Nearest = 'nearest',
 }
-
-/** `POST /api/v1/trade/lots` request body. `chain` = `[source, …waypoints, hub]`. */
-export interface CreateLotRequest {
-    chain: Array<TransportCoord>;
-    resourceId: number;
-    value: string;
-    pricePerUnit: string;
-    network: string;
-}
-
-/** `POST /api/v1/trade/lots/:id/buy` request body. `chain` = `[hub, …waypoints, buyerDest]`. */
-export interface BuyLotRequest {
-    chain: Array<TransportCoord>;
-    value: string;
-    network: string;
-}
-
-/** `POST /api/v1/trade/lots/:id/cancel` request body. `chain` = `[hub, …waypoints, sellerDest]` (required for OPEN lots). */
-export interface CancelLotRequest {
-    chain: Array<TransportCoord> | null;
-    network: string;
-}
-
-/** Free branch of a create / cancel — fully off-chain, no payment. */
-export interface FreeLotResponse {
-    kind: LotResponseKind.Free;
-    lotId: string;
-    state: LotState;
-    arrivalAt: number;
-}
-
-/**
- * Paid branch — the EIP-712 signature to submit on-chain. `tokenId` is the action's token:
- * create → `sourceTokenId` (settled via `transport`), buy → `buyerDestTokenId` (`tradeBuy`),
- * cancel → `sellerDestTokenId` (`tradeCancel`). On-chain amounts are wei.
- */
-export interface PaidLotSignatureResponse {
-    kind: LotResponseKind.Paid;
-    lotId: string;
-    signId: number;
-    state: LotState;
-    sender: string;
-    tokenId: string;
-    totalAmount: string;
-    burnAmount: string;
-    recipients: Array<string>;
-    payouts: Array<string>;
-    deadline: string;
-    v: number;
-    r: string;
-    s: string;
-}
-
-export type CreateLotResponse = FreeLotResponse | PaidLotSignatureResponse;
-export type CancelLotResponse = FreeLotResponse | PaidLotSignatureResponse;
 
 /** A lot row from `GET /api/v1/trade/lots`, `/trade/lots/:id`, `/trade/lots/mine`. */
 export interface LotView {
@@ -312,6 +238,8 @@ export interface LotView {
     distanceFromCenter: number | null;
     /** Listing time, unix seconds. */
     createdAt: number;
+    /** Last projection update, unix seconds. */
+    updated: number;
 }
 
 /** One `GET /api/v1/trade/markets` row per `(hub, resource)` — the compact scout view. */
@@ -327,22 +255,4 @@ export interface MarketResourceSummary {
     incomingLots: number;
     incomingRemaining: string;
     distanceFromCenter: number | null;
-}
-
-/**
- * `GET /api/v1/trade/lots/:id/quote` — non-destructive buy preview. `routed` is true when a route
- * `chain` was supplied (transit fees included — the exact total `buy_lot` would charge); false for a
- * seller-only quote (`pricePerUnit × value`).
- */
-export interface TradeQuoteResponse {
-    lotId: string;
-    resourceId: number;
-    sellerAddress: string;
-    pricePerUnit: string;
-    value: string;
-    remaining: string;
-    routed: boolean;
-    totalDistance: number | null;
-    totalTimeSec: number | null;
-    fee: TransportQuoteFee;
 }

@@ -1,0 +1,78 @@
+import { decodeFunctionData, type Address, type Hash } from 'viem';
+import { describe, expect, it } from 'vitest';
+
+import { TRADE_ABI } from '../../contracts/trade.abi.js';
+import { NoopLogger } from '../../logger/noop.logger.js';
+import type { ConfirmedTx, IContractClient, TransactionRequest } from '../../wallet/types.js';
+import { TradeClient } from '../trade.client.js';
+
+const TRADE = '0x8888888888888888888888888888888888888888' as Address;
+const SENT = `0x${'f'.repeat(64)}` as Hash;
+
+class FakeContracts implements IContractClient {
+    public readonly sent: Array<TransactionRequest> = [];
+    async read<T>(): Promise<T> {
+        throw new Error('unused');
+    }
+    async send(tx: TransactionRequest): Promise<Hash> {
+        this.sent.push(tx);
+        return SENT;
+    }
+    async confirm(): Promise<ConfirmedTx> {
+        throw new Error('unused');
+    }
+}
+
+function makeClient(): { client: TradeClient; contracts: FakeContracts } {
+    const contracts = new FakeContracts();
+    return { client: new TradeClient({ contracts, logger: new NoopLogger() }), contracts };
+}
+
+function sentTx(contracts: FakeContracts): TransactionRequest {
+    const tx = contracts.sent[0];
+    if (tx === undefined) {
+        throw new Error('expected a tx');
+    }
+    return tx;
+}
+
+describe('TradeClient', () => {
+    it('encodes createLot and sends it to the Trade contract with no value', async () => {
+        const { client, contracts } = makeClient();
+        const hash = await client.createLot({
+            trade: TRADE,
+            xs: [0n, 1n],
+            ys: [0n, 0n],
+            res: 3,
+            value: 100n,
+            price: 500000000000000000n,
+            maxFee: 1100n,
+        });
+
+        expect(hash).toBe(SENT);
+        const tx = sentTx(contracts);
+        expect(tx.to).toBe(TRADE);
+        expect(tx.value).toBeNull();
+        const decoded = decodeFunctionData({ abi: TRADE_ABI, data: tx.data });
+        expect(decoded.functionName).toBe('createLot');
+        expect(decoded.args).toEqual([[0n, 1n], [0n, 0n], 3, 100n, 500000000000000000n, 1100n]);
+    });
+
+    it('encodes buy', async () => {
+        const { client, contracts } = makeClient();
+        await client.buy({ trade: TRADE, lotId: 7n, value: 10n, destXs: [1n, 2n], destYs: [0n, 0n], maxFee: 0n });
+
+        const decoded = decodeFunctionData({ abi: TRADE_ABI, data: sentTx(contracts).data });
+        expect(decoded.functionName).toBe('buy');
+        expect(decoded.args).toEqual([7n, 10n, [1n, 2n], [0n, 0n], 0n]);
+    });
+
+    it('encodes cancel', async () => {
+        const { client, contracts } = makeClient();
+        await client.cancel({ trade: TRADE, lotId: 7n, returnXs: [2n, 1n], returnYs: [0n, 0n], maxFee: 5n });
+
+        const decoded = decodeFunctionData({ abi: TRADE_ABI, data: sentTx(contracts).data });
+        expect(decoded.functionName).toBe('cancel');
+        expect(decoded.args).toEqual([7n, [2n, 1n], [0n, 0n], 5n]);
+    });
+});
