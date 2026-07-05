@@ -89,7 +89,6 @@ async function main(): Promise<void> {
     const swap = new SwapService({ wallet, appConfig, allowance, logger: logger.child('swap') });
     const mint = new MintService({ wallet, appConfig, logger: logger.child('mint') });
     const balance = new BalanceService({ wallet, appConfig, logger: logger.child('balance') });
-    const withdraw = new WithdrawService({ api, wallet, appConfig, allowance, logger: logger.child('withdraw') });
 
     const store = new MapStore();
     const mapSync = new MapSync({
@@ -101,6 +100,15 @@ async function main(): Promise<void> {
         reconnectGraceMs: DEFAULT_RECONNECT_GRACE_MS,
     });
     const mapReader = new MapReader({ store, status: mapSync });
+
+    const withdraw = new WithdrawService({
+        wallet,
+        appConfig,
+        cellClient,
+        contracts,
+        mapReader,
+        logger: logger.child('withdraw'),
+    });
 
     const build = new BuildService({
         wallet,

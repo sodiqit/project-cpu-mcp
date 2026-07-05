@@ -34,8 +34,6 @@ export interface AppContracts {
     land: string;
     /** Empty until $CPU is configured for the network; validate with `isAddress` before use. */
     cpuToken: string;
-    /** Always a valid address — `AppConfigService.load()` rejects a config without it. */
-    gameSettlement: Address;
     /** Uniswap v4 hook for the ETH/$CPU pool; empty until configured. Validate before a swap. */
     cpuHook: string;
     cell: string;
@@ -121,6 +119,13 @@ export interface ClaimParams {
     tokenId: bigint;
 }
 
+export interface WithdrawCpuParams {
+    cell: Address;
+    tokenId: bigint;
+    /** Whole wCPU units to convert to $CPU (on-chain `uint64`). */
+    amount: bigint;
+}
+
 export interface ICellClient {
     quoteRevealFee(cell: Address): Promise<bigint>;
     requestReveal(params: RequestRevealParams): Promise<Hash>;
@@ -129,6 +134,7 @@ export interface ICellClient {
     startMining(params: StartMiningParams): Promise<Hash>;
     startCraft(params: StartCraftParams): Promise<Hash>;
     claim(params: ClaimParams): Promise<Hash>;
+    withdrawCpu(params: WithdrawCpuParams): Promise<Hash>;
 }
 
 export interface RevealServiceOptions {
@@ -200,10 +206,11 @@ export interface DemolishResult {
 }
 
 export interface WithdrawServiceOptions {
-    api: ApiClient;
     wallet: WalletProvider;
     appConfig: IAppConfig;
-    allowance: IAllowanceService;
+    cellClient: ICellClient;
+    contracts: IContractClient;
+    mapReader: RevealCellReader;
     logger: ILogger;
 }
 
@@ -216,16 +223,11 @@ export interface WithdrawInput {
 /** A confirmed withdraw — the on-chain mint of $CPU against a cell's debited wCPU (1:1). */
 export interface WithdrawResult {
     tokenId: string;
-    signId: number;
-    /** wCPU debited / $CPU minted, in wei. */
+    /** Whole wCPU units debited from the cell / $CPU units minted to the wallet, 1:1. */
     amount: string;
     txHash: Hash;
-    /** Always null — a withdraw mints $CPU, so no $CPU approve is ever needed. Kept for shape parity. */
-    approveTxHash: Hash | null;
     status: TxStatus;
     blockNumber: string;
-    /** True when this finished an already-signed (interrupted) withdraw instead of starting a new one. */
-    resumed: boolean;
 }
 
 export interface MiningServiceOptions {

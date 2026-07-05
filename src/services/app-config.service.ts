@@ -1,5 +1,3 @@
-import { isAddress } from 'viem';
-
 import type { AppConfig, AppConfigServiceOptions, IAppConfig } from './types.js';
 import type { ApiClient } from '../api/client.js';
 import { type AppConfigResponse, HttpStatus } from '../api/types.js';
@@ -30,20 +28,14 @@ export class AppConfigService implements IAppConfig {
             throw new Error(`Failed to load chain config (HTTP ${status}) for network ${this.network}.`);
         }
 
-        // The config ships empty addresses until contracts are deployed — fail loud rather than send a
-        // transaction into the void. `strict: false` validates shape only (addresses may be un-checksummed).
-        if (!isAddress(data.contracts.gameSettlement, { strict: false })) {
-            throw new Error(`GameSettlement contract is not configured for network ${this.network}.`);
-        }
-
+        // Addresses ship empty until their contracts are deployed; each paid action validates the address it
+        // needs (`isAddress`) before sending, so read-only tools keep working before a deployment lands.
         const config: AppConfig = {
             network: this.network,
             chainId: data.chainId,
-            // `gameSettlement` is narrowed to `Address` by the isAddress guard above.
             contracts: {
                 land: data.contracts.land,
                 cpuToken: data.contracts.cpuToken,
-                gameSettlement: data.contracts.gameSettlement,
                 cpuHook: data.contracts.cpuHook,
                 cell: data.contracts.cell,
                 cellLens: data.contracts.cellLens,
@@ -56,10 +48,7 @@ export class AppConfigService implements IAppConfig {
             reveal: data.reveal ?? { firstFree: true, reRevealCost: '0' },
         };
         this.cached = config;
-        this.logger.info('chain config loaded', {
-            chainId: config.chainId,
-            gameSettlement: config.contracts.gameSettlement,
-        });
+        this.logger.info('chain config loaded', { chainId: config.chainId });
         return config;
     }
 }

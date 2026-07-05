@@ -24,7 +24,6 @@ import type { AppConfig, IAllowanceService, IAppConfig, ICellClient } from '../t
  * all take the same `{ api, wallet, appConfig, allowance, logger }` dependencies.
  */
 
-export const GAME_SETTLEMENT = '0x1111111111111111111111111111111111111111';
 export const CPU_TOKEN = '0x2222222222222222222222222222222222222222';
 export const LAND = '0x3333333333333333333333333333333333333333';
 export const CPU_HOOK = '0x4444444444444444444444444444444444444444';
@@ -44,7 +43,6 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
         contracts: {
             land: LAND,
             cpuToken,
-            gameSettlement: GAME_SETTLEMENT,
             cpuHook: CPU_HOOK,
             cell: CELL,
             cellLens: CELL_LENS,

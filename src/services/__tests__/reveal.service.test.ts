@@ -67,6 +67,9 @@ class FakeCellClient implements ICellClient {
     async claim(): Promise<Hash> {
         return REQUEST_HASH;
     }
+    async withdrawCpu(): Promise<Hash> {
+        return REQUEST_HASH;
+    }
 }
 
 class FakeContractClient implements IContractClient {

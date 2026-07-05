@@ -1,15 +1,7 @@
 import { formatEther, parseEther, zeroAddress, type Address, type Hash, type Hex } from 'viem';
 import { describe, expect, it } from 'vitest';
 
-import {
-    CPU_HOOK,
-    CPU_TOKEN,
-    FakeAllowance,
-    FakeAppConfig,
-    GAME_SETTLEMENT,
-    LAND,
-    WALLET_ADDRESS,
-} from './service-fakes.js';
+import { CPU_HOOK, CPU_TOKEN, FakeAllowance, FakeAppConfig, LAND, WALLET_ADDRESS } from './service-fakes.js';
 import { Network } from '../../config/types.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import {
@@ -103,7 +95,6 @@ function makeConfig(contracts: Partial<AppContracts> = {}): AppConfig {
         contracts: {
             land: LAND,
             cpuToken: CPU_TOKEN,
-            gameSettlement: GAME_SETTLEMENT,
             cpuHook: CPU_HOOK,
             cell: '',
             cellLens: '',

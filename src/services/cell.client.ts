@@ -10,6 +10,7 @@ import type {
     RequestRevealParams,
     StartCraftParams,
     StartMiningParams,
+    WithdrawCpuParams,
 } from './types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import { ENTROPY_ABI } from '../contracts/entropy.abi.js';
@@ -120,6 +121,20 @@ export class CellClient implements ICellClient {
             args: [params.tokenId],
         });
         this.logger.info('submitting claim', { cell: params.cell, tokenId: params.tokenId.toString() });
+        return this.contracts.send({ to: params.cell, data, value: null });
+    }
+
+    async withdrawCpu(params: WithdrawCpuParams): Promise<Hash> {
+        const data = encodeFunctionData({
+            abi: CELL_ABI,
+            functionName: 'withdrawCpu',
+            args: [params.tokenId, params.amount],
+        });
+        this.logger.info('submitting withdrawCpu', {
+            cell: params.cell,
+            tokenId: params.tokenId.toString(),
+            amount: params.amount.toString(),
+        });
         return this.contracts.send({ to: params.cell, data, value: null });
     }
 }

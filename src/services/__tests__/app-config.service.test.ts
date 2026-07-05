@@ -6,7 +6,6 @@ import { Network } from '../../config/types.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import { AppConfigService } from '../app-config.service.js';
 
-const GAME_SETTLEMENT = '0x1111111111111111111111111111111111111111';
 const CPU_HOOK = '0x4444444444444444444444444444444444444444';
 const CELL = '0x5555555555555555555555555555555555555555';
 
@@ -28,7 +27,6 @@ function makeResponse(overrides: Partial<AppConfigResponse> = {}): AppConfigResp
         contracts: {
             land: '0x3333333333333333333333333333333333333333',
             cpuToken: '0x2222222222222222222222222222222222222222',
-            gameSettlement: GAME_SETTLEMENT,
             cpuHook: CPU_HOOK,
             cell: CELL,
             cellLens: '0x6666666666666666666666666666666666666666',
@@ -63,7 +61,7 @@ describe('AppConfigService', () => {
         expect(api.paths).toEqual(['/api/v1/config?network=ethereum']);
         expect(first.chainId).toBe(1);
         expect(first.network).toBe(Network.ETHEREUM);
-        expect(first.contracts.gameSettlement).toBe(GAME_SETTLEMENT);
+        expect(first.contracts.cell).toBe(CELL);
         expect(first.contracts.cpuHook).toBe(CPU_HOOK);
         expect(first.resources[3]).toBe('Silica');
         expect(second).toBe(first);
@@ -85,13 +83,14 @@ describe('AppConfigService', () => {
         ).load();
         expect(withRecipes.recipes).toEqual([recipe]);
 
+        // Addresses may be empty before contracts deploy; config load no longer rejects that.
         const without = await makeService(
             new FakeApi({
                 status: 200,
                 data: {
                     network: 'ethereum',
                     chainId: 1,
-                    contracts: { land: '', cpuToken: '', gameSettlement: GAME_SETTLEMENT, cpuHook: '' },
+                    contracts: { land: '', cpuToken: '', cpuHook: '', cell: '' },
                     resources: {},
                 },
             }),
@@ -99,25 +98,6 @@ describe('AppConfigService', () => {
         expect(without.recipes).toEqual([]);
         expect(without.buildings).toEqual([]);
         expect(without.reveal).toEqual({ firstFree: true, reRevealCost: '0' });
-    });
-
-    it('throws when the GameSettlement address is not yet deployed (empty string)', async () => {
-        const api = new FakeApi({
-            status: 200,
-            data: makeResponse({
-                contracts: {
-                    land: '',
-                    cpuToken: '',
-                    gameSettlement: '',
-                    cpuHook: '',
-                    cell: '',
-                    cellLens: '',
-                    transport: '',
-                    trade: '',
-                },
-            }),
-        });
-        await expect(makeService(api).load()).rejects.toThrow(/not configured/i);
     });
 
     it('throws on a non-200 config response', async () => {
