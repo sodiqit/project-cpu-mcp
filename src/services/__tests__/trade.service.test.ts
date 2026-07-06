@@ -1,4 +1,4 @@
-import { encodeAbiParameters, encodeEventTopics, parseEther, type Hash, type Log } from 'viem';
+import { encodeAbiParameters, encodeEventTopics, formatEther, parseEther, type Hash, type Log } from 'viem';
 import { describe, expect, it } from 'vitest';
 
 import type { ApiClient } from '../../api/client.js';
@@ -62,7 +62,7 @@ function lotView(over: Partial<LotView> = {}): LotView {
         resourceId: 3,
         listed: '100',
         remaining: '100',
-        pricePerUnit: '0.5',
+        pricePerUnit: parseEther('0.5').toString(),
         tradeFeePct: 0,
         state: LotState.Open,
         distanceFromCenter: null,
@@ -284,7 +284,7 @@ describe('TradeService.createLot', () => {
         expect(result.pricePerUnit).toBe('0.5');
         expect(result.deliveryId).toBe('123');
         expect(result.arrivalAt).toBe(1704);
-        expect(result.feeWei).toBe('0');
+        expect(result.fee).toBe('0');
         expect(result.approveTxHash).toBeNull();
         expect(result.txHash).toBe(CREATE_HASH);
         expect(result.blockNumber).toBe('100');
@@ -302,7 +302,7 @@ describe('TradeService.createLot', () => {
 
         expect(h.allowance.calls).toEqual([{ token: CPU_TOKEN, spender: TRANSPORT, needed: 1_100n }]);
         expect(h.tradeClient.creates[0]?.maxFee).toBe(1_100n);
-        expect(result.feeWei).toBe('1000');
+        expect(result.fee).toBe(formatEther(1_000n));
         expect(result.approveTxHash).toBe(APPROVE_HASH);
     });
 
@@ -330,7 +330,10 @@ describe('TradeService.createLot', () => {
 describe('TradeService.buyLot', () => {
     it('reads the lot, approves both the sale and the transit fee, and decodes the buy', async () => {
         const h = makeTrade({
-            response: { status: 200, data: lotView({ id: '7', pricePerUnit: '0.5', remaining: '100' }) },
+            response: {
+                status: 200,
+                data: lotView({ id: '7', pricePerUnit: parseEther('0.5').toString(), remaining: '100' }),
+            },
             quote: { totalFee: 1_000n, totalDistance: 4n, arrivalAt: 1704n },
             approve: APPROVE_HASH,
             confirmLogs: [
@@ -355,9 +358,9 @@ describe('TradeService.buyLot', () => {
             { token: CPU_TOKEN, spender: TRANSPORT, needed: 1_100n },
         ]);
         expect(h.tradeClient.buys[0]).toMatchObject({ trade: TRADE, lotId: 7n, value: 10n, maxFee: 1_100n });
-        expect(result.saleWei).toBe(parseEther('5').toString());
+        expect(result.sale).toBe('5');
         expect(result.remaining).toBe('90');
-        expect(result.feeWei).toBe('1000');
+        expect(result.fee).toBe(formatEther(1_000n));
         expect(result.deliveryId).toBe('123');
         expect(result.approveSaleTxHash).toBe(APPROVE_HASH);
         expect(result.approveTransitTxHash).toBe(APPROVE_HASH);
@@ -366,7 +369,10 @@ describe('TradeService.buyLot', () => {
 
     it('skips the transit approve on a free route but still approves the sale', async () => {
         const h = makeTrade({
-            response: { status: 200, data: lotView({ id: '7', pricePerUnit: '0.5', remaining: '100' }) },
+            response: {
+                status: 200,
+                data: lotView({ id: '7', pricePerUnit: parseEther('0.5').toString(), remaining: '100' }),
+            },
             quote: { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
             approve: APPROVE_HASH,
             confirmLogs: [
@@ -410,7 +416,7 @@ describe('TradeService.cancelLot', () => {
         expect(h.tradeClient.cancels[0]).toMatchObject({ trade: TRADE, lotId: 7n, maxFee: 0n });
         expect(h.transportClient.quotes[0]?.amount).toBe(100n);
         expect(result.returned).toBe('100');
-        expect(result.feeWei).toBe('0');
+        expect(result.fee).toBe('0');
         expect(result.deliveryId).toBe('123');
         expect(result.approveTxHash).toBeNull();
         expect(result.txHash).toBe(CANCEL_HASH);
@@ -420,7 +426,10 @@ describe('TradeService.cancelLot', () => {
 describe('TradeService.quoteBuy', () => {
     it('includes the transit fee for a routed preview and sends no transaction', async () => {
         const h = makeTrade({
-            response: { status: 200, data: lotView({ id: '7', pricePerUnit: '0.5', remaining: '100' }) },
+            response: {
+                status: 200,
+                data: lotView({ id: '7', pricePerUnit: parseEther('0.5').toString(), remaining: '100' }),
+            },
             quote: { totalFee: 1_000n, totalDistance: 4n, arrivalAt: 1704n },
         });
 
@@ -435,9 +444,9 @@ describe('TradeService.quoteBuy', () => {
 
         expect(h.transportClient.quotes).toHaveLength(1);
         expect(result.routed).toBe(true);
-        expect(result.saleWei).toBe(parseEther('5').toString());
-        expect(result.transitFeeWei).toBe('1000');
-        expect(result.totalWei).toBe((parseEther('5') + 1_000n).toString());
+        expect(result.sale).toBe('5');
+        expect(result.transitFee).toBe(formatEther(1_000n));
+        expect(result.total).toBe(formatEther(parseEther('5') + 1_000n));
         expect(result.totalDistance).toBe(4);
         expect(result.arrivalAt).toBe(1704);
         expect(h.tradeClient.buys).toHaveLength(0);
@@ -445,17 +454,35 @@ describe('TradeService.quoteBuy', () => {
 
     it('gives a seller-only estimate with no route and no on-chain quote', async () => {
         const h = makeTrade({
-            response: { status: 200, data: lotView({ id: '7', pricePerUnit: '0.5', remaining: '100' }) },
+            response: {
+                status: 200,
+                data: lotView({ id: '7', pricePerUnit: parseEther('0.5').toString(), remaining: '100' }),
+            },
         });
 
         const result = await h.service.quoteBuy({ lotId: '7', value: '10', chain: null });
 
         expect(h.transportClient.quotes).toHaveLength(0);
         expect(result.routed).toBe(false);
-        expect(result.transitFeeWei).toBeNull();
-        expect(result.totalWei).toBe(parseEther('5').toString());
+        expect(result.transitFee).toBeNull();
+        expect(result.total).toBe('5');
         expect(result.totalDistance).toBeNull();
         expect(result.arrivalAt).toBeNull();
+    });
+
+    it('reads the API price as wei — 20 units @ 2 $CPU quotes 4e19 wei, not 4e37', async () => {
+        const h = makeTrade({
+            response: {
+                status: 200,
+                data: lotView({ id: '7', pricePerUnit: parseEther('2').toString(), remaining: '100' }),
+            },
+        });
+
+        const result = await h.service.quoteBuy({ lotId: '7', value: '20', chain: null });
+
+        expect(result.pricePerUnit).toBe('2');
+        expect(result.sale).toBe('40');
+        expect(result.total).toBe('40');
     });
 });
 

@@ -155,8 +155,10 @@ export interface RevealResult {
     txHash: Hash;
     status: TxStatus;
     blockNumber: string;
-    feeWei: string;
-    reRevealCostWei: string;
+    /** Pyth Entropy request fee, in native ETH (decimal). */
+    fee: string;
+    /** Re-reveal cost in $CPU (decimal); "0" for a first reveal. */
+    reRevealCost: string;
     approveTxHash: Hash | null;
     fulfilled: boolean;
 }
@@ -181,7 +183,8 @@ export interface BuildResult {
     tokenId: string;
     buildingType: BuildingType;
     targetResourceId: number | null;
-    buildCostWei: string;
+    /** Build cost in $CPU (decimal). */
+    buildCost: string;
     approveTxHash: Hash | null;
     buildTxHash: Hash | null;
     miningTxHash: Hash | null;
@@ -191,7 +194,8 @@ export interface BuildResult {
 export interface BuildPlacement {
     buildTxHash: Hash | null;
     approveTxHash: Hash | null;
-    buildCostWei: string;
+    /** Build cost in $CPU (decimal). */
+    buildCost: string;
 }
 
 export interface DemolishInput {
@@ -315,7 +319,8 @@ export interface TransportInput {
 }
 
 export interface TransportQuote {
-    feeWei: string;
+    /** Transit fee in $CPU (decimal); "0" for an own-cells-only route. */
+    fee: string;
     totalDistance: number;
     arrivalAt: number;
 }
@@ -326,7 +331,8 @@ export interface TransportResult {
     targetTokenId: string;
     resourceId: number;
     amount: string;
-    feeWei: string;
+    /** Transit fee paid, in $CPU (decimal). */
+    fee: string;
     arrivalAt: number;
     txHash: Hash;
     approveTxHash: Hash | null;
@@ -380,7 +386,8 @@ export interface CraftStartResult {
     tokenId: string;
     recipeId: CraftRecipeId;
     batches: number;
-    costCpuWei: string;
+    /** Total $CPU cost for all batches (decimal); "0" for a free recipe. */
+    costCpu: string;
     approveTxHash: Hash | null;
     txHash: Hash;
     status: TxStatus;
@@ -536,8 +543,8 @@ export interface CreateLotResult {
     pricePerUnit: string;
     deliveryId: string;
     arrivalAt: number;
-    /** Transit fee quoted for the routing, in wei. */
-    feeWei: string;
+    /** Transit fee quoted for the routing, in $CPU (decimal). */
+    fee: string;
     txHash: Hash;
     /** Transport-fee approve, when the route crossed a foreign hub. */
     approveTxHash: Hash | null;
@@ -550,11 +557,12 @@ export interface BuyLotResult {
     lotId: string;
     resourceId: number;
     value: string;
-    /** value × pricePerUnit, in $CPU wei. */
-    saleWei: string;
+    /** value × pricePerUnit, in $CPU (decimal). */
+    sale: string;
     /** Units left on the lot after this buy (0 = sold out). */
     remaining: string;
-    feeWei: string;
+    /** Transit fee paid, in $CPU (decimal). */
+    fee: string;
     deliveryId: string;
     arrivalAt: number;
     txHash: Hash;
@@ -572,7 +580,8 @@ export interface CancelLotResult {
     resourceId: number;
     /** Units returned to the seller. */
     returned: string;
-    feeWei: string;
+    /** Transit fee paid, in $CPU (decimal). */
+    fee: string;
     deliveryId: string;
     arrivalAt: number;
     txHash: Hash;
@@ -585,16 +594,17 @@ export interface CancelLotResult {
 export interface TradeQuote {
     lotId: string;
     resourceId: number;
+    /** Decimal $CPU per unit (e.g. "2"). */
     pricePerUnit: string;
     value: string;
     remaining: string;
     routed: boolean;
-    /** value × pricePerUnit, in $CPU wei. */
-    saleWei: string;
-    /** Transit fee in wei, or null for a seller-only estimate. */
-    transitFeeWei: string | null;
-    /** saleWei + transitFeeWei, in wei — the exact $CPU buy_lot would charge. */
-    totalWei: string;
+    /** value × pricePerUnit, in $CPU (decimal). */
+    sale: string;
+    /** Transit fee in $CPU (decimal), or null for a seller-only estimate. */
+    transitFee: string | null;
+    /** sale + transitFee, in $CPU (decimal) — the expected $CPU buy_lot charges. */
+    total: string;
     totalDistance: number | null;
     arrivalAt: number | null;
 }
@@ -666,11 +676,8 @@ export interface SwapQuote {
     tokenOut: Address;
     fee: number;
     amountIn: string;
-    amountInWei: string;
     amountOut: string;
-    amountOutWei: string;
     amountOutMinimum: string;
-    amountOutMinimumWei: string;
     slippage: number;
 }
 
@@ -680,10 +687,8 @@ export interface SwapResult {
     tokenIn: Address;
     tokenOut: Address;
     amountIn: string;
-    amountInWei: string;
     amountOutQuoted: string;
     amountOutMinimum: string;
-    amountOutMinimumWei: string;
     txHash: Hash;
     approveTxHash: Hash | null;
     permit2TxHash: Hash | null;
@@ -729,12 +734,10 @@ export interface PreparedMint {
 export interface MintQuote {
     land: Address;
     quantity: number;
-    /** Per-cell price, human-readable ETH and wei. */
+    /** Per-cell price in native ETH (decimal). */
     mintPrice: string;
-    mintPriceWei: string;
-    /** quantity × mintPrice, human-readable ETH and wei. */
+    /** quantity × mintPrice in native ETH (decimal). */
     total: string;
-    totalWei: string;
     feeBps: number;
     startTime: number;
     endTime: number;
@@ -745,8 +748,8 @@ export interface MintQuote {
 export interface MintResult {
     land: Address;
     quantity: number;
+    /** quantity × mintPrice in native ETH (decimal). */
     total: string;
-    totalWei: string;
     txHash: Hash;
     status: TxStatus;
     blockNumber: string;
@@ -771,10 +774,8 @@ export interface BalanceResult {
     address: string;
     network: Network;
     chainId: number;
-    /** $CPU balance, human-readable and wei. */
+    /** $CPU balance in $CPU (decimal). */
     cpu: string;
-    cpuWei: string;
-    /** Native gas balance, human-readable and wei. */
+    /** Native gas balance in ETH (decimal). */
     native: string;
-    nativeWei: string;
 }

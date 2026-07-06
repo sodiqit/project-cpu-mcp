@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { BUILD_DESCRIPTION } from './constants.js';
 import { buildInputSchema } from './types.js';
 import type { AppContext } from '../../types.js';
-import { cpuFromWei, resourceLabel } from '../../utils/format.utils.js';
+import { resourceLabel } from '../../utils/format.utils.js';
 
 export function registerBuildTool(server: McpServer, context: AppContext): void {
     server.registerTool('build', { description: BUILD_DESCRIPTION, inputSchema: buildInputSchema }, async (args) => {
@@ -21,7 +21,7 @@ export function registerBuildTool(server: McpServer, context: AppContext): void 
         const approve = result.approveTxHash !== null ? `approve tx ${result.approveTxHash}; ` : '';
         const placed = result.alreadyBuilt
             ? `${result.buildingType} already in place`
-            : `build tx ${result.buildTxHash} (paid ${cpuFromWei(result.buildCostWei)} $CPU)`;
+            : `build tx ${result.buildTxHash} (paid ${result.buildCost} $CPU)`;
         const mining = result.miningTxHash !== null ? `; mining started (tx ${result.miningTxHash})` : '';
         const followUp =
             result.targetResourceId !== null

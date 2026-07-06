@@ -1,4 +1,4 @@
-import { parseEther, type Hash } from 'viem';
+import { formatEther, parseEther, type Hash } from 'viem';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NoopLogger } from '../../logger/noop.logger.js';
@@ -163,8 +163,8 @@ describe('RevealService', () => {
         expect(h.allowance.calls).toHaveLength(0);
         expect(h.cellClient.requests).toEqual([{ cell: CELL, x: 1n, y: -2n, value: 1_250n }]);
         expect(result.genesis).toBe(true);
-        expect(result.feeWei).toBe('1000');
-        expect(result.reRevealCostWei).toBe('0');
+        expect(result.fee).toBe(formatEther(1_000n));
+        expect(result.reRevealCost).toBe('0');
         expect(result.approveTxHash).toBeNull();
         expect(result.txHash).toBe(REQUEST_HASH);
         expect(result.blockNumber).toBe('100');
@@ -183,7 +183,7 @@ describe('RevealService', () => {
         expect(h.allowance.calls).toEqual([{ token: CPU_TOKEN, spender: CELL, needed: parseEther('1') }]);
         expect(h.cellClient.requests).toHaveLength(1);
         expect(result.genesis).toBe(false);
-        expect(result.reRevealCostWei).toBe(parseEther('1').toString());
+        expect(result.reRevealCost).toBe('1');
         expect(result.approveTxHash).toBe(APPROVE_HASH);
     });
 

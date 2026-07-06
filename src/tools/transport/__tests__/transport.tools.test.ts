@@ -41,7 +41,7 @@ const freeResult: TransportResult = {
     targetTokenId: '20',
     resourceId: 3,
     amount: '100',
-    feeWei: '0',
+    fee: '0',
     arrivalAt: 1704,
     txHash: '0xmove',
     approveTxHash: null,
@@ -55,7 +55,7 @@ const paidResult: TransportResult = {
     targetTokenId: '20',
     resourceId: 3,
     amount: '100',
-    feeWei: '10000000000000000000',
+    fee: '10',
     arrivalAt: 1704,
     txHash: '0xmove',
     approveTxHash: '0xapprove',
@@ -106,7 +106,7 @@ describe('transport tool', () => {
 
 describe('quote_transport tool', () => {
     it('summarizes a paid quote', async () => {
-        const quote: TransportQuote = { feeWei: '10000000000000000000', totalDistance: 4, arrivalAt: 1704 };
+        const quote: TransportQuote = { fee: '10', totalDistance: 4, arrivalAt: 1704 };
         const handler = capture(registerQuoteTransportTool, { quote: async () => quote });
         const result = await handler({ path: [], resourceId: 3, amount: '100' } as never);
         expect(result.content[0]?.text).toMatch(/10 \$CPU fee/);
@@ -114,7 +114,7 @@ describe('quote_transport tool', () => {
     });
 
     it('summarizes a free quote', async () => {
-        const quote: TransportQuote = { feeWei: '0', totalDistance: 2, arrivalAt: 1704 };
+        const quote: TransportQuote = { fee: '0', totalDistance: 2, arrivalAt: 1704 };
         const handler = capture(registerQuoteTransportTool, { quote: async () => quote });
         const result = await handler({ path: [], resourceId: 3, amount: '100' } as never);
         expect(result.content[0]?.text).toMatch(/free \(own cells only\)/);

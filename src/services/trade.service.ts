@@ -2,6 +2,7 @@ import { isAddress, parseEther, parseEventLogs, type Address, type Hash } from '
 
 import { decodeDeliveryScheduled } from './delivery.helpers.js';
 import { describeApiError } from './reveal.helpers.js';
+import { withDecimalMinPrice, withDecimalPrice } from './trade.helpers.js';
 import { TRANSPORT_MAX_FEE_BUFFER_PERCENT } from './transport.constants.js';
 import {
     type AppConfig,
@@ -32,6 +33,7 @@ import {
 } from '../api/types.js';
 import { TRADE_ABI } from '../contracts/trade.abi.js';
 import type { ILogger } from '../logger/types.js';
+import { cpuFromWei } from '../utils/format.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
 
 /**
@@ -117,7 +119,7 @@ export class TradeService {
             pricePerUnit: input.pricePerUnit,
             deliveryId: scheduled.deliveryId.toString(),
             arrivalAt: Number(scheduled.arrivalAt),
-            feeWei: feeWei.toString(),
+            fee: cpuFromWei(feeWei.toString()),
             txHash: confirmed.txHash,
             approveTxHash,
             status: confirmed.status,
@@ -174,9 +176,9 @@ export class TradeService {
             lotId: input.lotId,
             resourceId: lot.resourceId,
             value: input.value,
-            saleWei: bought.args.sale.toString(),
+            sale: cpuFromWei(bought.args.sale.toString()),
             remaining: bought.args.remaining.toString(),
-            feeWei: feeWei.toString(),
+            fee: cpuFromWei(feeWei.toString()),
             deliveryId: scheduled.deliveryId.toString(),
             arrivalAt: Number(scheduled.arrivalAt),
             txHash: confirmed.txHash,
@@ -223,7 +225,7 @@ export class TradeService {
             lotId: input.lotId,
             resourceId: lot.resourceId,
             returned: cancelled.args.returned.toString(),
-            feeWei: feeWei.toString(),
+            fee: cpuFromWei(feeWei.toString()),
             deliveryId: scheduled.deliveryId.toString(),
             arrivalAt: Number(scheduled.arrivalAt),
             txHash: confirmed.txHash,
@@ -271,9 +273,9 @@ export class TradeService {
             value: input.value,
             remaining: lot.remaining,
             routed: input.chain !== null,
-            saleWei: saleWei.toString(),
-            transitFeeWei: transitFeeWei === null ? null : transitFeeWei.toString(),
-            totalWei: (saleWei + (transitFeeWei ?? 0n)).toString(),
+            sale: cpuFromWei(saleWei.toString()),
+            transitFee: transitFeeWei === null ? null : cpuFromWei(transitFeeWei.toString()),
+            total: cpuFromWei((saleWei + (transitFeeWei ?? 0n)).toString()),
             totalDistance,
             arrivalAt,
         };
@@ -295,7 +297,7 @@ export class TradeService {
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to load markets (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }
-        return response.data;
+        return response.data.map(withDecimalMinPrice);
     }
 
     /** Paginated lot browse with filter / sort / zone. */
@@ -319,7 +321,7 @@ export class TradeService {
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to list lots (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }
-        return response.data;
+        return response.data.map(withDecimalPrice);
     }
 
     /** Public single-lot read. */
@@ -328,7 +330,7 @@ export class TradeService {
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to get lot ${lotId} (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }
-        return response.data;
+        return withDecimalPrice(response.data);
     }
 
     /** The caller's lots across all lifecycle states (optionally filtered). */
@@ -338,7 +340,7 @@ export class TradeService {
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to list your lots (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }
-        return response.data;
+        return response.data.map(withDecimalPrice);
     }
 
     // ---- Internal ----

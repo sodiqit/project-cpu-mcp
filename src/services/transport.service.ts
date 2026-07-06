@@ -19,6 +19,7 @@ import {
 import type { ApiClient } from '../api/client.js';
 import { HttpStatus, type DeliveriesResponse, type DeliveryResponse } from '../api/types.js';
 import type { ILogger } from '../logger/types.js';
+import { cpuFromWei } from '../utils/format.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
 
 interface Route {
@@ -81,7 +82,7 @@ export class TransportService {
             targetTokenId: scheduled.targetId.toString(),
             resourceId: input.resourceId,
             amount: input.amount,
-            feeWei: quote.totalFee.toString(),
+            fee: cpuFromWei(quote.totalFee.toString()),
             arrivalAt: Number(scheduled.arrivalAt),
             txHash: confirmed.txHash,
             approveTxHash,
@@ -103,7 +104,7 @@ export class TransportService {
         });
         const quote = await this.transportClient.quoteRoute(route);
         return {
-            feeWei: quote.totalFee.toString(),
+            fee: cpuFromWei(quote.totalFee.toString()),
             totalDistance: Number(quote.totalDistance),
             arrivalAt: Number(quote.arrivalAt),
         };

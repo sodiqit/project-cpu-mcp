@@ -57,7 +57,7 @@ describe('BuildService', () => {
         expect(result.buildTxHash).not.toBeNull();
         expect(result.miningTxHash).not.toBeNull();
         expect(result.alreadyBuilt).toBe(false);
-        expect(result.buildCostWei).toBe(parseEther('2000').toString());
+        expect(result.buildCost).toBe('2000');
     });
 
     it('builds a hub with a null target and sends no mining tx', async () => {
@@ -88,7 +88,7 @@ describe('BuildService', () => {
         expect(decodeSent(contracts, 0).functionName).toBe('startMining');
         expect(result.alreadyBuilt).toBe(true);
         expect(result.buildTxHash).toBeNull();
-        expect(result.buildCostWei).toBe('0');
+        expect(result.buildCost).toBe('0');
     });
 
     it('reports no approve tx when the allowance already covered the cost', async () => {

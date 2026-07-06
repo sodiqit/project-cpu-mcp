@@ -1,6 +1,6 @@
 import type { CraftStackView, RecipeView } from '../../api/types.js';
 import type { CraftClaimResult, CraftStartResult, CraftStatusResult } from '../../services/types.js';
-import { cpuFromWei, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
+import { resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
 
 function formatStacks(stacks: Array<CraftStackView>, resources: ResourceNames): string {
     if (stacks.length === 0) {
@@ -38,7 +38,7 @@ export function summarizeRecipes(recipes: Array<RecipeView>, resources: Resource
 
 export function summarizeCraftStart(r: CraftStartResult): string {
     const approve = r.approveTxHash !== null ? `approve tx ${r.approveTxHash}, ` : '';
-    const cost = r.costCpuWei === '0' ? 'free' : `${cpuFromWei(r.costCpuWei)} $CPU`;
+    const cost = r.costCpu === '0' ? 'free' : `${r.costCpu} $CPU`;
     return (
         `Craft started on cell ${r.tokenId}: ${r.batches}× ${r.recipeId} (${cost}). ${approve}craft tx ${r.txHash} ` +
         `confirmed in block ${r.blockNumber}. Batches mature over time — check get_craft_status ${r.tokenId} and bank ` +

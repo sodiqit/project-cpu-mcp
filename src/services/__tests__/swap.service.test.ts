@@ -164,7 +164,6 @@ describe('SwapService', () => {
             expect(quote.amountOut).toBe('2000');
             // 0.5% slippage → 2000 * (10000 - 50) / 10000 = 1990
             expect(quote.amountOutMinimum).toBe('1990');
-            expect(quote.amountOutMinimumWei).toBe(parseEther('1990').toString());
 
             const poolReads = wallet.reads.filter((r) => r.functionName === 'poolKey');
             expect(poolReads).toHaveLength(1);
