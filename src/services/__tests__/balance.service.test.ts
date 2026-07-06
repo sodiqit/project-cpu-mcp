@@ -69,9 +69,7 @@ describe('BalanceService', () => {
         expect(result.network).toBe(Network.ETHEREUM);
         expect(result.chainId).toBe(1);
         expect(result.cpu).toBe('1.5');
-        expect(result.cpuWei).toBe('1500000000000000000');
         expect(result.native).toBe('2');
-        expect(result.nativeWei).toBe('2000000000000000000');
 
         const read = wallet.reads[0];
         expect(read?.functionName).toBe('balanceOf');

@@ -47,11 +47,8 @@ export class SwapService {
             tokenOut: prepared.route.tokenOut,
             fee: prepared.pool.fee,
             amountIn: input.amount,
-            amountInWei: prepared.amountInWei.toString(),
             amountOut: formatEther(prepared.amountOutWei),
-            amountOutWei: prepared.amountOutWei.toString(),
             amountOutMinimum: formatEther(prepared.amountOutMinimumWei),
-            amountOutMinimumWei: prepared.amountOutMinimumWei.toString(),
             slippage: input.slippage,
         };
     }
@@ -101,10 +98,8 @@ export class SwapService {
             tokenIn: route.tokenIn,
             tokenOut: route.tokenOut,
             amountIn: input.amount,
-            amountInWei: amountInWei.toString(),
             amountOutQuoted: formatEther(amountOutWei),
             amountOutMinimum: formatEther(amountOutMinimumWei),
-            amountOutMinimumWei: amountOutMinimumWei.toString(),
             txHash,
             approveTxHash,
             permit2TxHash,

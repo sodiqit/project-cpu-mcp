@@ -113,7 +113,6 @@ describe('MintService', () => {
             expect(quote.quantity).toBe(3);
             expect(quote.mintPrice).toBe('0.01');
             expect(quote.total).toBe('0.03');
-            expect(quote.totalWei).toBe(parseEther('0.03').toString());
             expect(quote.feeBps).toBe(250);
             expect(quote.maxTotalMintableByWallet).toBe(5);
         });

@@ -16,6 +16,7 @@ import type {
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
 import { CellProcessKind, type RevealCellReader } from '../map/types.js';
+import { cpuFromWei } from '../utils/format.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
 
 export class CraftService {
@@ -59,7 +60,7 @@ export class CraftService {
             tokenId: input.tokenId,
             recipeId: input.recipeId,
             batches: input.batches,
-            costCpuWei: totalCostWei.toString(),
+            costCpu: cpuFromWei(totalCostWei.toString()),
         });
         const txHash = await this.cellClient.startCraft({
             cell,
@@ -73,7 +74,7 @@ export class CraftService {
             tokenId: input.tokenId,
             recipeId: input.recipeId,
             batches: input.batches,
-            costCpuWei: totalCostWei.toString(),
+            costCpu: cpuFromWei(totalCostWei.toString()),
             approveTxHash,
             txHash: confirmed.txHash,
             status: confirmed.status,

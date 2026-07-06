@@ -12,6 +12,7 @@ import type {
 import type { ILogger } from '../logger/types.js';
 import type { RevealCellReader } from '../map/types.js';
 import { sleep } from '../utils/async.utils.js';
+import { cpuFromWei } from '../utils/format.utils.js';
 import type { IContractClient, WalletProvider } from '../wallet/types.js';
 
 export class RevealService {
@@ -93,8 +94,8 @@ export class RevealService {
             txHash: confirmed.txHash,
             status: confirmed.status,
             blockNumber: confirmed.blockNumber,
-            feeWei: fee.toString(),
-            reRevealCostWei: reRevealCostWei.toString(),
+            fee: cpuFromWei(fee.toString()),
+            reRevealCost: cpuFromWei(reRevealCostWei.toString()),
             approveTxHash,
             fulfilled,
         };

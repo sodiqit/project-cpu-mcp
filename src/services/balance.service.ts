@@ -47,9 +47,7 @@ export class BalanceService {
             network: config.network,
             chainId: config.chainId,
             cpu: formatEther(cpuWei),
-            cpuWei: cpuWei.toString(),
             native: formatEther(nativeWei),
-            nativeWei: nativeWei.toString(),
         };
     }
 }

@@ -1,14 +1,14 @@
 import type { DeliveryView, TransportQuote, TransportResult } from '../../services/types.js';
-import { cpuFromWei, formatUnixSeconds, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
+import { formatUnixSeconds, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
 
 export function summarizeQuote(quote: TransportQuote): string {
-    const fee = quote.feeWei === '0' ? 'free (own cells only)' : `${cpuFromWei(quote.feeWei)} $CPU fee`;
+    const fee = quote.fee === '0' ? 'free (own cells only)' : `${quote.fee} $CPU fee`;
     return `Route — ${fee}, ${quote.totalDistance} hops, arrival ${formatUnixSeconds(quote.arrivalAt)}. Commit it with transport.`;
 }
 
 export function summarizeTransport(r: TransportResult, resources: ResourceNames): string {
     const approve = r.approveTxHash !== null ? `approve tx ${r.approveTxHash}, ` : '';
-    const fee = r.feeWei === '0' ? 'no $CPU fee' : `${cpuFromWei(r.feeWei)} $CPU fee`;
+    const fee = r.fee === '0' ? 'no $CPU fee' : `${r.fee} $CPU fee`;
     return (
         `Transport delivery ${r.deliveryId}: ${r.amount} ${resourceLabel(resources, r.resourceId)} from cell ` +
         `${r.sourceTokenId} → ${r.targetTokenId}, ${fee}. ${approve}move tx ${r.txHash} confirmed in block ` +

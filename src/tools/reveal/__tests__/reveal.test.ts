@@ -46,8 +46,8 @@ const fulfilledGenesis: RevealResult = {
     txHash: '0xreveal',
     status: TxStatus.Success,
     blockNumber: '100',
-    feeWei: '1000',
-    reRevealCostWei: '0',
+    fee: '0.0001',
+    reRevealCost: '0',
     approveTxHash: null,
     fulfilled: true,
 };
@@ -69,11 +69,11 @@ describe('reveal tool', () => {
             ...fulfilledGenesis,
             genesis: false,
             approveTxHash: '0xapprove',
-            reRevealCostWei: '1000',
+            reRevealCost: '1',
         })({ tokenId: '42' });
         expect(result.content[0]?.text).toMatch(/approve tx 0xapprove/);
         expect(result.content[0]?.text).toMatch(/re-reveal/);
-        expect(result.content[0]?.text).toMatch(/1000 wei \$CPU/);
+        expect(result.content[0]?.text).toMatch(/1 \$CPU/);
     });
 
     it('tells the agent to poll get_cell when the reveal is still pending', async () => {

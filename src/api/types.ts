@@ -205,6 +205,7 @@ export interface LotView {
     resourceId: number;
     listed: string;
     remaining: string;
+    /** Price per unit in $CPU. The game API sends wei; TradeService normalizes it to a decimal string (e.g. "2"). */
     pricePerUnit: string;
     /** Hub trade-fee % snapshot at listing — currently always 0 (placeholder; not applied to fees). */
     tradeFeePct: number;
@@ -225,6 +226,7 @@ export interface MarketResourceSummary {
     resourceId: number;
     openLots: number;
     openRemaining: string;
+    /** Lowest open-lot price per unit in $CPU (TradeService normalizes the API's wei to decimal), or null when no open lots. */
     minPricePerUnit: string | null;
     tradeFeePct: number | null;
     incomingLots: number;

@@ -1,6 +1,6 @@
 import type { LotView, MarketResourceSummary } from '../../api/types.js';
 import type { BuyLotResult, CancelLotResult, CreateLotResult, TradeQuote } from '../../services/types.js';
-import { cpuFromWei, formatUnixSeconds, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
+import { formatUnixSeconds, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
 
 /** Human header for a confirmed `create_lot`. */
 export function summarizeCreateLot(result: CreateLotResult, resources: ResourceNames): string {
@@ -10,7 +10,7 @@ export function summarizeCreateLot(result: CreateLotResult, resources: ResourceN
         `${result.pricePerUnit} $CPU/u at Hub ${result.hubTokenId}. Escrow shipping to the Hub ` +
         `(delivery ${result.deliveryId}, ETA ${formatUnixSeconds(result.arrivalAt)}); the lot opens once it ` +
         `arrives — run finalize_delivery on ${result.deliveryId} after the ETA (or wait). Transit fee ` +
-        `${cpuFromWei(result.feeWei)} $CPU. ${approve}create tx ${result.txHash} in block ${result.blockNumber}.`
+        `${result.fee} $CPU. ${approve}create tx ${result.txHash} in block ${result.blockNumber}.`
     );
 }
 
@@ -23,7 +23,7 @@ export function summarizeBuyLot(result: BuyLotResult, resources: ResourceNames):
     const approve = approvals.length > 0 ? `${approvals.join(', ')}, ` : '';
     return (
         `Bought ${result.value} ${resourceLabel(resources, result.resourceId)} from lot ${result.lotId} for ` +
-        `${cpuFromWei(result.saleWei)} $CPU (+ ${cpuFromWei(result.feeWei)} transit). ${result.remaining} units ` +
+        `${result.sale} $CPU (+ ${result.fee} transit). ${result.remaining} units ` +
         `remain on the lot. Goods shipping to your cell (delivery ${result.deliveryId}, ETA ` +
         `${formatUnixSeconds(result.arrivalAt)}) — run finalize_delivery on ${result.deliveryId} after the ETA. ` +
         `${approve}buy tx ${result.txHash} in block ${result.blockNumber}.`
@@ -37,7 +37,7 @@ export function summarizeCancelLot(result: CancelLotResult, resources: ResourceN
         `Cancelled lot ${result.lotId}: ${result.returned} ${resourceLabel(resources, result.resourceId)} ` +
         `returning to you (delivery ${result.deliveryId}, ETA ${formatUnixSeconds(result.arrivalAt)}) — run ` +
         `finalize_delivery on ${result.deliveryId} after the ETA to reclaim them. Transit fee ` +
-        `${cpuFromWei(result.feeWei)} $CPU. ${approve}cancel tx ${result.txHash} in block ${result.blockNumber}.`
+        `${result.fee} $CPU. ${approve}cancel tx ${result.txHash} in block ${result.blockNumber}.`
     );
 }
 
@@ -82,15 +82,15 @@ export function summarizeQuoteBuy(quote: TradeQuote, resources: ResourceNames): 
     const goods = `${quote.value} ${resourceLabel(resources, quote.resourceId)} @ ${quote.pricePerUnit} $CPU/u`;
     if (!quote.routed) {
         return (
-            `Seller-only estimate for lot ${quote.lotId}: ${goods} = ${cpuFromWei(quote.saleWei)} $CPU (transit ` +
+            `Seller-only estimate for lot ${quote.lotId}: ${goods} = ${quote.sale} $CPU (transit ` +
             `excluded — pass a chain for the exact total). ${quote.remaining} units remain.`
         );
     }
     const hops = quote.totalDistance !== null ? `, ${quote.totalDistance} hops` : '';
     const eta = quote.arrivalAt !== null ? ` ~ETA ${formatUnixSeconds(quote.arrivalAt)}` : '';
     return (
-        `Buy quote for lot ${quote.lotId}: ${goods} = ${cpuFromWei(quote.saleWei)} $CPU + ` +
-        `${cpuFromWei(quote.transitFeeWei ?? '0')} transit = ${cpuFromWei(quote.totalWei)} $CPU total${hops}${eta}. ` +
+        `Buy quote for lot ${quote.lotId}: ${goods} = ${quote.sale} $CPU + ` +
+        `${quote.transitFee ?? '0'} transit = ${quote.total} $CPU total${hops}${eta}. ` +
         `${quote.remaining} units remain. Commit with buy_lot.`
     );
 }

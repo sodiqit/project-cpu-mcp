@@ -8,14 +8,14 @@ export function registerRevealTool(server: McpServer, context: AppContext): void
     server.registerTool('reveal', { description: REVEAL_DESCRIPTION, inputSchema: revealInputSchema }, async (args) => {
         const result = await context.reveal.reveal(args.tokenId);
 
-        const cost = result.genesis ? 'first reveal (free)' : `re-reveal (burned ${result.reRevealCostWei} wei $CPU)`;
+        const cost = result.genesis ? 'first reveal (free)' : `re-reveal (burned ${result.reRevealCost} $CPU)`;
         const approve = result.approveTxHash !== null ? ` approve tx ${result.approveTxHash},` : '';
         const outcome = result.fulfilled
             ? `Deposits are revealed — read them with get_cell ${result.tokenId}.`
             : `Deposits are drawn asynchronously by Pyth Entropy and were not ready yet — poll get_cell ${result.tokenId} shortly.`;
         const header =
             `Requested reveal for cell ${result.tokenId} @(${result.x},${result.y}) — ${cost}, ` +
-            `paid ${result.feeWei} wei ETH fee.${approve} request tx ${result.txHash} confirmed in block ` +
+            `paid ${result.fee} ETH fee.${approve} request tx ${result.txHash} confirmed in block ` +
             `${result.blockNumber}. ${outcome}`;
 
         return {

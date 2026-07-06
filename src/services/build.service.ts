@@ -16,6 +16,7 @@ import type {
 import { BuildingType } from '../api/types.js';
 import type { ILogger } from '../logger/types.js';
 import type { CellState, RevealCellReader } from '../map/types.js';
+import { cpuFromWei } from '../utils/format.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
 
 export class BuildService {
@@ -51,7 +52,7 @@ export class BuildService {
 
         const alreadyBuilt = state?.building?.type === input.buildingType;
         const placement: BuildPlacement = alreadyBuilt
-            ? { buildTxHash: null, approveTxHash: null, buildCostWei: '0' }
+            ? { buildTxHash: null, approveTxHash: null, buildCost: '0' }
             : await this.placeBuilding(config, cell, cpuToken, input, tokenId);
         const miningTxHash = await this.startExtractorMining(cell, tokenId, input);
 
@@ -59,7 +60,7 @@ export class BuildService {
             tokenId: input.tokenId,
             buildingType: input.buildingType,
             targetResourceId: input.targetResourceId,
-            buildCostWei: placement.buildCostWei,
+            buildCost: placement.buildCost,
             approveTxHash: placement.approveTxHash,
             buildTxHash: placement.buildTxHash,
             miningTxHash,
@@ -120,13 +121,13 @@ export class BuildService {
         input: BuildInput,
         tokenId: bigint,
     ): Promise<BuildPlacement> {
-        const costWei = this.buildCostWei(config, input.buildingType);
+        const costWei = this.costWeiForBuilding(config, input.buildingType);
         const approveTxHash = costWei > 0n ? await this.allowance.ensureAllowance(cpuToken, cell, costWei) : null;
 
         this.logger.info('placing building', {
             tokenId: input.tokenId,
             buildingType: input.buildingType,
-            buildCostWei: costWei.toString(),
+            costWei: costWei.toString(),
             network: config.network,
         });
         const buildTxHash = await this.cellClient.place({
@@ -136,7 +137,7 @@ export class BuildService {
         });
         await this.contracts.confirm(buildTxHash, 'Build transaction');
 
-        return { buildTxHash, approveTxHash, buildCostWei: costWei.toString() };
+        return { buildTxHash, approveTxHash, buildCost: cpuFromWei(costWei.toString()) };
     }
 
     private async startExtractorMining(cell: Address, tokenId: bigint, input: BuildInput): Promise<Hash | null> {
@@ -173,7 +174,7 @@ export class BuildService {
         return cpuToken;
     }
 
-    private buildCostWei(config: AppConfig, buildingType: BuildingType): bigint {
+    private costWeiForBuilding(config: AppConfig, buildingType: BuildingType): bigint {
         const view = config.buildings.find((b) => b.type === buildingType);
         if (view === undefined) {
             throw new Error(`No build cost is configured for a ${buildingType} on network ${config.network}.`);

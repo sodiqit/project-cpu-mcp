@@ -46,7 +46,7 @@ const extractorResult: BuildResult = {
     tokenId: '42',
     buildingType: BuildingType.Extractor,
     targetResourceId: 3,
-    buildCostWei: '2000000000000000000000',
+    buildCost: '2000',
     approveTxHash: '0xapprove',
     buildTxHash: '0xbuild',
     miningTxHash: '0xmine',
@@ -78,7 +78,7 @@ describe('build tool', () => {
             buildingType: BuildingType.Hub,
             targetResourceId: null,
             approveTxHash: null,
-            buildCostWei: '5000000000000000000000',
+            buildCost: '5000',
             miningTxHash: null,
         })({ tokenId: '42', buildingType: BuildingType.Hub, targetResourceId: null });
 
@@ -94,7 +94,7 @@ describe('build tool', () => {
             ...extractorResult,
             approveTxHash: null,
             buildTxHash: null,
-            buildCostWei: '0',
+            buildCost: '0',
             alreadyBuilt: true,
         })({ tokenId: '42', buildingType: BuildingType.Extractor, targetResourceId: 3 });
 

@@ -195,7 +195,7 @@ describe('TransportService.transport', () => {
         expect(result.deliveryId).toBe('123');
         expect(result.sourceTokenId).toBe('10');
         expect(result.targetTokenId).toBe('20');
-        expect(result.feeWei).toBe('0');
+        expect(result.fee).toBe('0');
         expect(result.arrivalAt).toBe(1704);
         expect(result.approveTxHash).toBeNull();
         expect(result.txHash).toBe(MOVE_HASH);
@@ -214,7 +214,7 @@ describe('TransportService.transport', () => {
 
         expect(h.allowance.calls).toEqual([{ token: CPU_TOKEN, spender: TRANSPORT, needed: 1_100n }]);
         expect(h.transportClient.moves[0]?.maxFee).toBe(1_100n);
-        expect(result.feeWei).toBe('1000');
+        expect(result.fee).toBe('0.000000000000001');
         expect(result.approveTxHash).toBe(APPROVE_HASH);
     });
 
@@ -251,7 +251,7 @@ describe('TransportService.quote', () => {
         const result = await h.service.quote(INPUT);
 
         expect(h.transportClient.quotes).toHaveLength(1);
-        expect(result.feeWei).toBe('10');
+        expect(result.fee).toBe('0.00000000000000001');
         expect(result.totalDistance).toBe(4);
         expect(result.arrivalAt).toBe(1704);
         expect(h.contracts.sent).toHaveLength(0);

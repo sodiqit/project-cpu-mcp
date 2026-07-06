@@ -61,7 +61,7 @@ describe('CraftService.craft', () => {
         const decoded = decodeFunctionData({ abi: CELL_ABI, data: tx.data as Hex });
         expect(decoded.functionName).toBe('startCraft');
         expect(decoded.args).toEqual([42n, recipeNameToUint64(CraftRecipeId.GeneratePower), 2]);
-        expect(result.costCpuWei).toBe('0');
+        expect(result.costCpu).toBe('0');
         expect(result.approveTxHash).toBeNull();
     });
 
@@ -77,7 +77,7 @@ describe('CraftService.craft', () => {
         }
         expect(decodeFunctionData({ abi: CELL_ABI, data: tx.data as Hex }).functionName).toBe('startCraft');
         expect(result.approveTxHash).toBe(APPROVE_HASH);
-        expect(result.costCpuWei).toBe(parseEther('100').toString());
+        expect(result.costCpu).toBe('100');
         expect(result.status).toBe(TxStatus.Success);
     });
 
