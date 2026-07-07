@@ -132,10 +132,20 @@ describe('get_attention tool', () => {
 
     it('reports no owner-scoped items when the wallet is not ready', async () => {
         const handler = harness({ walletReady: false });
-        const result = await handler({ minSeverity: null });
-        expect(result.content[0]?.text).toMatch(/authenticate first/);
+        const result = await handler({ minSeverity: null, owner: null });
+        expect(result.content[0]?.text).toMatch(/authenticate/);
         const payload = JSON.parse(result.content[1]?.text ?? '{}');
         expect(payload.ownerKnown).toBe(false);
+    });
+
+    it('scouts another owner, surfacing their cells and inbound deliveries as intel', async () => {
+        const handler = harness({ deliveries: async () => [READY_DELIVERY] });
+        const result = await handler({ minSeverity: null, owner: '0xNeighbor' });
+        expect(result.content[0]?.text).toMatch(/Scouting 0xNeighbor/);
+        const payload = JSON.parse(result.content[1]?.text ?? '{}');
+        expect(payload.scouting).toBe(true);
+        expect(payload.owner).toBe('0xNeighbor');
+        expect(payload.items.some((i: { reason: string }) => i.reason === AttentionReason.DeliveryReady)).toBe(true);
     });
 
     it('filters by minSeverity', async () => {

@@ -118,11 +118,10 @@ export class TransportService {
         return views.filter((v) => this.matchesFilter(v, filter));
     }
 
-    // Deliveries landing on the caller's own cells that have arrived and are ready to finalize. Scopes by
-    // target-cell owner server-side, so it never pulls the global delivery set.
-    async listReadyToFinalizeForOwner(): Promise<Array<DeliveryView>> {
-        const address = this.wallet.get().getAddress();
-        const deliveries = await this.fetchDeliveries(`?owner=${address}`);
+    // Arrived-and-ready deliveries landing on the given owner's cells. Scopes by target-cell owner
+    // server-side (public endpoint), so it never pulls the global delivery set.
+    async listReadyToFinalizeForOwner(owner: string): Promise<Array<DeliveryView>> {
+        const deliveries = await this.fetchDeliveries(`?owner=${owner}`);
         const nowMs = Date.now();
         return deliveries.map((d) => this.toView(d, nowMs)).filter((v) => v.readyToFinalize);
     }

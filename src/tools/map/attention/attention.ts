@@ -32,21 +32,24 @@ export function registerGetAttentionTool(server: McpServer, context: AppContext)
         'get_attention',
         { description: GET_ATTENTION_DESCRIPTION, inputSchema: getAttentionInputSchema },
         async (args) => {
-            const owner = getWalletAddress(context);
+            const self = getWalletAddress(context);
+            const target = args.owner ?? self;
+            const scouting = target !== null && (self === null || target.toLowerCase() !== self.toLowerCase());
             const { resources, recipes } = await context.appConfig.load();
             const craftOutputsByRecipe = Object.fromEntries(
                 recipes.map((r): [string, Array<number>] => [r.id, r.outputs.map((o) => o.resourceId)]),
             );
 
-            const mapReport = context.mapReader.attention(owner, {
+            const mapReport = context.mapReader.attention(target, {
                 nearFullPct: WAREHOUSE_NEAR_FULL_PCT,
                 craftOutputsByRecipe,
             });
 
+            // Deliveries are public too, so we surface arrived-and-ready ones for whoever we're inspecting.
             let report = mapReport;
-            if (owner !== null) {
+            if (target !== null) {
                 try {
-                    const ready = await context.transport.listReadyToFinalizeForOwner();
+                    const ready = await context.transport.listReadyToFinalizeForOwner(target);
                     report = withExtraItems(
                         mapReport,
                         ready.map((d) => deliveryItem(context, d)),
@@ -65,15 +68,19 @@ export function registerGetAttentionTool(server: McpServer, context: AppContext)
                     resourceName: item.resourceId === null ? null : resourceName(resources, item.resourceId),
                 }));
 
+            const scope = scouting ? `Scouting ${target}` : 'Attention';
             const header = report.ownerKnown
-                ? `Attention: ${report.counts.critical} critical · ${report.counts.warning} warning · ` +
+                ? `${scope}: ${report.counts.critical} critical · ${report.counts.warning} warning · ` +
                   `${report.counts.info} info (map v${report.version}, ${items.length} shown).`
-                : 'Attention needs your wallet — call authenticate first. No owner-scoped items.';
+                : 'Attention needs a wallet or an `owner` address — call authenticate or pass owner. Nothing to scope to.';
 
             return {
                 content: [
                     { type: 'text', text: header },
-                    { type: 'text', text: JSON.stringify({ ...report, items, resourceNames: resources }) },
+                    {
+                        type: 'text',
+                        text: JSON.stringify({ ...report, owner: target, scouting, items, resourceNames: resources }),
+                    },
                 ],
             };
         },
