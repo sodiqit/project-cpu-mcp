@@ -88,8 +88,12 @@ function producedResourceIds(cell: CellState, craftOutputsByRecipe: Record<strin
     return new Set();
 }
 
-function isOperationalExtractor(cell: CellState): boolean {
-    return cell.building?.type === BuildingType.Extractor && cell.building.buildFinishAt === null;
+function isOperationalExtractor(cell: CellState, serverTime: number): boolean {
+    const building = cell.building;
+    if (building?.type !== BuildingType.Extractor) {
+        return false;
+    }
+    return building.buildFinishAt === null || building.buildFinishAt <= serverTime;
 }
 
 function cellItems(cell: CellState, input: BuildAttentionInput): Array<AttentionItem> {
@@ -116,7 +120,7 @@ function cellItems(cell: CellState, input: BuildAttentionInput): Array<Attention
         }
     }
 
-    if (isOperationalExtractor(cell) && isDepleted(cell)) {
+    if (isOperationalExtractor(cell, input.serverTime) && isDepleted(cell)) {
         const target = cell.process?.kind === CellProcessKind.Mining ? cell.process.resource : null;
         items.push(attentionItem(cell, AttentionReason.DepositDepleted, { resourceId: target, depositRemaining: '0' }));
     }

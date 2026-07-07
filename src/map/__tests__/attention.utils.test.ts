@@ -126,11 +126,13 @@ describe('buildAttentionReport', () => {
     });
 
     it('flags a built extractor sitting on depleted deposits, but not one mid-construction', () => {
+        // A finished extractor keeps a past buildFinishAt (only demolish clears it to null); operational
+        // means buildFinishAt <= serverTime (10 here), a future one is still under construction.
         const built = report([
             {
                 tokenId: '5',
                 revealCount: 1,
-                building: { type: BuildingType.Extractor, buildFinishAt: null },
+                building: { type: BuildingType.Extractor, buildFinishAt: 5 },
                 resources: [makeResource({ resourceId: 1, deposit: '0' })],
             },
         ]);
