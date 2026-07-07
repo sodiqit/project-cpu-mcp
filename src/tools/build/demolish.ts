@@ -6,7 +6,7 @@ import type { AppContext } from '../../types.js';
 
 export function registerDemolishTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'demolish',
+        'cpu_demolish',
         { description: DEMOLISH_DESCRIPTION, inputSchema: demolishInputSchema },
         async (args) => {
             const result = await context.build.demolish({ tokenId: args.tokenId });

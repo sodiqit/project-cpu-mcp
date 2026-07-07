@@ -4,6 +4,6 @@ export const BUY_LOT_DESCRIPTION = [
     'tx paid in $CPU: the seller price (value × pricePerUnit) plus any foreign-hub transit fee; you also pay gas.',
     'The first buy auto-approves twice — the sale (Trade) is approved exactly, while the transit fee (Transport)',
     'is approved with ~10% headroom over the quoted fee — a ceiling for on-chain fee drift, not a double charge.',
-    'Preview the exact cost first with `quote_buy`. The goods ship to your cell and are credited only after they',
-    'arrive and you `finalize_delivery` on the returned deliveryId. Self-buying your own lot is allowed.',
+    'Preview the exact cost first with `cpu_quote_buy`. The goods ship to your cell and are credited only after they',
+    'arrive and you `cpu_finalize_delivery` on the returned deliveryId. Self-buying your own lot is allowed.',
 ].join(' ');

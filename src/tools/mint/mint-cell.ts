@@ -7,7 +7,7 @@ import type { AppContext } from '../../types.js';
 
 export function registerMintCellTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'mint_cell',
+        'cpu_mint_cell',
         { description: MINT_CELL_DESCRIPTION, inputSchema: mintInputSchema },
         async (args) => {
             const result = await context.mint.mint({ quantity: args.quantity });

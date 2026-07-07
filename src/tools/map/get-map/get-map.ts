@@ -9,7 +9,7 @@ import { getMapInputSchema } from './types.js';
 
 export function registerGetMapTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'get_map',
+        'cpu_get_map',
         { description: GET_MAP_DESCRIPTION, inputSchema: getMapInputSchema },
         async (args) => {
             const ownerAddress = getWalletAddress(context);

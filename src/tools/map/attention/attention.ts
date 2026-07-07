@@ -29,7 +29,7 @@ function deliveryItem(context: AppContext, d: DeliveryView) {
 
 export function registerGetAttentionTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'get_attention',
+        'cpu_get_attention',
         { description: GET_ATTENTION_DESCRIPTION, inputSchema: getAttentionInputSchema },
         async (args) => {
             const self = getWalletAddress(context);

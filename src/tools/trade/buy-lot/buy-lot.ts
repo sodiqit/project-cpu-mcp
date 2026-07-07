@@ -7,7 +7,7 @@ import { buyLotInputSchema } from '../types.js';
 
 export function registerBuyLotTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'buy_lot',
+        'cpu_buy_lot',
         { description: BUY_LOT_DESCRIPTION, inputSchema: buyLotInputSchema },
         async (args) => {
             const result = await context.trade.buyLot({

@@ -10,7 +10,7 @@ export const GET_MAP_DESCRIPTION = [
     'Note units: version/updated are epoch ms, serverTime/startAt are unix seconds, amounts are decimal strings.',
     'Each cell resource carries a "storage" box — used/cap/reserved/stalled — in the same integer units as',
     'deposit/balance; cap null means uncapped (render ∞). Production stalls when a box is full; trust the',
-    'server "stalled" flag rather than recomputing. The summary carries "stalledCells"; use get_attention for',
+    'server "stalled" flag rather than recomputing. The summary carries "stalledCells"; use `cpu_get_attention` for',
     'the full owner to-do list.',
     'Also carries "server": { reachable } — false means the game server is unreachable right now and',
     'actions will fail; retry once it is true again.',

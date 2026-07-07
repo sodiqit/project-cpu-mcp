@@ -7,7 +7,7 @@ import { quoteMintInputSchema } from '../types.js';
 
 export function registerQuoteMintTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'quote_mint',
+        'cpu_quote_mint',
         { description: QUOTE_MINT_DESCRIPTION, inputSchema: quoteMintInputSchema },
         async (args) => {
             const quote = await context.mint.quote({ quantity: args.quantity });

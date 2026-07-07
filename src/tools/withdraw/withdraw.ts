@@ -6,7 +6,7 @@ import type { AppContext } from '../../types.js';
 
 export function registerWithdrawTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'withdraw',
+        'cpu_withdraw',
         { description: WITHDRAW_DESCRIPTION, inputSchema: withdrawInputSchema },
         async (args) => {
             const result = await context.withdraw.withdraw({ tokenId: args.tokenId, amount: args.amount });

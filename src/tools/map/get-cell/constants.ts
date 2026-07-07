@@ -5,5 +5,5 @@ export const GET_CELL_DESCRIPTION = [
     'Each resource carries a "storage" box (used/cap/reserved/stalled) and the active process carries a',
     '"stalled" flag — true when its warehouse (mining) or any output warehouse (craft) is full and production',
     'is halted until you offload.',
-    'Use this to study a specific target; use get_map for broader situational awareness.',
+    'Use this to study a specific target; use `cpu_get_map` for broader situational awareness.',
 ].join(' ');

@@ -6,7 +6,7 @@ import { swapInputSchema } from './types.js';
 import type { AppContext } from '../../types.js';
 
 export function registerSwapTool(server: McpServer, context: AppContext): void {
-    server.registerTool('swap', { description: SWAP_DESCRIPTION, inputSchema: swapInputSchema }, async (args) => {
+    server.registerTool('cpu_swap', { description: SWAP_DESCRIPTION, inputSchema: swapInputSchema }, async (args) => {
         const result = await context.swap.swap({
             sell: args.sell,
             amount: args.amount,

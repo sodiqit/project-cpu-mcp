@@ -7,7 +7,7 @@ import { GET_MINING_STATUS_DESCRIPTION } from './constants.js';
 
 export function registerGetMiningStatusTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'get_mining_status',
+        'cpu_get_mining_status',
         { description: GET_MINING_STATUS_DESCRIPTION, inputSchema: miningStatusInputSchema },
         async (args) => {
             const status = await context.mining.getStatus(args.tokenId);

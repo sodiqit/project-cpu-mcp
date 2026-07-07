@@ -7,7 +7,7 @@ import { craftCellInputSchema } from '../types.js';
 
 export function registerClaimCraftTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'claim_craft',
+        'cpu_claim_craft',
         { description: CLAIM_CRAFT_DESCRIPTION, inputSchema: craftCellInputSchema },
         async (args) => {
             const result = await context.craft.claim(args.tokenId);

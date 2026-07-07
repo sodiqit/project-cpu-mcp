@@ -6,7 +6,7 @@ import { FINALIZE_DELIVERY_DESCRIPTION } from './constants.js';
 
 export function registerFinalizeDeliveryTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'finalize_delivery',
+        'cpu_finalize_delivery',
         { description: FINALIZE_DELIVERY_DESCRIPTION, inputSchema: finalizeDeliveryInputSchema },
         async (args) => {
             const result = await context.transport.finalize(args.ids);

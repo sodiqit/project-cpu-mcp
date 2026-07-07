@@ -8,7 +8,7 @@ import { getChangesInputSchema } from './types.js';
 
 export function registerGetChangesTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'get_changes',
+        'cpu_get_changes',
         { description: GET_CHANGES_DESCRIPTION, inputSchema: getChangesInputSchema },
         async (args) => {
             const health = context.api.getServerHealth();

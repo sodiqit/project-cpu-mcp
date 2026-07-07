@@ -7,7 +7,7 @@ import { quoteSwapInputSchema } from '../types.js';
 
 export function registerQuoteSwapTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'quote_swap',
+        'cpu_quote_swap',
         { description: QUOTE_SWAP_DESCRIPTION, inputSchema: quoteSwapInputSchema },
         async (args) => {
             const quote = await context.swap.quote({

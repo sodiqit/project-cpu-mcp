@@ -8,7 +8,7 @@ import { getCellInputSchema } from './types.js';
 
 export function registerGetCellTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'get_cell',
+        'cpu_get_cell',
         { description: GET_CELL_DESCRIPTION, inputSchema: getCellInputSchema },
         async (args) => {
             const inspection = context.mapReader.inspectCell(args.tokenId, getWalletAddress(context));

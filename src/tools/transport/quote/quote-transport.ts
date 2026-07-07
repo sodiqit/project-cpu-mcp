@@ -7,7 +7,7 @@ import { QUOTE_TRANSPORT_DESCRIPTION } from './constants.js';
 
 export function registerQuoteTransportTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'quote_transport',
+        'cpu_quote_transport',
         { description: QUOTE_TRANSPORT_DESCRIPTION, inputSchema: transportInputSchema },
         async (args) => {
             const quote = await context.transport.quote({
