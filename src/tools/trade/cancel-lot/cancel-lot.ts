@@ -7,7 +7,7 @@ import { cancelLotInputSchema } from '../types.js';
 
 export function registerCancelLotTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'cancel_lot',
+        'cpu_cancel_lot',
         { description: CANCEL_LOT_DESCRIPTION, inputSchema: cancelLotInputSchema },
         async (args) => {
             const result = await context.trade.cancelLot({

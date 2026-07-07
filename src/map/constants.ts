@@ -34,3 +34,6 @@ export const STARTUP_FETCH_RETRY_MS = 10_000;
 // Input bound for the `around` scope (caps the query, not the response).
 export const DEFAULT_AROUND_RADIUS = 2;
 export const MAX_AROUND_RADIUS = 10;
+
+// A capped warehouse at or above this fill percentage is flagged as "about to stall" by get_attention.
+export const WAREHOUSE_NEAR_FULL_PCT = 90;

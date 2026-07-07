@@ -7,7 +7,7 @@ import type { AppContext } from '../../types.js';
 
 export function registerTransportTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'transport',
+        'cpu_transport',
         { description: TRANSPORT_DESCRIPTION, inputSchema: transportInputSchema },
         async (args) => {
             const result = await context.transport.transport({

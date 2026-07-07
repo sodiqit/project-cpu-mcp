@@ -1,6 +1,8 @@
+import { buildAttentionReport } from './attention.utils.js';
 import { buildResourceIndex, classifyNeighbors, filterCells, hexDistance, summarizeMap } from './map.utils.js';
 import type { MapStore } from './store.js';
 import {
+    type AttentionReport,
     type CellInspection,
     type CellState,
     type EnrichedCell,
@@ -13,6 +15,11 @@ import {
     type MapStatus,
     type ResourceIndex,
 } from './types.js';
+
+export interface AttentionOptions {
+    nearFullPct: number;
+    craftOutputsByRecipe: Record<string, Array<number>>;
+}
 
 const LOADING_NOTE = 'Map is still loading; data may be incomplete. Retry shortly.';
 
@@ -71,6 +78,17 @@ export class MapReader {
 
     readRevealCell(tokenId: string): CellState | null {
         return this.store.get(tokenId);
+    }
+
+    attention(ownerAddress: string | null, options: AttentionOptions): AttentionReport {
+        const ownedCells = ownerAddress === null ? null : this.store.getByOwner(ownerAddress);
+        return buildAttentionReport({
+            ownedCells,
+            version: this.store.getLatestUpdated(),
+            serverTime: this.store.getServerTime(),
+            nearFullPct: options.nearFullPct,
+            craftOutputsByRecipe: options.craftOutputsByRecipe,
+        });
     }
 
     refresh(): Promise<void> {

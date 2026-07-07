@@ -7,7 +7,7 @@ import { quoteBuyInputSchema } from '../types.js';
 
 export function registerQuoteBuyTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'quote_buy',
+        'cpu_quote_buy',
         { description: QUOTE_BUY_DESCRIPTION, inputSchema: quoteBuyInputSchema },
         async (args) => {
             const quote = await context.trade.quoteBuy({

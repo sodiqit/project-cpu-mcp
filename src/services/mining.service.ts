@@ -3,6 +3,7 @@ import { isAddress, parseEventLogs, type Address, type Log } from 'viem';
 import type { MiningClaimResult, MiningServiceOptions, MiningStatusResult, IAppConfig, ICellClient } from './types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
+import { capByRoom } from '../map/storage.utils.js';
 import { CellProcessKind, type RevealCellReader } from '../map/types.js';
 import type { IContractClient, WalletProvider } from '../wallet/types.js';
 
@@ -40,16 +41,25 @@ export class MiningService {
                 startAt: null,
                 claimable: '0',
                 depositRemaining: '0',
+                stalled: false,
+                warehouseUsed: null,
+                warehouseCap: null,
             };
         }
 
-        const deposit = state.resources.find((r) => r.resourceId === process.resource)?.deposit ?? '0';
+        const resource = state.resources.find((r) => r.resourceId === process.resource) ?? null;
+        const deposit = resource?.deposit ?? '0';
+        const storage = resource?.storage ?? null;
         const nowSec = BigInt(Math.floor(Date.now() / 1000));
         const startAt = BigInt(process.startAt);
         const elapsed = nowSec > startAt ? nowSec - startAt : 0n;
         const accrued = BigInt(process.rate) * elapsed;
         const depositRemaining = BigInt(deposit);
-        const claimable = accrued < depositRemaining ? accrued : depositRemaining;
+
+        // On-chain the miner banks min(accrued, deposit, room); mirror that so a full box reports ~0
+        // claimable instead of a phantom amount.
+        const bankable = accrued < depositRemaining ? accrued : depositRemaining;
+        const claimable = capByRoom(bankable, storage);
 
         return {
             tokenId,
@@ -59,6 +69,9 @@ export class MiningService {
             startAt: process.startAt,
             claimable: claimable.toString(),
             depositRemaining: deposit,
+            stalled: process.stalled,
+            warehouseUsed: storage?.used ?? null,
+            warehouseCap: storage?.cap ?? null,
         };
     }
 

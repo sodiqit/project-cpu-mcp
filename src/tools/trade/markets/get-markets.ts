@@ -7,7 +7,7 @@ import { marketsInputSchema } from '../types.js';
 
 export function registerGetMarketsTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'get_markets',
+        'cpu_get_markets',
         { description: GET_MARKETS_DESCRIPTION, inputSchema: marketsInputSchema },
         async (args) => {
             const markets = await context.trade.getMarkets(args);

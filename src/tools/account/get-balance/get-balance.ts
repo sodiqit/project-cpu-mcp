@@ -4,7 +4,7 @@ import { GET_BALANCE_DESCRIPTION } from './constants.js';
 import type { AppContext } from '../../../types.js';
 
 export function registerGetBalanceTool(server: McpServer, context: AppContext): void {
-    server.registerTool('get_balance', { description: GET_BALANCE_DESCRIPTION, inputSchema: {} }, async () => {
+    server.registerTool('cpu_get_balance', { description: GET_BALANCE_DESCRIPTION, inputSchema: {} }, async () => {
         const balance = await context.balance.getBalances();
         const header =
             `Wallet ${balance.address} on ${balance.network} (chainId ${balance.chainId}): ` +

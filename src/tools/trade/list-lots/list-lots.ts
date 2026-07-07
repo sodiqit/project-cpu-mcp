@@ -7,7 +7,7 @@ import { listLotsInputSchema } from '../types.js';
 
 export function registerListLotsTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'list_lots',
+        'cpu_list_lots',
         { description: LIST_LOTS_DESCRIPTION, inputSchema: listLotsInputSchema },
         async (args) => {
             const lots = await context.trade.listLots(args);

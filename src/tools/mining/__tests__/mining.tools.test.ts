@@ -68,6 +68,9 @@ describe('get_mining_status tool', () => {
             startAt: 1700,
             claimable: '120',
             depositRemaining: '500',
+            stalled: false,
+            warehouseUsed: null,
+            warehouseCap: null,
         })({ tokenId: '42' });
 
         const header = result.content[0]?.text ?? '';
@@ -88,6 +91,9 @@ describe('get_mining_status tool', () => {
             startAt: null,
             claimable: '0',
             depositRemaining: '0',
+            stalled: false,
+            warehouseUsed: null,
+            warehouseCap: null,
         })({ tokenId: '42' });
 
         expect(result.content[0]?.text).toMatch(/no active mining/i);

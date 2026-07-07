@@ -7,7 +7,7 @@ import { GET_TRANSPORT_STATUS_DESCRIPTION } from './constants.js';
 
 export function registerGetTransportStatusTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'get_transport_status',
+        'cpu_get_transport_status',
         { description: GET_TRANSPORT_STATUS_DESCRIPTION, inputSchema: getTransportStatusInputSchema },
         async (args) => {
             const delivery = await context.transport.getStatus(args.deliveryId);

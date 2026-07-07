@@ -7,7 +7,7 @@ import { LIST_MY_TRANSPORTS_DESCRIPTION } from './constants.js';
 
 export function registerListMyTransportsTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'list_my_transports',
+        'cpu_list_my_transports',
         { description: LIST_MY_TRANSPORTS_DESCRIPTION, inputSchema: listMyTransportsInputSchema },
         async (args) => {
             const deliveries = await context.transport.listMine(args.filter);

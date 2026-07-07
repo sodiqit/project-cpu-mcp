@@ -118,6 +118,14 @@ export class TransportService {
         return views.filter((v) => this.matchesFilter(v, filter));
     }
 
+    // Arrived-and-ready deliveries landing on the given owner's cells. Scopes by target-cell owner
+    // server-side (public endpoint), so it never pulls the global delivery set.
+    async listReadyToFinalizeForOwner(owner: string): Promise<Array<DeliveryView>> {
+        const deliveries = await this.fetchDeliveries(`?owner=${owner}`);
+        const nowMs = Date.now();
+        return deliveries.map((d) => this.toView(d, nowMs)).filter((v) => v.readyToFinalize);
+    }
+
     async getStatus(deliveryId: string): Promise<DeliveryView> {
         const deliveries = await this.fetchDeliveries('');
         const found = deliveries.find((d) => d.deliveryId === deliveryId);

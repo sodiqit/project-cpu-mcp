@@ -26,7 +26,7 @@ const inputSchema = {
 export function registerAuthenticateTool(server: McpServer, context: AppContext): void {
     const authService = context.auth;
 
-    server.registerTool('authenticate', { description: DESCRIPTION, inputSchema }, async (args) => {
+    server.registerTool('cpu_authenticate', { description: DESCRIPTION, inputSchema }, async (args) => {
         const force = args.force ?? false;
 
         // EVM mode: SIWE signs locally with the env private key — no browser step.

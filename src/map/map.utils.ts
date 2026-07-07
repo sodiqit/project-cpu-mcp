@@ -116,7 +116,7 @@ export function filterCells(cells: Iterable<CellState>, query: MapQuery): Array<
 }
 
 // A cell counts as depleted only after a reveal — an unrevealed cell has no deposits yet.
-function isDepleted(cell: CellState): boolean {
+export function isDepleted(cell: CellState): boolean {
     return cell.revealCount > 0 && cell.resources.length > 0 && cell.resources.every((r) => r.deposit === '0');
 }
 
@@ -163,5 +163,6 @@ export function summarizeMap(input: SummarizeInput): MapSummary {
         myCells: ownedCells === null ? null : ownedCells.length,
         myCellsByStatus: ownedCells === null ? null : countStatuses(ownedCells),
         depletedDeposits: ownedCells === null ? null : ownedCells.filter(isDepleted).length,
+        stalledCells: ownedCells === null ? null : ownedCells.filter((c) => c.process?.stalled === true).length,
     };
 }

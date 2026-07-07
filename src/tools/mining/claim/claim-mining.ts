@@ -7,7 +7,7 @@ import { CLAIM_MINING_DESCRIPTION } from './constants.js';
 
 export function registerClaimMiningTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'claim_mining',
+        'cpu_claim_mining',
         { description: CLAIM_MINING_DESCRIPTION, inputSchema: claimMiningInputSchema },
         async (args) => {
             const result = await context.mining.claim(args.tokenId);

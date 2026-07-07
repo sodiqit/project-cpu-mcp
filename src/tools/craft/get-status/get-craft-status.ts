@@ -7,7 +7,7 @@ import { craftCellInputSchema } from '../types.js';
 
 export function registerGetCraftStatusTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'get_craft_status',
+        'cpu_get_craft_status',
         { description: GET_CRAFT_STATUS_DESCRIPTION, inputSchema: craftCellInputSchema },
         async (args) => {
             const status = await context.craft.getStatus(args.tokenId);

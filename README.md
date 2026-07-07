@@ -114,7 +114,7 @@ Add to `~/.codeium/windsurf/mcp_config.json`, then restart Windsurf:
 
 | Variable | Default | When you need it |
 | --- | --- | --- |
-| `RPC_URL` | chain's public RPC | A custom RPC endpoint for sending on-chain transactions (e.g. `reveal`). |
+| `RPC_URL` | chain's public RPC | A custom RPC endpoint for sending on-chain transactions (e.g. `cpu_reveal`). |
 
 Session state (JWT / session keys) is persisted to `~/.project-cpu/`.
 
@@ -122,20 +122,20 @@ Session state (JWT / session keys) is persisted to `~/.project-cpu/`.
 
 Once connected, the server exposes tools grouped by area:
 
-- **Session** — `authenticate`, `get_game_config` (static rulebook: resources, costs, contract
-  addresses), `get_balance` (spendable $CPU + gas).
-- **World** — `get_map`, `get_cell`, `get_changes` (react to other players).
-- **Reveal & build** — `reveal` (surface a cell's deposits on-chain), `build` (place a
-  building; an extractor starts mining automatically), `get_mining_status`, `claim_mining`.
-- **Transport** — `quote_transport`, `transport`, `get_transport_status`,
-  `list_my_transports`, `get_pending_transports`, `resume_transport`.
-- **Crafting** — `list_recipes`, `craft`, `get_craft_status`, `claim_craft`.
-- **Trading** — `get_markets`, `list_lots`, `get_lot`, `quote_buy`, `buy_lot`, `create_lot`,
-  `cancel_lot`, `list_my_lots`.
-- **Tokens** — `quote_swap`, `swap` (trade ETH ↔ $CPU on the token pool), `withdraw` (cash a
+- **Session** — `cpu_authenticate`, `cpu_get_game_config` (static rulebook: resources, costs, contract
+  addresses), `cpu_get_balance` (spendable $CPU + gas).
+- **World** — `cpu_get_map`, `cpu_get_cell`, `cpu_get_changes` (react to other players).
+- **Reveal & build** — `cpu_reveal` (surface a cell's deposits on-chain), `cpu_build` (place a
+  building; an extractor starts mining automatically), `cpu_get_mining_status`, `cpu_claim_mining`.
+- **Transport** — `cpu_quote_transport`, `cpu_transport`, `cpu_get_transport_status`,
+  `cpu_list_my_transports`, `get_pending_transports`, `resume_transport`.
+- **Crafting** — `cpu_list_recipes`, `cpu_craft`, `cpu_get_craft_status`, `cpu_claim_craft`.
+- **Trading** — `cpu_get_markets`, `cpu_list_lots`, `cpu_get_lot`, `cpu_quote_buy`, `cpu_buy_lot`, `cpu_create_lot`,
+  `cpu_cancel_lot`, `cpu_list_my_lots`.
+- **Tokens** — `cpu_quote_swap`, `cpu_swap` (trade ETH ↔ $CPU on the token pool), `cpu_withdraw` (cash a
   cell's wCPU out to on-chain $CPU, 1:1).
 
-Paid routes and on-chain actions are settled automatically; always check `get_balance` before
+Paid routes and on-chain actions are settled automatically; always check `cpu_get_balance` before
 a paid action.
 
 ## Requirements

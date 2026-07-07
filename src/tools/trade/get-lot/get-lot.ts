@@ -7,7 +7,7 @@ import { getLotInputSchema } from '../types.js';
 
 export function registerGetLotTool(server: McpServer, context: AppContext): void {
     server.registerTool(
-        'get_lot',
+        'cpu_get_lot',
         { description: GET_LOT_DESCRIPTION, inputSchema: getLotInputSchema },
         async (args) => {
             const lot = await context.trade.getLot(args.lotId);

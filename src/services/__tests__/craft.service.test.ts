@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CraftRecipeId } from '../../api/types.js';
 import { CELL_ABI } from '../../contracts/cell.abi.js';
-import { makeCell } from '../../map/__tests__/fixtures.js';
+import { makeCell, makeStorage } from '../../map/__tests__/fixtures.js';
 import { CellProcessKind } from '../../map/types.js';
 import { TxStatus } from '../../wallet/types.js';
 import { recipeNameToUint64 } from '../cell.utils.js';
@@ -117,6 +117,7 @@ describe('CraftService.getStatus', () => {
                 batches: 2,
                 claimedBatches: 0,
                 durationSec: 60,
+                stalled: false,
                 startAt: 1,
             },
         });
@@ -135,6 +136,43 @@ describe('CraftService.getStatus', () => {
         const { service } = makeService({ cell });
         const status = await service.getStatus('42');
         expect(status.active).toBe(false);
+    });
+
+    it('reports stalled with the recipe outputs whose warehouse is full', async () => {
+        const config = makeConfig();
+        config.recipes = config.recipes.map((r) =>
+            r.id === CraftRecipeId.GeneratePower ? { ...r, outputs: [{ resourceId: 101, amount: 10 }] } : r,
+        );
+        const cell = makeCell({
+            tokenId: '42',
+            process: {
+                kind: CellProcessKind.Craft,
+                recipeId: CraftRecipeId.GeneratePower,
+                batches: 2,
+                claimedBatches: 0,
+                durationSec: 60,
+                stalled: true,
+                startAt: 1,
+            },
+            resources: [
+                {
+                    resourceId: 101,
+                    deposit: '0',
+                    balance: '60',
+                    strength: null,
+                    storage: makeStorage({ used: '60', cap: '60', stalled: true }),
+                },
+            ],
+        });
+        const { service } = makeService({ cell, config });
+
+        const status = await service.getStatus('42');
+
+        expect(status.stalled).toBe(true);
+        expect(status.blockedResourceIds).toEqual([101]);
+        // The single output box is full, so no matured batch fits — claimable is clamped to 0.
+        expect(status.claimableBatches).toBe(0);
+        expect(status.maturedBatches).toBe(2);
     });
 });
 

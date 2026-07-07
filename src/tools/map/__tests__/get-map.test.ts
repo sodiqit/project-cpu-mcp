@@ -21,6 +21,7 @@ const SUMMARY: MapSummary = {
     myCells: 1,
     myCellsByStatus: { idle: 1, mining: 0, crafting: 0 },
     depletedDeposits: 0,
+    stalledCells: 0,
 };
 
 function harness(
