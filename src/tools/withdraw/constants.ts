@@ -2,12 +2,9 @@
 export const WITHDRAW_MAX_UNITS = 2n ** 64n - 1n;
 
 export const WITHDRAW_DESCRIPTION = [
-    'Cash out a cell’s wCPU (resource id 1, the Tier-5 CPU Forge output) into the on-chain $CPU token in',
-    'your wallet, 1:1. Requires a session — call `cpu_authenticate` first, and you must own the cell. Pass the',
-    'amount in whole wCPU units (e.g. "100"), up to the cell’s wCPU balance. This debits the wCPU from the',
-    'cell and mints $CPU straight to your wallet, so no $CPU approve is needed; it submits the on-chain',
-    'transaction and waits for its confirmation, then reports the tx hash — check the credited $CPU with',
-    '`cpu_get_balance`.',
-    'wCPU lives on the cell, not your wallet: selling or transferring the cell takes its wCPU with it, so',
-    'withdraw before you sell.',
+    'Cash out a cell’s wCPU (resource id 1, the CPU Forge output) to the on-chain $CPU token in your wallet, 1:1',
+    '(needs a session — `cpu_authenticate` first; you must own the cell). Pass the amount in whole wCPU units up',
+    'to the cell’s wCPU balance; it debits the cell and mints $CPU to your wallet (no approve needed), waits for',
+    'confirmation, and returns the tx hash — check the result with `cpu_get_balance`. wCPU lives on the cell, so',
+    'selling or transferring the cell takes it along: withdraw before you sell.',
 ].join(' ');
