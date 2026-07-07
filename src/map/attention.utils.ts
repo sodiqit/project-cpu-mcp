@@ -10,34 +10,43 @@ import {
 } from './types.js';
 import { BuildingType } from '../api/types.js';
 
-const SEVERITY_RANK: Record<AttentionSeverity, number> = {
-    [AttentionSeverity.Critical]: 0,
-    [AttentionSeverity.Warning]: 1,
-    [AttentionSeverity.Info]: 2,
+const { Critical, Warning, Info } = AttentionSeverity;
+
+// Severity + suggested tool + action are fixed per reason, so one table drives all three.
+const REASON_META: Record<AttentionReason, { severity: AttentionSeverity; tool: string; action: string }> = {
+    [AttentionReason.StalledMining]: {
+        severity: Critical,
+        tool: 'transport',
+        action: 'Warehouse is full — mining is stalled. Offload this resource (transport out, create_lot to sell, or craft with it) to resume.',
+    },
+    [AttentionReason.StalledCraft]: {
+        severity: Critical,
+        tool: 'transport',
+        action: 'Output warehouse is full — craft batches are paused. Offload this output (transport out or create_lot) to resume.',
+    },
+    [AttentionReason.WarehouseNearFull]: {
+        severity: Warning,
+        tool: 'transport',
+        action: 'Warehouse is nearly full — production will stall soon. Offload before it caps.',
+    },
+    [AttentionReason.DepositDepleted]: {
+        severity: Warning,
+        tool: 'demolish',
+        action: "Extractor's deposit is exhausted — it can no longer mine. Demolish and redeploy on a fresh deposit.",
+    },
+    [AttentionReason.DeliveryReady]: {
+        severity: Warning,
+        tool: 'finalize_delivery',
+        action: 'Delivery has arrived — finalize_delivery to land the goods and free the reserved space.',
+    },
+    [AttentionReason.Unbuilt]: {
+        severity: Info,
+        tool: 'build',
+        action: 'Cell is revealed but has no building. Build an extractor to start mining.',
+    },
 };
 
-const SUGGESTED_TOOL: Record<AttentionReason, string> = {
-    [AttentionReason.StalledMining]: 'transport',
-    [AttentionReason.StalledCraft]: 'transport',
-    [AttentionReason.WarehouseNearFull]: 'transport',
-    [AttentionReason.DepositDepleted]: 'demolish',
-    [AttentionReason.DeliveryReady]: 'finalize_delivery',
-    [AttentionReason.Unbuilt]: 'build',
-};
-
-const ACTION: Record<AttentionReason, string> = {
-    [AttentionReason.StalledMining]:
-        'Warehouse is full — mining is stalled. Offload this resource (transport out, create_lot to sell, or craft with it) to resume.',
-    [AttentionReason.StalledCraft]:
-        'Output warehouse is full — craft batches are paused. Offload this output (transport out or create_lot) to resume.',
-    [AttentionReason.WarehouseNearFull]:
-        'Warehouse is nearly full — production will stall soon. Offload before it caps.',
-    [AttentionReason.DepositDepleted]:
-        "Extractor's deposit is exhausted — it can no longer mine. Demolish and redeploy on a fresh deposit.",
-    [AttentionReason.DeliveryReady]:
-        'Delivery has arrived — finalize_delivery to land the goods and free the reserved space.',
-    [AttentionReason.Unbuilt]: 'Cell is revealed but has no building. Build an extractor to start mining.',
-};
+const SEVERITY_RANK: Record<AttentionSeverity, number> = { [Critical]: 0, [Warning]: 1, [Info]: 2 };
 
 export interface BuildAttentionInput {
     ownedCells: Array<CellState> | null;
@@ -48,45 +57,52 @@ export interface BuildAttentionInput {
     craftOutputsByRecipe: Record<string, Array<number>>;
 }
 
-function fillPercent(used: bigint, cap: bigint): number {
-    if (cap === 0n) {
-        return 100;
-    }
-    return Number((used * 100n) / cap);
-}
-
-function storageItem(
-    cell: CellState,
-    resource: CellResource,
-    severity: AttentionSeverity,
+// Every item shares this shape; a reason + coords + a few `extra` fields is all that varies.
+export function attentionItem(
+    loc: { tokenId: string; x: number; y: number },
     reason: AttentionReason,
+    extra: Partial<AttentionItem> = {},
 ): AttentionItem {
-    const storage = resource.storage;
-    const used = storage?.used ?? '0';
-    const cap = storage?.cap ?? null;
-    const incomingTransport = storage?.reserved.incomingTransport ?? '0';
-    const lots = storage?.reserved.lots ?? '0';
+    const meta = REASON_META[reason];
     return {
-        tokenId: cell.tokenId,
-        x: cell.x,
-        y: cell.y,
-        severity,
+        tokenId: loc.tokenId,
+        x: loc.x,
+        y: loc.y,
+        severity: meta.severity,
         reason,
-        resourceId: resource.resourceId,
-        used,
-        cap,
-        fillPct: cap === null ? null : fillPercent(BigInt(used), BigInt(cap)),
-        breakdown: { liquid: resource.balance, incomingTransport, lots },
+        resourceId: null,
+        used: null,
+        cap: null,
+        fillPct: null,
+        breakdown: null,
         depositRemaining: null,
         deliveryId: null,
         arrivalAt: null,
-        suggestedTool: SUGGESTED_TOOL[reason],
-        action: ACTION[reason],
+        suggestedTool: meta.tool,
+        action: meta.action,
+        ...extra,
+    };
+}
+
+function storageFields(resource: CellResource): Partial<AttentionItem> {
+    const s = resource.storage;
+    const used = s?.used ?? '0';
+    const cap = s?.cap ?? null;
+    return {
+        resourceId: resource.resourceId,
+        used,
+        cap,
+        fillPct: cap === null || cap === '0' ? null : Number((BigInt(used) * 100n) / BigInt(cap)),
+        breakdown: {
+            liquid: resource.balance,
+            incomingTransport: s?.reserved.incomingTransport ?? '0',
+            lots: s?.reserved.lots ?? '0',
+        },
     };
 }
 
 // Resources this cell is actively producing right now: the mining target, or the active craft's outputs.
-// Only these can "stall" or approach the cap, so near-full is scoped to them (a static full box does not).
+// Only these can stall or approach the cap, so near-full is scoped to them (a static full box does not).
 function producedResourceIds(cell: CellState, craftOutputsByRecipe: Record<string, Array<number>>): Set<number> {
     const process = cell.process;
     if (process?.kind === CellProcessKind.Mining) {
@@ -98,11 +114,6 @@ function producedResourceIds(cell: CellState, craftOutputsByRecipe: Record<strin
     return new Set();
 }
 
-function isNearFull(used: bigint, cap: bigint, pct: number): boolean {
-    return used * 100n >= cap * BigInt(pct);
-}
-
-// An extractor that is built (not mid-construction) and whose deposits are gone can no longer mine.
 function isOperationalExtractor(cell: CellState): boolean {
     return cell.building?.type === BuildingType.Extractor && cell.building.buildFinishAt === null;
 }
@@ -110,85 +121,39 @@ function isOperationalExtractor(cell: CellState): boolean {
 function cellItems(cell: CellState, input: BuildAttentionInput): Array<AttentionItem> {
     const items: Array<AttentionItem> = [];
     const produced = producedResourceIds(cell, input.craftOutputsByRecipe);
-    const process = cell.process;
+    const isCraft = cell.process?.kind === CellProcessKind.Craft;
 
-    if (process?.kind === CellProcessKind.Mining && process.stalled) {
-        const resource = cell.resources.find((r) => r.resourceId === process.resource);
-        if (resource) {
-            items.push(storageItem(cell, resource, AttentionSeverity.Critical, AttentionReason.StalledMining));
-        }
-    }
-
-    if (process?.kind === CellProcessKind.Craft && process.stalled) {
-        for (const resource of cell.resources) {
-            if (produced.has(resource.resourceId) && resource.storage?.stalled === true) {
-                items.push(storageItem(cell, resource, AttentionSeverity.Critical, AttentionReason.StalledCraft));
-            }
-        }
-    }
-
+    // One pass over produced, capped boxes: a full one stalls, an almost-full one warns.
     for (const resource of cell.resources) {
-        const storage = resource.storage;
-        if (
-            storage !== null &&
-            storage.cap !== null &&
-            !storage.stalled &&
-            produced.has(resource.resourceId) &&
-            isNearFull(BigInt(storage.used), BigInt(storage.cap), input.nearFullPct)
-        ) {
-            items.push(storageItem(cell, resource, AttentionSeverity.Warning, AttentionReason.WarehouseNearFull));
+        const s = resource.storage;
+        if (!s || s.cap === null || !produced.has(resource.resourceId)) {
+            continue;
+        }
+        if (s.stalled) {
+            items.push(
+                attentionItem(
+                    cell,
+                    isCraft ? AttentionReason.StalledCraft : AttentionReason.StalledMining,
+                    storageFields(resource),
+                ),
+            );
+        } else if (BigInt(s.used) * 100n >= BigInt(s.cap) * BigInt(input.nearFullPct)) {
+            items.push(attentionItem(cell, AttentionReason.WarehouseNearFull, storageFields(resource)));
         }
     }
 
     if (isOperationalExtractor(cell) && isDepleted(cell)) {
-        items.push({
-            tokenId: cell.tokenId,
-            x: cell.x,
-            y: cell.y,
-            severity: AttentionSeverity.Warning,
-            reason: AttentionReason.DepositDepleted,
-            resourceId: process?.kind === CellProcessKind.Mining ? process.resource : null,
-            used: null,
-            cap: null,
-            fillPct: null,
-            breakdown: null,
-            depositRemaining: '0',
-            deliveryId: null,
-            arrivalAt: null,
-            suggestedTool: SUGGESTED_TOOL[AttentionReason.DepositDepleted],
-            action: ACTION[AttentionReason.DepositDepleted],
-        });
+        const target = cell.process?.kind === CellProcessKind.Mining ? cell.process.resource : null;
+        items.push(attentionItem(cell, AttentionReason.DepositDepleted, { resourceId: target, depositRemaining: '0' }));
     }
-
     if (cell.revealCount > 0 && cell.building === null && !cell.revealPending) {
-        items.push({
-            tokenId: cell.tokenId,
-            x: cell.x,
-            y: cell.y,
-            severity: AttentionSeverity.Info,
-            reason: AttentionReason.Unbuilt,
-            resourceId: null,
-            used: null,
-            cap: null,
-            fillPct: null,
-            breakdown: null,
-            depositRemaining: null,
-            deliveryId: null,
-            arrivalAt: null,
-            suggestedTool: SUGGESTED_TOOL[AttentionReason.Unbuilt],
-            action: ACTION[AttentionReason.Unbuilt],
-        });
+        items.push(attentionItem(cell, AttentionReason.Unbuilt));
     }
-
     return items;
 }
 
 function countBySeverity(items: Array<AttentionItem>): Record<AttentionSeverity, number> {
-    const counts: Record<AttentionSeverity, number> = {
-        [AttentionSeverity.Critical]: 0,
-        [AttentionSeverity.Warning]: 0,
-        [AttentionSeverity.Info]: 0,
-    };
+    const counts: Record<AttentionSeverity, number> = { [Critical]: 0, [Warning]: 0, [Info]: 0 };
     for (const item of items) {
         counts[item.severity] += 1;
     }
@@ -197,26 +162,20 @@ function countBySeverity(items: Array<AttentionItem>): Record<AttentionSeverity,
 
 // Most-urgent first, then a stable tokenId tiebreak so callers get a deterministic ordering.
 export function sortAttentionItems(items: Array<AttentionItem>): Array<AttentionItem> {
-    return [...items].sort((a, b) => {
-        const rank = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
-        return rank !== 0 ? rank : a.tokenId.localeCompare(b.tokenId);
-    });
+    return [...items].sort(
+        (a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || a.tokenId.localeCompare(b.tokenId),
+    );
+}
+
+export function meetsSeverity(severity: AttentionSeverity, min: AttentionSeverity | null): boolean {
+    return min === null || SEVERITY_RANK[severity] <= SEVERITY_RANK[min];
 }
 
 export function buildAttentionReport(input: BuildAttentionInput): AttentionReport {
-    if (input.ownedCells === null) {
-        return {
-            ownerKnown: false,
-            version: input.version,
-            serverTime: input.serverTime,
-            counts: countBySeverity([]),
-            items: [],
-            note: null,
-        };
-    }
-    const items = sortAttentionItems(input.ownedCells.flatMap((cell) => cellItems(cell, input)));
+    const cells = input.ownedCells;
+    const items = cells === null ? [] : sortAttentionItems(cells.flatMap((cell) => cellItems(cell, input)));
     return {
-        ownerKnown: true,
+        ownerKnown: cells !== null,
         version: input.version,
         serverTime: input.serverTime,
         counts: countBySeverity(items),

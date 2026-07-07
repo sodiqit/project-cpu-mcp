@@ -2,41 +2,29 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { GET_ATTENTION_DESCRIPTION } from './constants.js';
 import { getAttentionInputSchema } from './types.js';
-import { withExtraItems } from '../../../map/attention.utils.js';
+import { attentionItem, meetsSeverity, withExtraItems } from '../../../map/attention.utils.js';
 import { WAREHOUSE_NEAR_FULL_PCT } from '../../../map/constants.js';
-import { type AttentionItem, AttentionReason, AttentionSeverity } from '../../../map/types.js';
+import { AttentionReason } from '../../../map/types.js';
 import type { DeliveryView } from '../../../services/types.js';
 import type { AppContext } from '../../../types.js';
 import { errorMessage } from '../../../utils/error.utils.js';
 import { resourceName } from '../../../utils/format.utils.js';
 import { getWalletAddress } from '../wallet.utils.js';
 
-const SEVERITY_RANK: Record<AttentionSeverity, number> = {
-    [AttentionSeverity.Critical]: 0,
-    [AttentionSeverity.Warning]: 1,
-    [AttentionSeverity.Info]: 2,
-};
+const DELIVERIES_UNREACHABLE = 'Deliveries could not be loaded (server unreachable); showing map-based items only.';
 
-// A delivery isn't a cell, so it carries no coords of its own — read them off the target cell in the map.
-function buildDeliveryItem(context: AppContext, delivery: DeliveryView): AttentionItem {
-    const cell = context.mapReader.readRevealCell(delivery.targetTokenId);
-    return {
-        tokenId: delivery.targetTokenId,
-        x: cell?.x ?? 0,
-        y: cell?.y ?? 0,
-        severity: AttentionSeverity.Warning,
-        reason: AttentionReason.DeliveryReady,
-        resourceId: delivery.resourceId,
-        used: null,
-        cap: null,
-        fillPct: null,
-        breakdown: null,
-        depositRemaining: null,
-        deliveryId: delivery.deliveryId,
-        arrivalAt: delivery.arrivalAt,
-        suggestedTool: 'finalize_delivery',
-        action: 'Delivery has arrived — finalize_delivery to land the goods and free the reserved space.',
-    };
+// A delivery isn't a cell, so it borrows the target cell's coords from the map.
+function deliveryItem(context: AppContext, d: DeliveryView) {
+    const cell = context.mapReader.readRevealCell(d.targetTokenId);
+    return attentionItem(
+        { tokenId: d.targetTokenId, x: cell?.x ?? 0, y: cell?.y ?? 0 },
+        AttentionReason.DeliveryReady,
+        {
+            resourceId: d.resourceId,
+            deliveryId: d.deliveryId,
+            arrivalAt: d.arrivalAt,
+        },
+    );
 }
 
 export function registerGetAttentionTool(server: McpServer, context: AppContext): void {
@@ -46,10 +34,9 @@ export function registerGetAttentionTool(server: McpServer, context: AppContext)
         async (args) => {
             const owner = getWalletAddress(context);
             const { resources, recipes } = await context.appConfig.load();
-            const craftOutputsByRecipe: Record<string, Array<number>> = {};
-            for (const recipe of recipes) {
-                craftOutputsByRecipe[recipe.id] = recipe.outputs.map((o) => o.resourceId);
-            }
+            const craftOutputsByRecipe = Object.fromEntries(
+                recipes.map((r): [string, Array<number>] => [r.id, r.outputs.map((o) => o.resourceId)]),
+            );
 
             const mapReport = context.mapReader.attention(owner, {
                 nearFullPct: WAREHOUSE_NEAR_FULL_PCT,
@@ -60,22 +47,19 @@ export function registerGetAttentionTool(server: McpServer, context: AppContext)
             if (owner !== null) {
                 try {
                     const ready = await context.transport.listReadyToFinalizeForOwner();
-                    const deliveryItems = ready.map((d) => buildDeliveryItem(context, d));
-                    report = withExtraItems(mapReport, deliveryItems, null);
-                } catch (error) {
-                    context.logger.warn('attention: deliveries fetch failed', { error: errorMessage(error) });
                     report = withExtraItems(
                         mapReport,
-                        [],
-                        'Deliveries could not be loaded (server unreachable); showing map-based items only.',
+                        ready.map((d) => deliveryItem(context, d)),
+                        null,
                     );
+                } catch (error) {
+                    context.logger.warn('attention: deliveries fetch failed', { error: errorMessage(error) });
+                    report = withExtraItems(mapReport, [], DELIVERIES_UNREACHABLE);
                 }
             }
 
-            const minRank =
-                args.minSeverity === null ? SEVERITY_RANK[AttentionSeverity.Info] : SEVERITY_RANK[args.minSeverity];
             const items = report.items
-                .filter((item) => SEVERITY_RANK[item.severity] <= minRank)
+                .filter((item) => meetsSeverity(item.severity, args.minSeverity))
                 .map((item) => ({
                     ...item,
                     resourceName: item.resourceId === null ? null : resourceName(resources, item.resourceId),
