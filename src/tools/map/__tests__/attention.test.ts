@@ -34,8 +34,6 @@ function mapReport(): AttentionReport {
                 depositRemaining: null,
                 deliveryId: null,
                 arrivalAt: null,
-                suggestedTool: 'transport',
-                action: 'offload',
             },
             {
                 tokenId: '2',
@@ -51,8 +49,6 @@ function mapReport(): AttentionReport {
                 depositRemaining: null,
                 deliveryId: null,
                 arrivalAt: null,
-                suggestedTool: 'build',
-                action: 'build',
             },
         ],
         note: null,
@@ -125,7 +121,7 @@ describe('get_attention tool', () => {
         const payload = JSON.parse(result.content[1]?.text ?? '{}');
         const delivery = payload.items.find((i: { reason: string }) => i.reason === AttentionReason.DeliveryReady);
         expect(delivery.deliveryId).toBe('77');
-        expect(delivery.suggestedTool).toBe('finalize_delivery');
+        expect(delivery.arrivalAt).toBe(1);
         const stalled = payload.items.find((i: { reason: string }) => i.reason === AttentionReason.StalledMining);
         expect(stalled.resourceName).toBe('Silica');
     });

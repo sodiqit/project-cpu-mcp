@@ -48,7 +48,6 @@ describe('buildAttentionReport', () => {
         expect(item?.resourceId).toBe(7);
         expect(item?.fillPct).toBe(100);
         expect(item?.breakdown).toEqual({ liquid: '20', incomingTransport: '30', lots: '0' });
-        expect(item?.suggestedTool).toBe('transport');
     });
 
     it('flags one stalled_craft item per full output box', () => {
@@ -136,7 +135,7 @@ describe('buildAttentionReport', () => {
             },
         ]);
         expect(built.items.map((i) => i.reason)).toContain(AttentionReason.DepositDepleted);
-        expect(built.items.find((i) => i.reason === AttentionReason.DepositDepleted)?.suggestedTool).toBe('demolish');
+        expect(built.items.find((i) => i.reason === AttentionReason.DepositDepleted)?.depositRemaining).toBe('0');
 
         const constructing = report([
             {
@@ -212,8 +211,6 @@ describe('withExtraItems', () => {
             depositRemaining: null,
             deliveryId: '77',
             arrivalAt: 1,
-            suggestedTool: 'finalize_delivery',
-            action: 'finalize it',
         };
         const merged = withExtraItems(base, [extra], 'deliveries offline');
         expect(merged.items[0]?.severity).toBe(AttentionSeverity.Warning);

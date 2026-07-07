@@ -279,8 +279,6 @@ export interface AttentionItem {
     depositRemaining: string | null;
     deliveryId: string | null;
     arrivalAt: number | null;
-    suggestedTool: string;
-    action: string;
 }
 
 export interface AttentionReport {

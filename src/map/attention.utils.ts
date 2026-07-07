@@ -12,38 +12,15 @@ import { BuildingType } from '../api/types.js';
 
 const { Critical, Warning, Info } = AttentionSeverity;
 
-// Severity + suggested tool + action are fixed per reason, so one table drives all three.
-const REASON_META: Record<AttentionReason, { severity: AttentionSeverity; tool: string; action: string }> = {
-    [AttentionReason.StalledMining]: {
-        severity: Critical,
-        tool: 'transport',
-        action: 'Warehouse is full — mining is stalled. Offload this resource (transport out, create_lot to sell, or craft with it) to resume.',
-    },
-    [AttentionReason.StalledCraft]: {
-        severity: Critical,
-        tool: 'transport',
-        action: 'Output warehouse is full — craft batches are paused. Offload this output (transport out or create_lot) to resume.',
-    },
-    [AttentionReason.WarehouseNearFull]: {
-        severity: Warning,
-        tool: 'transport',
-        action: 'Warehouse is nearly full — production will stall soon. Offload before it caps.',
-    },
-    [AttentionReason.DepositDepleted]: {
-        severity: Warning,
-        tool: 'demolish',
-        action: "Extractor's deposit is exhausted — it can no longer mine. Demolish and redeploy on a fresh deposit.",
-    },
-    [AttentionReason.DeliveryReady]: {
-        severity: Warning,
-        tool: 'finalize_delivery',
-        action: 'Delivery has arrived — finalize_delivery to land the goods and free the reserved space.',
-    },
-    [AttentionReason.Unbuilt]: {
-        severity: Info,
-        tool: 'build',
-        action: 'Cell is revealed but has no building. Build an extractor to start mining.',
-    },
+// Each reason has a fixed urgency (how time-sensitive the fact is), used only for ordering — the report
+// stays descriptive and suggests no action, leaving what to do to the caller.
+const REASON_SEVERITY: Record<AttentionReason, AttentionSeverity> = {
+    [AttentionReason.StalledMining]: Critical,
+    [AttentionReason.StalledCraft]: Critical,
+    [AttentionReason.WarehouseNearFull]: Warning,
+    [AttentionReason.DepositDepleted]: Warning,
+    [AttentionReason.DeliveryReady]: Warning,
+    [AttentionReason.Unbuilt]: Info,
 };
 
 const SEVERITY_RANK: Record<AttentionSeverity, number> = { [Critical]: 0, [Warning]: 1, [Info]: 2 };
@@ -63,12 +40,11 @@ export function attentionItem(
     reason: AttentionReason,
     extra: Partial<AttentionItem> = {},
 ): AttentionItem {
-    const meta = REASON_META[reason];
     return {
         tokenId: loc.tokenId,
         x: loc.x,
         y: loc.y,
-        severity: meta.severity,
+        severity: REASON_SEVERITY[reason],
         reason,
         resourceId: null,
         used: null,
@@ -78,8 +54,6 @@ export function attentionItem(
         depositRemaining: null,
         deliveryId: null,
         arrivalAt: null,
-        suggestedTool: meta.tool,
-        action: meta.action,
         ...extra,
     };
 }
