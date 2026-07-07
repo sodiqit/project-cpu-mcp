@@ -9,11 +9,25 @@ export enum CellProcessKind {
     Craft = 'craft',
 }
 
+// Warehouse occupancy for one resource. `used` = liquid + reserved (incoming transport + open lots),
+// all plain integer unit counts like `balance`/`deposit` (NOT wei). `cap === null` means uncapped
+// (e.g. WCPU) — never full. `stalled` is server-authoritative; do not recompute `used >= cap`.
+export const cellResourceStorageSchema = z.object({
+    used: z.string(),
+    cap: z.string().nullable(),
+    reserved: z.object({
+        incomingTransport: z.string(),
+        lots: z.string(),
+    }),
+    stalled: z.boolean(),
+});
+
 export const cellResourceSchema = z.object({
     resourceId: z.number(),
     deposit: z.string(),
     balance: z.string(),
     strength: z.number().nullable().default(null),
+    storage: cellResourceStorageSchema.nullable().default(null),
 });
 
 export const cellBuildingViewSchema = z.object({
@@ -26,6 +40,8 @@ export const cellProcessMiningViewSchema = z.object({
     resource: z.number(),
     rate: z.number(),
     startAt: z.number(),
+    // Mirrors the mined resource's warehouse: production halts while its box is full.
+    stalled: z.boolean().default(false),
 });
 
 export const cellProcessCraftViewSchema = z.object({
@@ -35,6 +51,8 @@ export const cellProcessCraftViewSchema = z.object({
     claimedBatches: z.number(),
     durationSec: z.number(),
     startAt: z.number(),
+    // True when ANY output box is full — a batch is atomic, so one full output stalls the furnace.
+    stalled: z.boolean().default(false),
 });
 
 export const cellProcessViewSchema = z.discriminatedUnion('kind', [
@@ -63,6 +81,7 @@ export const mapSnapshotResponseSchema = z.object({
 });
 
 export type CellResource = z.infer<typeof cellResourceSchema>;
+export type CellResourceStorage = z.infer<typeof cellResourceStorageSchema>;
 export type CellBuildingView = z.infer<typeof cellBuildingViewSchema>;
 export type CellProcessMiningView = z.infer<typeof cellProcessMiningViewSchema>;
 export type CellProcessCraftView = z.infer<typeof cellProcessCraftViewSchema>;
@@ -198,6 +217,8 @@ export interface MapSummary {
     myCells: number | null;
     myCellsByStatus: MapCellStatusCounts | null;
     depletedDeposits: number | null;
+    // Owned cells whose active process is stalled (warehouse full). null when the wallet is unknown.
+    stalledCells: number | null;
 }
 
 export interface MapQueryResult {
@@ -220,4 +241,55 @@ export interface MapChanges {
     serverTime: number;
     changed: Array<EnrichedCell>;
     changedCount: number;
+}
+
+export enum AttentionSeverity {
+    Critical = 'critical',
+    Warning = 'warning',
+    Info = 'info',
+}
+
+export enum AttentionReason {
+    StalledMining = 'stalled_mining',
+    StalledCraft = 'stalled_craft',
+    WarehouseNearFull = 'warehouse_near_full',
+    DepositDepleted = 'deposit_depleted',
+    DeliveryReady = 'delivery_ready',
+    Unbuilt = 'unbuilt',
+}
+
+export interface AttentionStorageBreakdown {
+    liquid: string;
+    incomingTransport: string;
+    lots: string;
+}
+
+export interface AttentionItem {
+    tokenId: string;
+    x: number;
+    y: number;
+    severity: AttentionSeverity;
+    reason: AttentionReason;
+    // Decorated with resourceName at the tool layer. null for cell-level reasons (unbuilt).
+    resourceId: number | null;
+    used: string | null;
+    cap: string | null;
+    fillPct: number | null;
+    breakdown: AttentionStorageBreakdown | null;
+    depositRemaining: string | null;
+    deliveryId: string | null;
+    arrivalAt: number | null;
+    suggestedTool: string;
+    action: string;
+}
+
+export interface AttentionReport {
+    // false when the wallet is unknown — attention is owner-scoped, so there is nothing to report.
+    ownerKnown: boolean;
+    version: number;
+    serverTime: number;
+    counts: Record<AttentionSeverity, number>;
+    items: Array<AttentionItem>;
+    // Set when the deliveries endpoint could not be reached; the map-derived items are still present.
+    note: string | null;
 }

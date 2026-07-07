@@ -11,6 +11,7 @@ import { registerClaimCraftTool } from './tools/craft/claim/claim-craft.js';
 import { registerCraftTool } from './tools/craft/craft.js';
 import { registerGetCraftStatusTool } from './tools/craft/get-status/get-craft-status.js';
 import { registerListRecipesTool } from './tools/craft/list-recipes/list-recipes.js';
+import { registerGetAttentionTool } from './tools/map/attention/attention.js';
 import { registerGetCellTool } from './tools/map/get-cell/get-cell.js';
 import { registerGetChangesTool } from './tools/map/get-changes/get-changes.js';
 import { registerGetMapTool } from './tools/map/get-map/get-map.js';
@@ -44,11 +45,16 @@ const SERVER_INSTRUCTIONS = [
     'Read the static rulebook once with `get_game_config` — resource catalog, building and reveal costs,',
     'recipe count, and contract addresses.',
     'The world map is loaded at startup and kept current in the background; read it with `get_map`',
-    '(situational awareness), `get_cell` (inspect one cell), and `get_changes` (react to other players',
-    'since a given version). You only observe updates when you call these — there is no push.',
+    '(situational awareness), `get_cell` (inspect one cell), `get_changes` (react to other players since a',
+    'given version), and `get_attention` (your owner-scoped to-do list of stalled/near-full/depleted/unbuilt',
+    'cells + deliveries ready to finalize). You only observe updates when you call these — there is no push.',
     'Act on a cell you own with `reveal`, which surfaces its resource deposits on-chain.',
     'Place a building with `build` — an `extractor` (paid in $CPU, auto-settled on-chain) starts mining its',
     'target resource automatically; read accrual with `get_mining_status` and bank it with `claim_mining`.',
+    'Every resource has a per-cell warehouse with a storage cap; when it fills, that resource’s production',
+    '(mining or craft) stalls until you offload it (transport, sell, craft, or withdraw). A null cap means',
+    'uncapped. `get_mining_status`/`get_craft_status` report the stall; `get_attention` lists every stalled or',
+    'near-full cell at once.',
     'Move resources between cells with `transport` (preview cost first with `quote_transport`) — one on-chain',
     'move that debits the source, pays the $CPU transit fee for any foreign Hub on the route, and escrows a',
     'time-delayed delivery. Track deliveries with `get_transport_status` / `list_my_transports`; a delivery is',
@@ -84,6 +90,7 @@ export async function createServer(context: AppContext): Promise<void> {
     registerGetMapTool(server, context);
     registerGetCellTool(server, context);
     registerGetChangesTool(server, context);
+    registerGetAttentionTool(server, context);
     registerRevealTool(server, context);
     registerBuildTool(server, context);
     registerDemolishTool(server, context);

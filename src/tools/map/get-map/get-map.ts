@@ -19,9 +19,13 @@ export function registerGetMapTool(server: McpServer, context: AppContext): void
             const health = context.api.getServerHealth();
 
             const serverTag = health.reachable ? 'server=up' : 'server=DOWN';
+            const stalledTag =
+                result.summary.stalledCells !== null && result.summary.stalledCells > 0
+                    ? ` · stalled ${result.summary.stalledCells}`
+                    : '';
             const header =
                 `Map v${result.summary.version} · ${result.summary.totalCells} cells · ` +
-                `scope=${result.scope} · returned ${result.returnedCells} · ${serverTag}`;
+                `scope=${result.scope} · returned ${result.returnedCells} · ${serverTag}${stalledTag}`;
 
             // Resolve resource ids to names: inline on each cell, plus a legend for the resourceIndex keys.
             const labeled = {

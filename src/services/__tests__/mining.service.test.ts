@@ -2,7 +2,7 @@ import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, type Addres
 import { describe, expect, it } from 'vitest';
 
 import { CELL_ABI } from '../../contracts/cell.abi.js';
-import { makeCell } from '../../map/__tests__/fixtures.js';
+import { makeCell, makeStorage } from '../../map/__tests__/fixtures.js';
 import { CellProcessKind } from '../../map/types.js';
 import { MiningService } from '../mining.service.js';
 import { CELL, makeCellHarness, WALLET_ADDRESS } from './service-fakes.js';
@@ -35,8 +35,8 @@ describe('MiningService.getStatus', () => {
         const cell = makeCell({
             tokenId: '42',
             owner: WALLET_ADDRESS,
-            process: { kind: CellProcessKind.Mining, resource: 3, rate: 10, startAt: 1 },
-            resources: [{ resourceId: 3, deposit: '500', balance: '0', strength: null }],
+            process: { kind: CellProcessKind.Mining, resource: 3, rate: 10, startAt: 1, stalled: false },
+            resources: [{ resourceId: 3, deposit: '500', balance: '0', strength: null, storage: null }],
         });
         const { service } = makeService({ cell });
 
@@ -47,6 +47,56 @@ describe('MiningService.getStatus', () => {
         expect(status.rate).toBe(10);
         expect(status.depositRemaining).toBe('500');
         expect(status.claimable).toBe('500');
+        expect(status.stalled).toBe(false);
+    });
+
+    it('reports zero claimable and stalled when the warehouse is full', async () => {
+        const cell = makeCell({
+            tokenId: '42',
+            owner: WALLET_ADDRESS,
+            process: { kind: CellProcessKind.Mining, resource: 3, rate: 10, startAt: 1, stalled: true },
+            resources: [
+                {
+                    resourceId: 3,
+                    deposit: '500',
+                    balance: '50',
+                    strength: null,
+                    storage: makeStorage({ used: '50', cap: '50', stalled: true }),
+                },
+            ],
+        });
+        const { service } = makeService({ cell });
+
+        const status = await service.getStatus('42');
+
+        expect(status.stalled).toBe(true);
+        expect(status.claimable).toBe('0');
+        expect(status.warehouseUsed).toBe('50');
+        expect(status.warehouseCap).toBe('50');
+    });
+
+    it('caps claimable at the remaining warehouse room', async () => {
+        const cell = makeCell({
+            tokenId: '42',
+            owner: WALLET_ADDRESS,
+            process: { kind: CellProcessKind.Mining, resource: 3, rate: 10, startAt: 1, stalled: false },
+            resources: [
+                {
+                    resourceId: 3,
+                    deposit: '500',
+                    balance: '80',
+                    strength: null,
+                    storage: makeStorage({ used: '80', cap: '100', stalled: false }),
+                },
+            ],
+        });
+        const { service } = makeService({ cell });
+
+        const status = await service.getStatus('42');
+
+        // Accrual and deposit both exceed the 20 units of remaining room, so claimable is clamped to room.
+        expect(status.claimable).toBe('20');
+        expect(status.stalled).toBe(false);
     });
 
     it('reports inactive when the cell has no mining process', async () => {

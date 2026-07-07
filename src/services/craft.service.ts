@@ -123,6 +123,8 @@ export class CraftService {
                 claimableBatches: 0,
                 startAt: null,
                 durationSec: null,
+                stalled: false,
+                blockedResourceIds: [],
             };
         }
 
@@ -134,6 +136,12 @@ export class CraftService {
                 : process.batches;
         const claimableBatches = Math.max(0, matured - process.claimedBatches);
 
+        const config = await this.appConfig.load();
+        const outputs = config.recipes.find((r) => r.id === process.recipeId)?.outputs ?? [];
+        const blockedResourceIds = outputs
+            .map((o) => o.resourceId)
+            .filter((id) => state.resources.find((r) => r.resourceId === id)?.storage?.stalled === true);
+
         return {
             tokenId,
             active: true,
@@ -144,6 +152,8 @@ export class CraftService {
             claimableBatches,
             startAt: process.startAt,
             durationSec: process.durationSec,
+            stalled: process.stalled,
+            blockedResourceIds,
         };
     }
 

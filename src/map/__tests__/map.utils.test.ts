@@ -79,15 +79,15 @@ describe('buildResourceIndex', () => {
             makeCell({
                 tokenId: '1',
                 resources: [
-                    { resourceId: 1, deposit: '10', balance: '5', strength: 3 },
-                    { resourceId: 2, deposit: '0', balance: '3', strength: null },
+                    { resourceId: 1, deposit: '10', balance: '5', strength: 3, storage: null },
+                    { resourceId: 2, deposit: '0', balance: '3', strength: null, storage: null },
                 ],
             }),
             makeCell({
                 tokenId: '2',
                 x: 1,
                 y: 0,
-                resources: [{ resourceId: 1, deposit: '0', balance: '7', strength: null }],
+                resources: [{ resourceId: 1, deposit: '0', balance: '7', strength: null, storage: null }],
             }),
         ];
 
@@ -151,7 +151,7 @@ describe('summarizeMap', () => {
             makeCell({
                 tokenId: 'm',
                 revealCount: 1,
-                process: { kind: CellProcessKind.Mining, resource: 1, rate: 1, startAt: 1 },
+                process: { kind: CellProcessKind.Mining, resource: 1, rate: 1, startAt: 1, stalled: true },
             }),
             makeCell({
                 tokenId: 'c',
@@ -163,13 +163,14 @@ describe('summarizeMap', () => {
                     claimedBatches: 0,
                     durationSec: 60,
                     startAt: 1,
+                    stalled: false,
                 },
             }),
             makeCell({ tokenId: 'i', revealCount: 1 }),
             makeCell({
                 tokenId: 'd',
                 revealCount: 1,
-                resources: [{ resourceId: 1, deposit: '0', balance: '0', strength: null }],
+                resources: [{ resourceId: 1, deposit: '0', balance: '0', strength: null, storage: null }],
             }),
         ];
 
@@ -178,5 +179,6 @@ describe('summarizeMap', () => {
         expect(summary.myCells).toBe(4);
         expect(summary.myCellsByStatus).toEqual({ idle: 2, mining: 1, crafting: 1 });
         expect(summary.depletedDeposits).toBe(1);
+        expect(summary.stalledCells).toBe(1);
     });
 });

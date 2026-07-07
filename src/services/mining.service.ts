@@ -40,16 +40,32 @@ export class MiningService {
                 startAt: null,
                 claimable: '0',
                 depositRemaining: '0',
+                stalled: false,
+                warehouseUsed: null,
+                warehouseCap: null,
             };
         }
 
-        const deposit = state.resources.find((r) => r.resourceId === process.resource)?.deposit ?? '0';
+        const resource = state.resources.find((r) => r.resourceId === process.resource) ?? null;
+        const deposit = resource?.deposit ?? '0';
+        const storage = resource?.storage ?? null;
         const nowSec = BigInt(Math.floor(Date.now() / 1000));
         const startAt = BigInt(process.startAt);
         const elapsed = nowSec > startAt ? nowSec - startAt : 0n;
         const accrued = BigInt(process.rate) * elapsed;
         const depositRemaining = BigInt(deposit);
-        const claimable = accrued < depositRemaining ? accrued : depositRemaining;
+
+        // On-chain the miner banks min(accrued, deposit, room) where room = cap − used; mirror that so a
+        // full box reports ~0 claimable instead of a phantom amount. A null cap means uncapped (no room limit).
+        let claimable = accrued < depositRemaining ? accrued : depositRemaining;
+        if (storage !== null && storage.cap !== null) {
+            const used = BigInt(storage.used);
+            const cap = BigInt(storage.cap);
+            const room = cap > used ? cap - used : 0n;
+            if (room < claimable) {
+                claimable = room;
+            }
+        }
 
         return {
             tokenId,
@@ -59,6 +75,9 @@ export class MiningService {
             startAt: process.startAt,
             claimable: claimable.toString(),
             depositRemaining: deposit,
+            stalled: process.stalled,
+            warehouseUsed: storage?.used ?? null,
+            warehouseCap: storage?.cap ?? null,
         };
     }
 

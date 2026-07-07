@@ -19,7 +19,7 @@ const CHANGED: EnrichedCell = {
     owner: '0xMe',
     revealCount: 1,
     revealPending: false,
-    resources: [{ resourceId: 4, deposit: '50', balance: '0', strength: null }],
+    resources: [{ resourceId: 4, deposit: '50', balance: '0', strength: null, storage: null }],
     building: null,
     transitFeePerUnit: null,
     process: null,

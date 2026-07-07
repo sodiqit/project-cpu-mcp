@@ -142,6 +142,8 @@ describe('get_craft_status tool', () => {
             claimableBatches: 1,
             startAt: 1000,
             durationSec: 30,
+            stalled: false,
+            blockedResourceIds: [],
         };
         const craft = { getStatus: async (): Promise<CraftStatusResult> => status };
         const context = { craft, appConfig: appConfigStub, logger: new NoopLogger() } as unknown as AppContext;
@@ -164,6 +166,8 @@ describe('get_craft_status tool', () => {
             claimableBatches: 0,
             startAt: null,
             durationSec: null,
+            stalled: false,
+            blockedResourceIds: [],
         };
         const craft = { getStatus: async (): Promise<CraftStatusResult> => status };
         const context = { craft, appConfig: appConfigStub, logger: new NoopLogger() } as unknown as AppContext;

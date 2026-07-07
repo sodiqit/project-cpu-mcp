@@ -16,9 +16,12 @@ export function registerGetMiningStatusTool(server: McpServer, context: AppConte
             if (status.active && status.targetResourceId !== null) {
                 const { resources } = await context.appConfig.load();
                 const depleted = status.depositRemaining === '0' ? ' Deposit depleted.' : '';
+                const stalled = status.stalled
+                    ? ` Warehouse FULL (${status.warehouseUsed}/${status.warehouseCap}) — mining stalled; offload to resume.`
+                    : '';
                 header =
                     `Cell ${status.tokenId} mining ${resourceLabel(resources, status.targetResourceId)}: ` +
-                    `~${status.claimable} claimable now, ${status.depositRemaining} left in deposit.${depleted}`;
+                    `~${status.claimable} claimable now, ${status.depositRemaining} left in deposit.${depleted}${stalled}`;
             } else {
                 header = `Cell ${status.tokenId} has no active mining (no extractor, or the deposit is depleted).`;
             }
