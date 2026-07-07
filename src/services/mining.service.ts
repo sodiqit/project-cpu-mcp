@@ -3,6 +3,7 @@ import { isAddress, parseEventLogs, type Address, type Log } from 'viem';
 import type { MiningClaimResult, MiningServiceOptions, MiningStatusResult, IAppConfig, ICellClient } from './types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
+import { capByRoom } from '../map/storage.utils.js';
 import { CellProcessKind, type RevealCellReader } from '../map/types.js';
 import type { IContractClient, WalletProvider } from '../wallet/types.js';
 
@@ -55,17 +56,10 @@ export class MiningService {
         const accrued = BigInt(process.rate) * elapsed;
         const depositRemaining = BigInt(deposit);
 
-        // On-chain the miner banks min(accrued, deposit, room) where room = cap − used; mirror that so a
-        // full box reports ~0 claimable instead of a phantom amount. A null cap means uncapped (no room limit).
-        let claimable = accrued < depositRemaining ? accrued : depositRemaining;
-        if (storage !== null && storage.cap !== null) {
-            const used = BigInt(storage.used);
-            const cap = BigInt(storage.cap);
-            const room = cap > used ? cap - used : 0n;
-            if (room < claimable) {
-                claimable = room;
-            }
-        }
+        // On-chain the miner banks min(accrued, deposit, room); mirror that so a full box reports ~0
+        // claimable instead of a phantom amount.
+        const bankable = accrued < depositRemaining ? accrued : depositRemaining;
+        const claimable = capByRoom(bankable, storage);
 
         return {
             tokenId,

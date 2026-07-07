@@ -13,11 +13,30 @@ import type {
     IAppConfig,
     ICellClient,
 } from './types.js';
+import type { CraftStackView } from '../api/types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
-import { CellProcessKind, type RevealCellReader } from '../map/types.js';
+import { warehouseRoom } from '../map/storage.utils.js';
+import { type CellResource, CellProcessKind, type RevealCellReader } from '../map/types.js';
 import { cpuFromWei } from '../utils/format.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
+
+// Whole batches that fit given the room in every output box (min over outputs); null when no output is
+// capped (unbounded). Mirrors the on-chain fitByRoom = min(room[out] / outputAmount).
+function fitBatchesByRoom(outputs: Array<CraftStackView>, resources: Array<CellResource>): number | null {
+    let fit: bigint | null = null;
+    for (const out of outputs) {
+        const storage = resources.find((r) => r.resourceId === out.resourceId)?.storage ?? null;
+        const room = warehouseRoom(storage);
+        if (room === null) {
+            continue;
+        }
+        const amount = BigInt(out.amount);
+        const batches = amount > 0n ? room / amount : room;
+        fit = fit === null || batches < fit ? batches : fit;
+    }
+    return fit === null ? null : Number(fit);
+}
 
 export class CraftService {
     private readonly wallet: WalletProvider;
@@ -134,10 +153,13 @@ export class CraftService {
             process.durationSec > 0
                 ? Math.min(process.batches, Math.floor(elapsed / process.durationSec))
                 : process.batches;
-        const claimableBatches = Math.max(0, matured - process.claimedBatches);
-
         const config = await this.appConfig.load();
         const outputs = config.recipes.find((r) => r.id === process.recipeId)?.outputs ?? [];
+        // Matured batches only bank while every output fits; mirror the on-chain fitByRoom so a full
+        // output box reports 0 claimable instead of a phantom count (same room shape as mining).
+        const matureClaimable = Math.max(0, matured - process.claimedBatches);
+        const batchesThatFit = fitBatchesByRoom(outputs, state.resources);
+        const claimableBatches = batchesThatFit === null ? matureClaimable : Math.min(matureClaimable, batchesThatFit);
         const blockedResourceIds = outputs
             .map((o) => o.resourceId)
             .filter((id) => state.resources.find((r) => r.resourceId === id)?.storage?.stalled === true);

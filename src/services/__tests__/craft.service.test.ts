@@ -170,6 +170,9 @@ describe('CraftService.getStatus', () => {
 
         expect(status.stalled).toBe(true);
         expect(status.blockedResourceIds).toEqual([101]);
+        // The single output box is full, so no matured batch fits — claimable is clamped to 0.
+        expect(status.claimableBatches).toBe(0);
+        expect(status.maturedBatches).toBe(2);
     });
 });
 
