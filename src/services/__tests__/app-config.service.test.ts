@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ApiClient } from '../../api/client.js';
-import { type AppConfigResponse, BuildingType, CraftCategory, CraftRecipeId } from '../../api/types.js';
+import { type AppConfigResponse, BuildingKind, BuildingType, CraftRecipeId } from '../../api/types.js';
 import { Network } from '../../config/types.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import { AppConfigService } from '../app-config.service.js';
@@ -34,9 +34,22 @@ function makeResponse(overrides: Partial<AppConfigResponse> = {}): AppConfigResp
             trade: '0x8888888888888888888888888888888888888888',
             ...overrides.contracts,
         },
-        resources: { 3: 'Silica' },
+        resources: { 5: 'Iron' },
         recipes: [],
-        buildings: [{ type: BuildingType.Extractor, name: 'Extractor', buildCost: '2000' }],
+        buildings: [
+            {
+                type: BuildingType.Mine,
+                onChainId: 4,
+                name: 'Mine',
+                kind: BuildingKind.Extractor,
+                tier: 1,
+                buildCost: '5',
+                buildTimeSec: 120,
+                buildInputs: [],
+                minableResources: [5, 6],
+                recipes: [],
+            },
+        ],
         reveal: { firstFree: true, reRevealCost: '1000' },
         ...overrides,
     };
@@ -63,18 +76,17 @@ describe('AppConfigService', () => {
         expect(first.network).toBe(Network.ETHEREUM);
         expect(first.contracts.cell).toBe(CELL);
         expect(first.contracts.cpuHook).toBe(CPU_HOOK);
-        expect(first.resources[3]).toBe('Silica');
+        expect(first.resources[5]).toBe('Iron');
         expect(second).toBe(first);
     });
 
     it('passes recipes through and defaults them to an empty array when absent', async () => {
         const recipe = {
-            id: CraftRecipeId.GeneratePower,
-            name: 'Generate Power',
-            category: CraftCategory.Refine,
+            id: CraftRecipeId.SmeltSteel,
+            name: 'Smelt Steel',
             tier: 2,
-            inputs: [{ resourceId: 6, amount: 5 }],
-            outputs: [{ resourceId: 101, amount: 10 }],
+            inputs: [{ resourceId: 5, amount: 4 }],
+            outputs: [{ resourceId: 102, amount: 2 }],
             durationSec: 30,
             costCpu: '0',
         };

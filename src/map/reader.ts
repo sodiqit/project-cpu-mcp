@@ -19,6 +19,7 @@ import {
 export interface AttentionOptions {
     nearFullPct: number;
     craftOutputsByRecipe: Record<string, Array<number>>;
+    extractorBuildingTypes: Set<string>;
 }
 
 const LOADING_NOTE = 'Map is still loading; data may be incomplete. Retry shortly.';
@@ -88,6 +89,7 @@ export class MapReader {
             serverTime: this.store.getServerTime(),
             nearFullPct: options.nearFullPct,
             craftOutputsByRecipe: options.craftOutputsByRecipe,
+            extractorBuildingTypes: options.extractorBuildingTypes,
         });
     }
 

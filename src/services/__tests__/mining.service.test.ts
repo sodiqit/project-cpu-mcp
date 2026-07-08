@@ -1,11 +1,13 @@
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, type Address, type Hex, type Log } from 'viem';
 import { describe, expect, it } from 'vitest';
 
+import { BuildingType } from '../../api/types.js';
 import { CELL_ABI } from '../../contracts/cell.abi.js';
-import { makeCell, makeStorage } from '../../map/__tests__/fixtures.js';
-import { CellProcessKind } from '../../map/types.js';
+import { makeCell, makeResource, makeStorage } from '../../map/__tests__/fixtures.js';
+import { CellProcessKind, type CellState } from '../../map/types.js';
 import { MiningService } from '../mining.service.js';
-import { CELL, makeCellHarness, WALLET_ADDRESS } from './service-fakes.js';
+import type { AppConfig } from '../types.js';
+import { CELL, makeCellHarness, makeConfig, WALLET_ADDRESS } from './service-fakes.js';
 
 function makeService(opts: Parameters<typeof makeCellHarness>[1] = {}) {
     return makeCellHarness((deps) => new MiningService(deps), opts);
@@ -143,5 +145,84 @@ describe('MiningService.claim', () => {
         const { service, contracts } = makeService({ walletChainId: 8453 });
         await expect(service.claim('42')).rejects.toThrow(/chain mismatch/i);
         expect(contracts.sent).toHaveLength(0);
+    });
+});
+
+// A ready Mine (mines Iron=5 / Copper=6 in makeConfig) on an owned cell with an Iron deposit.
+function mineCell(overrides: Partial<CellState> = {}): CellState {
+    return makeCell({
+        tokenId: '42',
+        owner: WALLET_ADDRESS,
+        building: { type: BuildingType.Mine, buildFinishAt: null },
+        resources: [makeResource({ resourceId: 5, deposit: '1000' })],
+        ...overrides,
+    });
+}
+
+describe('MiningService.startMining', () => {
+    it('starts extraction of a valid target on a ready extractor', async () => {
+        const { service, contracts } = makeService({ cell: mineCell() });
+
+        const result = await service.startMining({ tokenId: '42', targetResourceId: 5 });
+
+        expect(contracts.sent).toHaveLength(1);
+        const call = decodeFunctionData({ abi: CELL_ABI, data: contracts.sent[0]?.data as Hex });
+        expect(call.functionName).toBe('startMining');
+        expect(call.args).toEqual([42n, 5]);
+        expect(result.targetResourceId).toBe(5);
+    });
+
+    it('rejects a target the extractor cannot mine', async () => {
+        const { service, contracts } = makeService({ cell: mineCell() });
+        await expect(service.startMining({ tokenId: '42', targetResourceId: 102 })).rejects.toThrow(/cannot mine/i);
+        expect(contracts.sent).toHaveLength(0);
+    });
+
+    it('requires an explicit target when the extractor mines multiple resources', async () => {
+        const { service } = makeService({ cell: mineCell() });
+        await expect(service.startMining({ tokenId: '42', targetResourceId: null })).rejects.toThrow(
+            /pass targetResourceId/i,
+        );
+    });
+
+    it('auto-picks the sole minable resource when the target is omitted', async () => {
+        const config: AppConfig = makeConfig();
+        config.buildings = config.buildings.map((b) =>
+            b.type === BuildingType.Mine ? { ...b, minableResources: [5] } : b,
+        );
+        const { service, contracts } = makeService({ cell: mineCell(), config });
+
+        const result = await service.startMining({ tokenId: '42', targetResourceId: null });
+
+        expect(result.targetResourceId).toBe(5);
+        expect(contracts.sent).toHaveLength(1);
+    });
+
+    it('rejects while the extractor is still under construction', async () => {
+        const future = Math.floor(Date.now() / 1000) + 3600;
+        const cell = mineCell({ building: { type: BuildingType.Mine, buildFinishAt: future } });
+        const { service, contracts } = makeService({ cell });
+        await expect(service.startMining({ tokenId: '42', targetResourceId: 5 })).rejects.toThrow(
+            /still under construction/i,
+        );
+        expect(contracts.sent).toHaveLength(0);
+    });
+
+    it('rejects when the building is a crafter, not an extractor', async () => {
+        const cell = mineCell({ building: { type: BuildingType.SteelMill, buildFinishAt: null } });
+        const { service } = makeService({ cell });
+        await expect(service.startMining({ tokenId: '42', targetResourceId: 5 })).rejects.toThrow(/not an extractor/i);
+    });
+
+    it('rejects when the cell has no live deposit for the target', async () => {
+        const cell = mineCell({ resources: [makeResource({ resourceId: 5, deposit: '0' })] });
+        const { service } = makeService({ cell });
+        await expect(service.startMining({ tokenId: '42', targetResourceId: 5 })).rejects.toThrow(/no .*deposit/i);
+    });
+
+    it('rejects a start on a cell owned by someone else', async () => {
+        const cell = mineCell({ owner: '0xother' });
+        const { service } = makeService({ cell });
+        await expect(service.startMining({ tokenId: '42', targetResourceId: 5 })).rejects.toThrow(/do not own/i);
     });
 });

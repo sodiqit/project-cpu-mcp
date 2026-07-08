@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it } from 'vitest';
 
-import { CraftCategory, CraftRecipeId, type RecipeView } from '../../../api/types.js';
+import { CraftRecipeId, type RecipeView } from '../../../api/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
 import type { CraftClaimResult, CraftStartResult, CraftStatusResult } from '../../../services/types.js';
 import type { AppContext } from '../../../types.js';
@@ -17,20 +17,18 @@ interface ToolResult {
 
 type Handler = (args: Record<string, unknown>) => Promise<ToolResult>;
 
-const POWER_RECIPE: RecipeView = {
-    id: CraftRecipeId.GeneratePower,
-    name: 'Generate Power',
-    category: CraftCategory.Refine,
+const STEEL_RECIPE: RecipeView = {
+    id: CraftRecipeId.SmeltSteel,
+    name: 'Smelt Steel',
     tier: 2,
-    inputs: [{ resourceId: 6, amount: 5 }],
-    outputs: [{ resourceId: 101, amount: 10 }],
+    inputs: [{ resourceId: 5, amount: 4 }],
+    outputs: [{ resourceId: 102, amount: 2 }],
     durationSec: 30,
     costCpu: '0',
 };
 const FORGE_RECIPE: RecipeView = {
     id: CraftRecipeId.ForgeWcpu,
     name: 'CPU Forge',
-    category: CraftCategory.Forge,
     tier: 5,
     inputs: [{ resourceId: 100, amount: 50 }],
     outputs: [{ resourceId: 1, amount: 1 }],
@@ -40,8 +38,8 @@ const FORGE_RECIPE: RecipeView = {
 
 const appConfigStub = {
     load: async (): Promise<{ resources: Record<number, string>; recipes: Array<RecipeView> }> => ({
-        resources: { 1: 'WCPU', 6: 'Coal', 100: 'Pure Silicon', 101: 'Power' },
-        recipes: [POWER_RECIPE, FORGE_RECIPE],
+        resources: { 1: 'WCPU', 5: 'Iron', 100: 'Energy', 102: 'Steel' },
+        recipes: [STEEL_RECIPE, FORGE_RECIPE],
     }),
 };
 
@@ -69,18 +67,18 @@ describe('craft tool', () => {
     it('summarizes a free craft', async () => {
         const result = await craftHarness({
             tokenId: '42',
-            recipeId: CraftRecipeId.GeneratePower,
+            recipeId: CraftRecipeId.SmeltSteel,
             batches: 2,
             costCpu: '0',
             approveTxHash: null,
             txHash: `0x${'1'.repeat(64)}`,
             status: TxStatus.Success,
             blockNumber: '100',
-        })({ tokenId: '42', recipeId: CraftRecipeId.GeneratePower, batches: 2 });
+        })({ tokenId: '42', recipeId: CraftRecipeId.SmeltSteel, batches: 2 });
 
         const header = result.content[0]?.text ?? '';
         expect(header).toMatch(/Craft started/i);
-        expect(header).toMatch(/2× generate_power \(free\)/);
+        expect(header).toMatch(/2× smelt_steel \(free\)/);
         expect(header).toMatch(/claim_craft 42/);
     });
 
@@ -110,7 +108,7 @@ describe('craft tool', () => {
         };
         const context = { craft, appConfig: appConfigStub, logger: new NoopLogger() } as unknown as AppContext;
         const handler = capture(registerCraftTool, context);
-        await expect(handler({ tokenId: '42', recipeId: CraftRecipeId.GeneratePower, batches: 1 })).rejects.toThrow(
+        await expect(handler({ tokenId: '42', recipeId: CraftRecipeId.SmeltSteel, batches: 1 })).rejects.toThrow(
             /craftRejected/,
         );
     });
@@ -123,9 +121,7 @@ describe('list_recipes tool', () => {
 
         const result = await handler({});
         const header = result.content[0]?.text ?? '';
-        expect(header).toMatch(
-            /Generate Power \(generate_power\): 5 Coal \(#6\) → 10 Power \(#101\), ~30s\/batch, free/,
-        );
+        expect(header).toMatch(/Smelt Steel \(smelt_steel\): 4 Iron \(#5\) → 2 Steel \(#102\), ~30s\/batch, free/);
         expect(header).toMatch(/CPU Forge \(forge_wcpu\):.*~1h\/batch, 100 \$CPU\/batch/);
     });
 });
@@ -135,7 +131,7 @@ describe('get_craft_status tool', () => {
         const status: CraftStatusResult = {
             tokenId: '42',
             active: true,
-            recipeId: CraftRecipeId.GeneratePower,
+            recipeId: CraftRecipeId.SmeltSteel,
             batches: 2,
             claimedBatches: 0,
             maturedBatches: 1,
@@ -182,9 +178,9 @@ describe('claim_craft tool', () => {
     it('reports the claimed resources', async () => {
         const claim: CraftClaimResult = {
             tokenId: '42',
-            recipeId: CraftRecipeId.GeneratePower,
+            recipeId: CraftRecipeId.SmeltSteel,
             batches: 1,
-            outputs: [{ resourceId: 101, amount: '20' }],
+            outputs: [{ resourceId: 102, amount: '20' }],
             txHash: `0x${'1'.repeat(64)}`,
             status: TxStatus.Success,
             blockNumber: '100',
@@ -194,7 +190,7 @@ describe('claim_craft tool', () => {
         const handler = capture(registerClaimCraftTool, context);
 
         const result = await handler({ tokenId: '42' });
-        expect(result.content[0]?.text).toMatch(/Claimed 1 batch\(es\) → 20 Power \(#101\)/);
+        expect(result.content[0]?.text).toMatch(/Claimed 1 batch\(es\) → 20 Steel \(#102\)/);
     });
 
     it('reports a no-op claim when nothing matured', async () => {

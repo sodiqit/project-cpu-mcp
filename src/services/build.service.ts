@@ -1,6 +1,5 @@
-import { isAddress, parseEther, type Address, type Hash } from 'viem';
+import { isAddress, parseEther, type Address } from 'viem';
 
-import { BUILDING_ON_CHAIN_ID } from './cell.constants.js';
 import type {
     AppConfig,
     BuildInput,
@@ -13,7 +12,7 @@ import type {
     IAppConfig,
     ICellClient,
 } from './types.js';
-import { BuildingType } from '../api/types.js';
+import type { BuildingType, BuildingView } from '../api/types.js';
 import type { ILogger } from '../logger/types.js';
 import type { CellState, RevealCellReader } from '../map/types.js';
 import { cpuFromWei } from '../utils/format.utils.js';
@@ -54,16 +53,13 @@ export class BuildService {
         const placement: BuildPlacement = alreadyBuilt
             ? { buildTxHash: null, approveTxHash: null, buildCost: '0' }
             : await this.placeBuilding(config, cell, cpuToken, input, tokenId);
-        const miningTxHash = await this.startExtractorMining(cell, tokenId, input);
 
         return {
             tokenId: input.tokenId,
             buildingType: input.buildingType,
-            targetResourceId: input.targetResourceId,
             buildCost: placement.buildCost,
             approveTxHash: placement.approveTxHash,
             buildTxHash: placement.buildTxHash,
-            miningTxHash,
             alreadyBuilt,
         };
     }
@@ -121,33 +117,21 @@ export class BuildService {
         input: BuildInput,
         tokenId: bigint,
     ): Promise<BuildPlacement> {
-        const costWei = this.costWeiForBuilding(config, input.buildingType);
+        const view = this.buildingView(config, input.buildingType);
+        const costWei = parseEther(view.buildCost);
         const approveTxHash = costWei > 0n ? await this.allowance.ensureAllowance(cpuToken, cell, costWei) : null;
 
         this.logger.info('placing building', {
             tokenId: input.tokenId,
             buildingType: input.buildingType,
+            onChainId: view.onChainId,
             costWei: costWei.toString(),
             network: config.network,
         });
-        const buildTxHash = await this.cellClient.place({
-            cell,
-            tokenId,
-            buildingType: BUILDING_ON_CHAIN_ID[input.buildingType],
-        });
+        const buildTxHash = await this.cellClient.place({ cell, tokenId, buildingType: view.onChainId });
         await this.contracts.confirm(buildTxHash, 'Build transaction');
 
         return { buildTxHash, approveTxHash, buildCost: cpuFromWei(costWei.toString()) };
-    }
-
-    private async startExtractorMining(cell: Address, tokenId: bigint, input: BuildInput): Promise<Hash | null> {
-        if (input.buildingType !== BuildingType.Extractor || input.targetResourceId === null) {
-            return null;
-        }
-        this.logger.info('starting mining', { tokenId: input.tokenId, target: input.targetResourceId });
-        const miningTxHash = await this.cellClient.startMining({ cell, tokenId, target: input.targetResourceId });
-        await this.contracts.confirm(miningTxHash, 'Start mining');
-        return miningTxHash;
     }
 
     private assertChain(config: AppConfig, wallet: WalletManager): void {
@@ -174,11 +158,11 @@ export class BuildService {
         return cpuToken;
     }
 
-    private costWeiForBuilding(config: AppConfig, buildingType: BuildingType): bigint {
+    private buildingView(config: AppConfig, buildingType: BuildingType): BuildingView {
         const view = config.buildings.find((b) => b.type === buildingType);
         if (view === undefined) {
-            throw new Error(`No build cost is configured for a ${buildingType} on network ${config.network}.`);
+            throw new Error(`No catalog entry for a ${buildingType} on network ${config.network}.`);
         }
-        return parseEther(view.buildCost);
+        return view;
     }
 }

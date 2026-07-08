@@ -51,7 +51,7 @@ export interface AppConfig {
     /** Resource id → display name, served alongside the chain config. */
     resources: Record<number, string>;
     recipes: Array<RecipeView>;
-    /** Build-cost catalog (extractor / hub), human-readable $CPU. */
+    /** Per-building catalog — on-chain id, kind, costs, and mine/craft bindings. */
     buildings: Array<BuildingView>;
     /** First-reveal-free + re-reveal cost params. */
     reveal: RevealCostView;
@@ -176,18 +176,15 @@ export interface BuildServiceOptions {
 export interface BuildInput {
     tokenId: string;
     buildingType: BuildingType;
-    targetResourceId: number | null;
 }
 
 export interface BuildResult {
     tokenId: string;
     buildingType: BuildingType;
-    targetResourceId: number | null;
     /** Build cost in $CPU (decimal). */
     buildCost: string;
     approveTxHash: Hash | null;
     buildTxHash: Hash | null;
-    miningTxHash: Hash | null;
     alreadyBuilt: boolean;
 }
 
@@ -262,6 +259,22 @@ export interface MiningClaimResult {
     tokenId: string;
     resourceId: number | null;
     claimedAmount: string;
+    txHash: Hash;
+    status: TxStatus;
+    blockNumber: string;
+}
+
+export interface StartMiningInput {
+    tokenId: string;
+    /** Resource id to mine; null defaults to the extractor's sole minable resource. */
+    targetResourceId: number | null;
+}
+
+export interface StartMiningResult {
+    tokenId: string;
+    targetResourceId: number;
+    /** Per-second rate snapshot from the on-chain MiningStarted event; null if not decodable. */
+    rate: number | null;
     txHash: Hash;
     status: TxStatus;
     blockNumber: string;

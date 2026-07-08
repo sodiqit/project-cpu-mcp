@@ -8,7 +8,6 @@ import {
     type CellState,
     CellProcessKind,
 } from './types.js';
-import { BuildingType } from '../api/types.js';
 
 const { Critical, Warning, Info } = AttentionSeverity;
 
@@ -32,6 +31,8 @@ export interface BuildAttentionInput {
     nearFullPct: number;
     // recipeId → its output resourceIds; lets craft signals stay precise without the map layer knowing recipes.
     craftOutputsByRecipe: Record<string, Array<number>>;
+    // Building types whose kind is `extractor`; injected so the map layer stays config-agnostic.
+    extractorBuildingTypes: Set<string>;
 }
 
 // Every item shares this shape; a reason + coords + a few `extra` fields is all that varies.
@@ -88,9 +89,9 @@ function producedResourceIds(cell: CellState, craftOutputsByRecipe: Record<strin
     return new Set();
 }
 
-function isOperationalExtractor(cell: CellState, serverTime: number): boolean {
+function isOperationalExtractor(cell: CellState, serverTime: number, extractorTypes: Set<string>): boolean {
     const building = cell.building;
-    if (building?.type !== BuildingType.Extractor) {
+    if (building === null || !extractorTypes.has(building.type)) {
         return false;
     }
     return building.buildFinishAt === null || building.buildFinishAt <= serverTime;
@@ -120,7 +121,7 @@ function cellItems(cell: CellState, input: BuildAttentionInput): Array<Attention
         }
     }
 
-    if (isOperationalExtractor(cell, input.serverTime) && isDepleted(cell)) {
+    if (isOperationalExtractor(cell, input.serverTime, input.extractorBuildingTypes) && isDepleted(cell)) {
         const target = cell.process?.kind === CellProcessKind.Mining ? cell.process.resource : null;
         items.push(attentionItem(cell, AttentionReason.DepositDepleted, { resourceId: target, depositRemaining: '0' }));
     }

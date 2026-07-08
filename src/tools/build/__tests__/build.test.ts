@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { BuildingType } from '../../../api/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
+import { makeConfig } from '../../../services/__tests__/service-fakes.js';
 import type { BuildResult } from '../../../services/types.js';
 import type { AppContext } from '../../../types.js';
 import { registerBuildTool } from '../build.js';
@@ -11,7 +12,7 @@ interface ToolResult {
     content: Array<{ type: string; text: string }>;
 }
 
-type BuildArgs = { tokenId: string; buildingType: BuildingType; targetResourceId: number | null };
+type BuildArgs = { tokenId: string; buildingType: BuildingType };
 type Handler = (args: BuildArgs) => Promise<ToolResult>;
 
 function harness(outcome: BuildResult | Error): Handler {
@@ -23,9 +24,7 @@ function harness(outcome: BuildResult | Error): Handler {
             return outcome;
         },
     };
-    const appConfig = {
-        load: async (): Promise<{ resources: Record<number, string> }> => ({ resources: { 3: 'Silica' } }),
-    };
+    const appConfig = { load: async () => makeConfig() };
     const context = { build, appConfig, logger: new NoopLogger() } as unknown as AppContext;
 
     let captured: Handler | null = null;
@@ -42,74 +41,74 @@ function harness(outcome: BuildResult | Error): Handler {
     return captured;
 }
 
-const extractorResult: BuildResult = {
+const mineResult: BuildResult = {
     tokenId: '42',
-    buildingType: BuildingType.Extractor,
-    targetResourceId: 3,
-    buildCost: '2000',
+    buildingType: BuildingType.Mine,
+    buildCost: '5',
     approveTxHash: '0xapprove',
     buildTxHash: '0xbuild',
-    miningTxHash: '0xmine',
     alreadyBuilt: false,
 };
 
 describe('build tool', () => {
-    it('reports the resource name, $CPU paid, and a mining follow-up for an extractor', async () => {
-        const result = await harness(extractorResult)({
-            tokenId: '42',
-            buildingType: BuildingType.Extractor,
-            targetResourceId: 3,
-        });
+    it('reports $CPU paid and a start-mining follow-up (with mine targets) for an extractor', async () => {
+        const result = await harness(mineResult)({ tokenId: '42', buildingType: BuildingType.Mine });
 
         const header = result.content[0]?.text ?? '';
-        expect(header).toMatch(/Silica \(#3\)/);
+        expect(header).toMatch(/Mine/);
         expect(header).toMatch(/approve tx 0xapprove/);
-        expect(header).toMatch(/2000 \$CPU/);
-        expect(header).toMatch(/mining started \(tx 0xmine\)/);
-        expect(header).toMatch(/get_mining_status 42/);
+        expect(header).toMatch(/5 \$CPU/);
+        expect(header).toMatch(/cpu_start_mining 42/);
+        // Mine mines Iron/Copper in the fixture.
+        expect(header).toMatch(/Iron \(#5\)/);
+        expect(header).not.toMatch(/mining started/);
+    });
 
-        const parsed = JSON.parse(result.content[1]?.text ?? '{}') as BuildResult;
-        expect(parsed.targetResourceId).toBe(3);
+    it('reports a crafter with a cpu_craft follow-up listing its recipe', async () => {
+        const result = await harness({
+            ...mineResult,
+            buildingType: BuildingType.SteelMill,
+            buildCost: '20',
+        })({ tokenId: '42', buildingType: BuildingType.SteelMill });
+
+        const header = result.content[0]?.text ?? '';
+        expect(header).toMatch(/Steel Mill/);
+        expect(header).toMatch(/cpu_craft 42/);
+        expect(header).toMatch(/Smelt Steel \(smelt_steel\)/);
     });
 
     it('reports a hub with no approve mention and a get_cell follow-up', async () => {
         const result = await harness({
-            ...extractorResult,
+            ...mineResult,
             buildingType: BuildingType.Hub,
-            targetResourceId: null,
             approveTxHash: null,
-            buildCost: '5000',
-            miningTxHash: null,
-        })({ tokenId: '42', buildingType: BuildingType.Hub, targetResourceId: null });
+            buildCost: '40',
+        })({ tokenId: '42', buildingType: BuildingType.Hub });
 
         const header = result.content[0]?.text ?? '';
-        expect(header).toMatch(/hub/);
-        expect(header).toMatch(/5000 \$CPU/);
-        expect(header).toMatch(/get_cell 42/);
+        expect(header).toMatch(/routes transport and trade/);
+        expect(header).toMatch(/40 \$CPU/);
+        expect(header).toMatch(/cpu_get_cell 42/);
         expect(header).not.toMatch(/approve/i);
     });
 
     it('notes when the building was already in place', async () => {
         const result = await harness({
-            ...extractorResult,
+            ...mineResult,
             approveTxHash: null,
             buildTxHash: null,
             buildCost: '0',
             alreadyBuilt: true,
-        })({ tokenId: '42', buildingType: BuildingType.Extractor, targetResourceId: 3 });
+        })({ tokenId: '42', buildingType: BuildingType.Mine });
 
         const header = result.content[0]?.text ?? '';
         expect(header).toMatch(/already in place/);
-        expect(header).toMatch(/mining started/);
+        expect(header).toMatch(/cpu_start_mining 42/);
     });
 
     it('propagates service errors', async () => {
         await expect(
-            harness(new Error('CellNotRevealed'))({
-                tokenId: '42',
-                buildingType: BuildingType.Extractor,
-                targetResourceId: 3,
-            }),
+            harness(new Error('CellNotRevealed'))({ tokenId: '42', buildingType: BuildingType.Mine }),
         ).rejects.toThrow(/CellNotRevealed/);
     });
 });

@@ -90,7 +90,7 @@ function harness(opts: Partial<HarnessOpts> = {}): Handler {
     };
     const wallet = { isReady: () => walletReady, get: () => ({ getAddress: () => '0xMe' }) };
     const appConfig = {
-        load: async () => ({ resources: { 3: 'Silica', 101: 'Power' }, recipes: [] }),
+        load: async () => ({ resources: { 3: 'Silica', 101: 'Power' }, recipes: [], buildings: [] }),
     };
     const transport = {
         listReadyToFinalizeForOwner: opts.deliveries ?? (async () => []),
