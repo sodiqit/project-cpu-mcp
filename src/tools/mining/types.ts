@@ -18,5 +18,7 @@ export const startMiningInputSchema = {
 };
 
 export const claimMiningInputSchema = {
-    tokenId: z.string().describe('The tokenId of a cell you own with an extractor, to bank its accrued resources.'),
+    tokenId: z
+        .string()
+        .describe('The tokenId of a cell you own with an extractor, to bank its matured mining batches.'),
 };

@@ -22,3 +22,14 @@ export function cpuFromWei(wei: string): string {
 export function formatUnixSeconds(seconds: number): string {
     return `${new Date(seconds * 1000).toISOString().slice(0, 19).replace('T', ' ')} UTC`;
 }
+
+/** Compact duration: `45s`, `3m`, `1.5h`. Shared by craft (per-batch) and mining (per-cycle) display. */
+export function formatDuration(sec: number): string {
+    if (sec < 60) {
+        return `${sec}s`;
+    }
+    if (sec < 3600) {
+        return `${Math.round(sec / 60)}m`;
+    }
+    return `${(sec / 3600).toFixed(sec % 3600 === 0 ? 0 : 1)}h`;
+}

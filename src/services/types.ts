@@ -244,8 +244,14 @@ export interface MiningStatusResult {
     tokenId: string;
     active: boolean;
     targetResourceId: number | null;
-    rate: number | null;
+    // Units produced per matured cycle, and the cycle length; null when no extractor is active.
+    batch: number | null;
+    durationSec: number | null;
     startAt: number | null;
+    // Whole cycles matured since `startAt` (before the deposit/room cap).
+    cyclesMatured: number;
+    // Seconds until the next cycle matures; null when inactive, stalled, or the deposit is depleted.
+    nextBatchInSec: number | null;
     claimable: string;
     depositRemaining: string;
     // Production halted because the mined resource's warehouse is full (server-authoritative).
@@ -273,8 +279,9 @@ export interface StartMiningInput {
 export interface StartMiningResult {
     tokenId: string;
     targetResourceId: number;
-    /** Per-second rate snapshot from the on-chain MiningStarted event; null if not decodable. */
-    rate: number | null;
+    /** Cycle length and per-cycle batch snapshot from the on-chain MiningStarted event; null if not decodable. */
+    batch: number | null;
+    durationSec: number | null;
     txHash: Hash;
     status: TxStatus;
     blockNumber: string;

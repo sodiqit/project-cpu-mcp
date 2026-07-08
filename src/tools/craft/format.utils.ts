@@ -1,22 +1,12 @@
 import type { CraftStackView, RecipeView } from '../../api/types.js';
 import type { CraftClaimResult, CraftStartResult, CraftStatusResult } from '../../services/types.js';
-import { resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
+import { formatDuration, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
 
 function formatStacks(stacks: Array<CraftStackView>, resources: ResourceNames): string {
     if (stacks.length === 0) {
         return 'nothing';
     }
     return stacks.map((s) => `${s.amount} ${resourceLabel(resources, s.resourceId)}`).join(' + ');
-}
-
-function formatDuration(sec: number): string {
-    if (sec < 60) {
-        return `${sec}s`;
-    }
-    if (sec < 3600) {
-        return `${Math.round(sec / 60)}m`;
-    }
-    return `${(sec / 3600).toFixed(sec % 3600 === 0 ? 0 : 1)}h`;
 }
 
 function formatCost(costCpu: string): string {

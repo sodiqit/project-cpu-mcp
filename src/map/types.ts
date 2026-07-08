@@ -38,7 +38,9 @@ export const cellBuildingViewSchema = z.object({
 export const cellProcessMiningViewSchema = z.object({
     kind: z.literal(CellProcessKind.Mining),
     resource: z.number(),
-    rate: z.number(),
+    // An extractor mines in whole cycles: each `durationSec` cycle yields a fixed `batch` of units.
+    durationSec: z.number(),
+    batch: z.number(),
     startAt: z.number(),
     // Mirrors the mined resource's warehouse: production halts while its box is full.
     stalled: z.boolean().default(false),

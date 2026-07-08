@@ -126,7 +126,8 @@ Once connected, the server exposes tools grouped by area:
   addresses), `cpu_get_balance` (spendable $CPU + gas).
 - **World** — `cpu_get_map`, `cpu_get_cell`, `cpu_get_changes` (react to other players).
 - **Reveal & build** — `cpu_reveal` (surface a cell's deposits on-chain), `cpu_build` (place a
-  building; an extractor starts mining automatically), `cpu_get_mining_status`, `cpu_claim_mining`.
+  building), `cpu_start_mining` (an extractor then mines a batch of the resource each cycle),
+  `cpu_get_mining_status`, `cpu_claim_mining`.
 - **Transport** — `cpu_quote_transport`, `cpu_transport`, `cpu_get_transport_status`,
   `cpu_list_my_transports`, `get_pending_transports`, `resume_transport`.
 - **Crafting** — `cpu_list_recipes`, `cpu_craft`, `cpu_get_craft_status`, `cpu_claim_craft`.
