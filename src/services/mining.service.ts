@@ -196,23 +196,23 @@ export class MiningService {
 
     private pickTarget(view: BuildingView, requested: number | null, config: AppConfig): number {
         const minable = view.minableResources;
-        if (requested !== null) {
-            if (!minable.includes(requested)) {
-                const options = minable.map((id) => resourceLabel(config.resources, id)).join(', ');
-                throw new Error(
-                    `The ${view.name} cannot mine ${resourceLabel(config.resources, requested)}; it mines: ${options}.`,
-                );
+        const mines = () => minable.map((id) => resourceLabel(config.resources, id)).join(', ');
+
+        if (requested === null) {
+            const [sole, ...rest] = minable;
+            if (sole !== undefined && rest.length === 0) {
+                return sole;
             }
-            return requested;
+            throw new Error(
+                `The ${view.name} mines several resources (${mines()}); pass targetResourceId to pick one.`,
+            );
         }
-        const [sole] = minable;
-        if (sole !== undefined && minable.length === 1) {
-            return sole;
+        if (!minable.includes(requested)) {
+            throw new Error(
+                `The ${view.name} cannot mine ${resourceLabel(config.resources, requested)}; it mines: ${mines()}.`,
+            );
         }
-        const options = minable.map((id) => resourceLabel(config.resources, id)).join(', ');
-        throw new Error(
-            `The ${view.name} can mine multiple resources (${options}); pass targetResourceId to pick one.`,
-        );
+        return requested;
     }
 
     private decodeMined(logs: Array<Log>, cell: Address): { resource: number; amount: bigint } | null {

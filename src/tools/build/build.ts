@@ -1,11 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { formatDistanceStrict } from 'date-fns';
 
 import { BUILD_DESCRIPTION } from './constants.js';
 import { buildInputSchema } from './types.js';
 import { BuildingKind, type BuildingView } from '../../api/types.js';
 import type { AppConfig } from '../../services/types.js';
 import type { AppContext } from '../../types.js';
-import { formatDuration, resourceLabel } from '../../utils/format.utils.js';
+import { resourceLabel } from '../../utils/format.utils.js';
 
 export function registerBuildTool(server: McpServer, context: AppContext): void {
     server.registerTool(
@@ -42,16 +43,21 @@ function nextStep(view: BuildingView | null, config: AppConfig, tokenId: string)
     if (view === null) {
         return `Inspect it with cpu_get_cell ${tokenId}.`;
     }
-    const ready = view.buildTimeSec > 0 ? `It finishes building in ~${formatDuration(view.buildTimeSec)}; ` : '';
+    const ready =
+        view.buildTimeSec > 0 ? `Finishes building in ${formatDistanceStrict(0, view.buildTimeSec * 1000)}; ` : '';
+    return ready + action(view, config, tokenId);
+}
+
+function action(view: BuildingView, config: AppConfig, tokenId: string): string {
     if (view.kind === BuildingKind.Extractor) {
         const mines = view.minableResources.map((id) => resourceLabel(config.resources, id)).join(', ');
-        return `${ready}once ready, start extraction with cpu_start_mining ${tokenId} (mines: ${mines}).`;
+        return `once ready, start extraction with cpu_start_mining ${tokenId} (mines: ${mines}).`;
     }
     if (view.kind === BuildingKind.Crafter) {
         const recipes = view.recipes.map((id) => recipeName(config, id)).join(', ');
-        return `${ready}once ready, run a recipe with cpu_craft ${tokenId} (recipes: ${recipes}).`;
+        return `once ready, run a recipe with cpu_craft ${tokenId} (recipes: ${recipes}).`;
     }
-    return `${ready}it routes transport and trade. Inspect it with cpu_get_cell ${tokenId}.`;
+    return `it routes transport and trade. Inspect it with cpu_get_cell ${tokenId}.`;
 }
 
 function recipeName(config: AppConfig, recipeId: string): string {
