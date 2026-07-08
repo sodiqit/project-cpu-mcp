@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it } from 'vitest';
 
-import { BuildingType, CraftCategory, CraftRecipeId } from '../../../api/types.js';
+import { BuildingKind, BuildingType, CraftRecipeId } from '../../../api/types.js';
 import { Network } from '../../../config/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
 import type { AppConfig } from '../../../services/types.js';
@@ -24,12 +24,11 @@ const CONFIG: AppConfig = {
         transport: '0x7777777777777777777777777777777777777777',
         trade: '0x8888888888888888888888888888888888888888',
     },
-    resources: { 3: 'Silica' },
+    resources: { 5: 'Iron' },
     recipes: [
         {
-            id: CraftRecipeId.GeneratePower,
-            name: 'Generate Power',
-            category: CraftCategory.Refine,
+            id: CraftRecipeId.SmeltSteel,
+            name: 'Smelt Steel',
             tier: 2,
             inputs: [],
             outputs: [],
@@ -37,7 +36,20 @@ const CONFIG: AppConfig = {
             costCpu: '0',
         },
     ],
-    buildings: [{ type: BuildingType.Extractor, name: 'Extractor', buildCost: '2000' }],
+    buildings: [
+        {
+            type: BuildingType.Mine,
+            onChainId: 4,
+            name: 'Mine',
+            kind: BuildingKind.Extractor,
+            tier: 1,
+            buildCost: '5',
+            buildTimeSec: 120,
+            buildInputs: [],
+            minableResources: [5, 6],
+            recipes: [],
+        },
+    ],
     reveal: { firstFree: true, reRevealCost: '1000' },
 };
 
@@ -65,14 +77,14 @@ describe('get_game_config tool', () => {
 
         const header = result.content[0]?.text ?? '';
         expect(header).toMatch(/Network ethereum \(chainId 1\)/);
-        expect(header).toMatch(/Extractor 2000 \$CPU/);
+        expect(header).toMatch(/Mine \(extractor, 5 \$CPU\)/);
         expect(header).toMatch(/first reveal free, re-reveal 1000 \$CPU/);
         expect(header).toMatch(/1 recipe\(s\)/);
-        expect(header).toMatch(/3:Silica/);
+        expect(header).toMatch(/5:Iron/);
         expect(header).toMatch(/cell 0x5555555555555555555555555555555555555555/);
 
         const json = JSON.parse(result.content[1]?.text ?? '{}') as AppConfig;
-        expect(json.buildings[0]?.buildCost).toBe('2000');
+        expect(json.buildings[0]?.buildCost).toBe('5');
         expect(json.reveal.reRevealCost).toBe('1000');
     });
 });

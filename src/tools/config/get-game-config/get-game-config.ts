@@ -14,7 +14,8 @@ export function registerGetGameConfigTool(server: McpServer, context: AppContext
                 Object.entries(config.resources)
                     .map(([id, name]) => `${id}:${name}`)
                     .join(', ') || 'none';
-            const buildings = config.buildings.map((b) => `${b.name} ${b.buildCost} $CPU`).join(', ') || 'none';
+            const buildings =
+                config.buildings.map((b) => `${b.name} (${b.kind}, ${b.buildCost} $CPU)`).join(', ') || 'none';
             const reveal = config.reveal.firstFree
                 ? `first reveal free, re-reveal ${config.reveal.reRevealCost} $CPU`
                 : `reveal ${config.reveal.reRevealCost} $CPU`;

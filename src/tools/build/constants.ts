@@ -1,11 +1,11 @@
 export const BUILD_DESCRIPTION = [
-    'Place a building on a revealed Land cell you own (needs a session — `cpu_authenticate` first). Two types via',
-    '`targetResourceId`: `extractor` (pass a resource id with an active deposit on the cell — it then auto-starts',
-    'mining, tracked by `cpu_get_mining_status`) or `hub` (trade; pass null). Costs $CPU; the tool auto-approves the',
-    'spend once, sends the on-chain place, and waits for confirmation. A cell holds one building: re-running build',
-    'on the same building just (re)starts mining, so an interrupted build is safe to retry; to switch buildings',
-    '`cpu_demolish` first; to switch an extractor’s resource, deplete the current one (claim to zero) then build',
-    'again. Inspect the result with `cpu_get_cell`.',
+    'Place a building on a revealed Land cell you own (needs a session — `cpu_authenticate` first). Pick a',
+    '`buildingType` from the catalog (`cpu_get_game_config`): an extractor mines a raw deposit, a crafter runs a',
+    'recipe, the hub routes transport/trade. Costs $CPU (some buildings also consume refined resources from the',
+    "cell's warehouse); the tool auto-approves the $CPU spend once, sends the on-chain place, and waits for",
+    'confirmation. Building takes time — it is not usable until it finishes. Once ready, start an extractor with',
+    '`cpu_start_mining` or a crafter with `cpu_craft`. A cell holds one building: re-running build on the same',
+    'building is a safe no-op; to switch buildings `cpu_demolish` first. Inspect the result with `cpu_get_cell`.',
 ].join(' ');
 
 export const DEMOLISH_DESCRIPTION = [

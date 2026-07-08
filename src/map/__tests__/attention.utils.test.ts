@@ -5,7 +5,13 @@ import { BuildingType } from '../../api/types.js';
 import { buildAttentionReport, withExtraItems } from '../attention.utils.js';
 import { AttentionReason, AttentionSeverity, type AttentionItem } from '../types.js';
 
-const BASE = { version: 100, serverTime: 10, nearFullPct: 90, craftOutputsByRecipe: {} };
+const BASE = {
+    version: 100,
+    serverTime: 10,
+    nearFullPct: 90,
+    craftOutputsByRecipe: {},
+    extractorBuildingTypes: new Set<string>([BuildingType.Mine]),
+};
 
 function report(cells: Array<Parameters<typeof makeCell>[0]>, craftOutputsByRecipe = {}) {
     return buildAttentionReport({ ...BASE, craftOutputsByRecipe, ownedCells: cells.map((o) => makeCell(o)) });
@@ -24,7 +30,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: '1',
                 revealCount: 1,
-                building: { type: BuildingType.Extractor, buildFinishAt: null },
+                building: { type: BuildingType.Mine, buildFinishAt: null },
                 process: makeMiningProcess({ resource: 7, stalled: true }),
                 resources: [
                     makeResource({
@@ -56,7 +62,7 @@ describe('buildAttentionReport', () => {
                 {
                     tokenId: '2',
                     revealCount: 1,
-                    building: { type: BuildingType.Extractor, buildFinishAt: null },
+                    building: { type: BuildingType.Mine, buildFinishAt: null },
                     process: makeCraftProcess({ recipeId: 'refine', stalled: true }),
                     resources: [
                         makeResource({
@@ -90,7 +96,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: '3',
                 revealCount: 1,
-                building: { type: BuildingType.Extractor, buildFinishAt: null },
+                building: { type: BuildingType.Mine, buildFinishAt: null },
                 process: makeMiningProcess({ resource: 5, stalled: false }),
                 resources: [
                     // Mined resource at 95% → warning.
@@ -111,7 +117,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: '4',
                 revealCount: 1,
-                building: { type: BuildingType.Extractor, buildFinishAt: null },
+                building: { type: BuildingType.Mine, buildFinishAt: null },
                 process: makeMiningProcess({ resource: 1, stalled: false }),
                 resources: [
                     makeResource({
@@ -132,7 +138,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: '5',
                 revealCount: 1,
-                building: { type: BuildingType.Extractor, buildFinishAt: 5 },
+                building: { type: BuildingType.Mine, buildFinishAt: 5 },
                 resources: [makeResource({ resourceId: 1, deposit: '0' })],
             },
         ]);
@@ -143,7 +149,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: '6',
                 revealCount: 1,
-                building: { type: BuildingType.Extractor, buildFinishAt: 9_999_999 },
+                building: { type: BuildingType.Mine, buildFinishAt: 9_999_999 },
                 resources: [makeResource({ resourceId: 1, deposit: '0' })],
             },
         ]);
@@ -180,7 +186,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: 'a',
                 revealCount: 1,
-                building: { type: BuildingType.Extractor, buildFinishAt: null },
+                building: { type: BuildingType.Mine, buildFinishAt: null },
                 process: makeMiningProcess({ resource: 1, stalled: true }),
                 resources: [
                     makeResource({

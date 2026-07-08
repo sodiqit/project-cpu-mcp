@@ -17,6 +17,7 @@ import { registerGetChangesTool } from './tools/map/get-changes/get-changes.js';
 import { registerGetMapTool } from './tools/map/get-map/get-map.js';
 import { registerClaimMiningTool } from './tools/mining/claim/claim-mining.js';
 import { registerGetMiningStatusTool } from './tools/mining/get-status/get-mining-status.js';
+import { registerStartMiningTool } from './tools/mining/start/start-mining.js';
 import { registerMintCellTool } from './tools/mint/mint-cell.js';
 import { registerQuoteMintTool } from './tools/mint/quote/quote-mint.js';
 import { registerRevealTool } from './tools/reveal/reveal.js';
@@ -42,15 +43,17 @@ const SERVER_INSTRUCTIONS = [
     'MCP server for Project CPU (blockchain game on EVM).',
     'Call `cpu_authenticate` to create a session: in the default EVM mode it signs in via SIWE locally;',
     'in AGW mode it starts a Device Authorization flow.',
-    'Read the static rulebook once with `cpu_get_game_config` — resource catalog, building and reveal costs,',
-    'recipe count, and contract addresses.',
+    'Read the static rulebook once with `cpu_get_game_config` — resource catalog, the building catalog (each',
+    "building's kind, cost, and what it mines or crafts), reveal cost, recipes, and contract addresses.",
     'The world map is loaded at startup and kept current in the background; read it with `cpu_get_map`',
     '(situational awareness), `cpu_get_cell` (inspect one cell), `cpu_get_changes` (react to other players since a',
     'given version), and `cpu_get_attention` (your owner-scoped to-do list of stalled/near-full/depleted/unbuilt',
     'cells + deliveries ready to finalize). You only observe updates when you call these — there is no push.',
     'Act on a cell you own with `cpu_reveal`, which surfaces its resource deposits on-chain.',
-    'Place a building with `cpu_build` — an `extractor` (paid in $CPU, auto-settled on-chain) starts mining its',
-    'target resource automatically; read accrual with `cpu_get_mining_status` and bank it with `cpu_claim_mining`.',
+    'Place a building with `cpu_build` (paid in $CPU, auto-settled on-chain) — an extractor mines a raw deposit, a',
+    'crafter runs a recipe, the Hub routes transport/trade. Building takes time and is not usable until it',
+    'finishes. Once an extractor is ready, start it with `cpu_start_mining` (pick the target resource, or omit it',
+    'for a single-resource extractor); read accrual with `cpu_get_mining_status` and bank it with `cpu_claim_mining`.',
     'Every resource has a per-cell warehouse with a storage cap; when it fills, that resource’s production',
     '(mining or craft) stalls until you offload it (transport, sell, craft, or withdraw). A null cap means',
     'uncapped. `cpu_get_mining_status`/`cpu_get_craft_status` report the stall; `cpu_get_attention` lists every stalled or',
@@ -98,6 +101,7 @@ export async function createServer(context: AppContext): Promise<void> {
     registerCraftTool(server, context);
     registerGetCraftStatusTool(server, context);
     registerClaimCraftTool(server, context);
+    registerStartMiningTool(server, context);
     registerGetMiningStatusTool(server, context);
     registerClaimMiningTool(server, context);
     registerQuoteTransportTool(server, context);

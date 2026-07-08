@@ -46,7 +46,7 @@ const inspection: CellInspection = {
         revealCount: 1,
         revealPending: false,
         resources: [{ resourceId: 3, deposit: '100', balance: '0', strength: 3, storage: null }],
-        building: { type: BuildingType.Extractor, buildFinishAt: null },
+        building: { type: BuildingType.Mine, buildFinishAt: null },
         transitFeePerUnit: null,
         process: { kind: CellProcessKind.Mining, resource: 3, rate: 10, startAt: 1700, stalled: false },
         updated: 10,
@@ -72,7 +72,7 @@ describe('get_cell tool', () => {
         expect(parsed.cell.tokenId).toBe('7');
         expect(parsed.distanceFromMine).toBe(2);
         expect(parsed.cell.resources[0]?.resourceName).toBe('Silica');
-        expect(parsed.cell.building?.type).toBe('extractor');
+        expect(parsed.cell.building?.type).toBe('mine');
         expect(parsed.cell.process?.resourceName).toBe('Silica');
     });
 

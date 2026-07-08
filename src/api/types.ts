@@ -76,18 +76,24 @@ export interface AppContractsConfig {
     trade: string;
 }
 
-export enum CraftCategory {
-    Refine = 'refine',
-    Forge = 'forge',
-}
-
 /** Must match the game's recipe catalog — never rename or reuse a value. */
 export enum CraftRecipeId {
-    GeneratePower = 'generate_power',
-    RefinePureSilicon = 'refine_pure_silicon',
-    RefineConcrete = 'refine_concrete',
+    GenerateEnergyOil = 'generate_energy_oil',
+    EnrichFuelRods = 'enrich_fuel_rods',
+    GenerateEnergyReactor = 'generate_energy_reactor',
+    MakeConcrete = 'make_concrete',
     SmeltSteel = 'smelt_steel',
-    RefineCopper = 'refine_copper',
+    RefineWiring = 'refine_wiring',
+    MakeHeatsinks = 'make_heatsinks',
+    MakeChemicals = 'make_chemicals',
+    MakeCompounds = 'make_compounds',
+    MakeSilicon = 'make_silicon',
+    MakeChips = 'make_chips',
+    MakeMemory = 'make_memory',
+    MakeCooling = 'make_cooling',
+    MakeBattery = 'make_battery',
+    MakeAccelerators = 'make_accelerators',
+    MakeNetwork = 'make_network',
     ForgeWcpu = 'forge_wcpu',
 }
 
@@ -100,7 +106,6 @@ export interface CraftStackView {
 export interface RecipeView {
     id: CraftRecipeId;
     name: string;
-    category: CraftCategory;
     tier: number;
     inputs: Array<CraftStackView>;
     outputs: Array<CraftStackView>;
@@ -109,11 +114,30 @@ export interface RecipeView {
     costCpu: string;
 }
 
-/** Static build-cost catalog entry — `$CPU` per build, human-readable decimal (`'0'` = free). */
+/** Building role — an extractor mines resources, a crafter runs recipes, the hub routes transport. */
+export enum BuildingKind {
+    Extractor = 'extractor',
+    Crafter = 'crafter',
+    Hub = 'hub',
+}
+
+/** Per-building catalog entry from `GET /api/v1/config`. */
 export interface BuildingView {
     type: BuildingType;
+    /** `uint8` id the on-chain `place(tokenId, type)` consumes — stable and append-only. */
+    onChainId: number;
     name: string;
+    kind: BuildingKind;
+    tier: number;
+    /** $CPU per build, human-readable decimal (`'0'` = free). */
     buildCost: string;
+    buildTimeSec: number;
+    /** Resources burned to construct it (integer units); empty for tier-1 extractors. Ids → `resources`. */
+    buildInputs: Array<CraftStackView>;
+    /** Resource ids an extractor produces; empty for crafters/hub. Ids → `resources`. */
+    minableResources: Array<number>;
+    /** Recipe ids a crafter runs; empty for extractors/hub. */
+    recipes: Array<CraftRecipeId>;
 }
 
 /** Reveal-cost params — the first reveal of a cell is free; re-revealing a depleted cell costs `reRevealCost`. */
@@ -127,18 +151,39 @@ export interface AppConfigResponse {
     network: string;
     chainId: number;
     contracts: AppContractsConfig;
-    /** Resource id → display name (e.g. `{ 3: 'Silica' }`). */
+    /** Resource id → display name (e.g. `{ 5: 'Iron' }`). */
     resources: Record<number, string>;
     recipes: Array<RecipeView>;
-    /** Build-cost catalog (extractor / hub), human-readable $CPU. */
+    /** Per-building catalog — on-chain id, kind, costs, and mine/craft bindings. */
     buildings: Array<BuildingView>;
     /** First-reveal-free + re-reveal cost params. */
     reveal: RevealCostView;
 }
 
-/** The kind of building a cell can hold. */
+/** The building types a cell can hold — 6 tier-1 extractors, tier-2..5 crafters, and the Hub. */
 export enum BuildingType {
-    Extractor = 'extractor',
+    PumpStation = 'pump_station',
+    Quarry = 'quarry',
+    Derrick = 'derrick',
+    Mine = 'mine',
+    TungstenDrill = 'tungsten_drill',
+    LeachField = 'leach_field',
+    OilPowerPlant = 'oil_power_plant',
+    EnrichmentPlant = 'enrichment_plant',
+    Reactor = 'reactor',
+    ConcretePlant = 'concrete_plant',
+    SteelMill = 'steel_mill',
+    CopperSmelter = 'copper_smelter',
+    HeatsinkPlant = 'heatsink_plant',
+    ChemicalPlant = 'chemical_plant',
+    CompoundsPlant = 'compounds_plant',
+    SiliconPlant = 'silicon_plant',
+    WaferFab = 'wafer_fab',
+    CoolingPlant = 'cooling_plant',
+    BatteryPlant = 'battery_plant',
+    AcceleratorFab = 'accelerator_fab',
+    NetworkAssembly = 'network_assembly',
+    Datacenter = 'datacenter',
     Hub = 'hub',
 }
 

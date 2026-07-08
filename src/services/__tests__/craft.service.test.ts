@@ -20,7 +20,7 @@ import type { CraftInput } from '../types.js';
 import { APPROVE_HASH, CELL, CPU_TOKEN, makeCellHarness, makeConfig } from './service-fakes.js';
 
 const FORGE: CraftInput = { tokenId: '42', recipeId: CraftRecipeId.ForgeWcpu, batches: 1 };
-const POWER: CraftInput = { tokenId: '42', recipeId: CraftRecipeId.GeneratePower, batches: 2 };
+const STEEL: CraftInput = { tokenId: '42', recipeId: CraftRecipeId.SmeltSteel, batches: 2 };
 
 function makeService(opts: Parameters<typeof makeCellHarness>[1] = {}) {
     return makeCellHarness((deps) => new CraftService(deps), opts);
@@ -49,7 +49,7 @@ describe('CraftService.craft', () => {
     it('starts a free craft with no approve and encodes startCraft', async () => {
         const { service, contracts, allowance } = makeService();
 
-        const result = await service.craft(POWER);
+        const result = await service.craft(STEEL);
 
         expect(allowance.calls).toHaveLength(0);
         expect(contracts.sent).toHaveLength(1);
@@ -60,7 +60,7 @@ describe('CraftService.craft', () => {
         expect(tx.to).toBe(CELL);
         const decoded = decodeFunctionData({ abi: CELL_ABI, data: tx.data as Hex });
         expect(decoded.functionName).toBe('startCraft');
-        expect(decoded.args).toEqual([42n, recipeNameToUint64(CraftRecipeId.GeneratePower), 2]);
+        expect(decoded.args).toEqual([42n, recipeNameToUint64(CraftRecipeId.SmeltSteel), 2]);
         expect(result.costCpu).toBe('0');
         expect(result.approveTxHash).toBeNull();
     });
@@ -113,7 +113,7 @@ describe('CraftService.getStatus', () => {
             tokenId: '42',
             process: {
                 kind: CellProcessKind.Craft,
-                recipeId: CraftRecipeId.GeneratePower,
+                recipeId: CraftRecipeId.SmeltSteel,
                 batches: 2,
                 claimedBatches: 0,
                 durationSec: 60,
@@ -126,7 +126,7 @@ describe('CraftService.getStatus', () => {
         const status = await service.getStatus('42');
 
         expect(status.active).toBe(true);
-        expect(status.recipeId).toBe(CraftRecipeId.GeneratePower);
+        expect(status.recipeId).toBe(CraftRecipeId.SmeltSteel);
         expect(status.maturedBatches).toBe(2);
         expect(status.claimableBatches).toBe(2);
     });
@@ -141,13 +141,13 @@ describe('CraftService.getStatus', () => {
     it('reports stalled with the recipe outputs whose warehouse is full', async () => {
         const config = makeConfig();
         config.recipes = config.recipes.map((r) =>
-            r.id === CraftRecipeId.GeneratePower ? { ...r, outputs: [{ resourceId: 101, amount: 10 }] } : r,
+            r.id === CraftRecipeId.SmeltSteel ? { ...r, outputs: [{ resourceId: 102, amount: 10 }] } : r,
         );
         const cell = makeCell({
             tokenId: '42',
             process: {
                 kind: CellProcessKind.Craft,
-                recipeId: CraftRecipeId.GeneratePower,
+                recipeId: CraftRecipeId.SmeltSteel,
                 batches: 2,
                 claimedBatches: 0,
                 durationSec: 60,
@@ -156,7 +156,7 @@ describe('CraftService.getStatus', () => {
             },
             resources: [
                 {
-                    resourceId: 101,
+                    resourceId: 102,
                     deposit: '0',
                     balance: '60',
                     strength: null,
@@ -169,7 +169,7 @@ describe('CraftService.getStatus', () => {
         const status = await service.getStatus('42');
 
         expect(status.stalled).toBe(true);
-        expect(status.blockedResourceIds).toEqual([101]);
+        expect(status.blockedResourceIds).toEqual([102]);
         // The single output box is full, so no matured batch fits — claimable is clamped to 0.
         expect(status.claimableBatches).toBe(0);
         expect(status.maturedBatches).toBe(2);
@@ -178,15 +178,15 @@ describe('CraftService.getStatus', () => {
 
 describe('CraftService.claim', () => {
     it('sends Cell.claim and decodes CraftClaimed outputs', async () => {
-        const recipeId = recipeNameToUint64(CraftRecipeId.GeneratePower);
-        const { service, contracts } = makeService({ logs: [[claimedLog(recipeId, 2, [101], [10n])]] });
+        const recipeId = recipeNameToUint64(CraftRecipeId.SmeltSteel);
+        const { service, contracts } = makeService({ logs: [[claimedLog(recipeId, 2, [102], [10n])]] });
 
         const result = await service.claim('42');
 
         expect(decodeFunctionData({ abi: CELL_ABI, data: contracts.sent[0]?.data as Hex }).functionName).toBe('claim');
-        expect(result.recipeId).toBe(CraftRecipeId.GeneratePower);
+        expect(result.recipeId).toBe(CraftRecipeId.SmeltSteel);
         expect(result.batches).toBe(2);
-        expect(result.outputs).toEqual([{ resourceId: 101, amount: '10' }]);
+        expect(result.outputs).toEqual([{ resourceId: 102, amount: '10' }]);
     });
 
     it('reports nothing claimed when no CraftClaimed event is emitted', async () => {

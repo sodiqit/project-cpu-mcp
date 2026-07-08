@@ -50,6 +50,7 @@
         "@uniswap/sdk-core": "^7.17.0",
         "@uniswap/universal-router-sdk": "^5.7.0",
         "@uniswap/v4-sdk": "^2.2.2",
+        "date-fns": "^4.4.0",
         "jose": "^6.2.2",
         "socket.io-client": "^4.8.3",
         "viem": "^2.21.0",

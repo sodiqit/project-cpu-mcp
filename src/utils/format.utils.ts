@@ -8,7 +8,7 @@ export function resourceName(resources: ResourceNames, id: number): string {
     return resources[id] ?? `#${id}`;
 }
 
-/** Human label for a resource id, e.g. `Silica (#3)`, falling back to `resource #3` when unknown. */
+/** Human label for a resource id, e.g. `Iron (#5)`, falling back to `resource #5` when unknown. */
 export function resourceLabel(resources: ResourceNames, id: number): string {
     const name = resources[id];
     return name !== undefined ? `${name} (#${id})` : `resource #${id}`;

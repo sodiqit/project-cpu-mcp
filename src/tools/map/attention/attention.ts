@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { GET_ATTENTION_DESCRIPTION } from './constants.js';
 import { getAttentionInputSchema } from './types.js';
+import { BuildingKind } from '../../../api/types.js';
 import { attentionItem, meetsSeverity, withExtraItems } from '../../../map/attention.utils.js';
 import { WAREHOUSE_NEAR_FULL_PCT } from '../../../map/constants.js';
 import { AttentionReason } from '../../../map/types.js';
@@ -35,14 +36,18 @@ export function registerGetAttentionTool(server: McpServer, context: AppContext)
             const self = getWalletAddress(context);
             const target = args.owner ?? self;
             const scouting = target !== null && (self === null || target.toLowerCase() !== self.toLowerCase());
-            const { resources, recipes } = await context.appConfig.load();
+            const { resources, recipes, buildings } = await context.appConfig.load();
             const craftOutputsByRecipe = Object.fromEntries(
                 recipes.map((r): [string, Array<number>] => [r.id, r.outputs.map((o) => o.resourceId)]),
+            );
+            const extractorBuildingTypes = new Set(
+                buildings.filter((b) => b.kind === BuildingKind.Extractor).map((b) => b.type as string),
             );
 
             const mapReport = context.mapReader.attention(target, {
                 nearFullPct: WAREHOUSE_NEAR_FULL_PCT,
                 craftOutputsByRecipe,
+                extractorBuildingTypes,
             });
 
             // Deliveries are public too, so we surface arrived-and-ready ones for whoever we're inspecting.

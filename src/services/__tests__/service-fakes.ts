@@ -1,7 +1,7 @@
 import type { Address, Hash, Hex, Log } from 'viem';
 
 import type { ApiClient } from '../../api/client.js';
-import { BuildingType, CraftCategory, CraftRecipeId } from '../../api/types.js';
+import { BuildingKind, BuildingType, CraftRecipeId } from '../../api/types.js';
 import { Network } from '../../config/types.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import type { ILogger } from '../../logger/types.js';
@@ -49,32 +49,64 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
             transport: TRANSPORT,
             trade: TRADE,
         },
-        resources: { 3: 'Silica' },
+        resources: { 1: 'WCPU', 5: 'Iron', 6: 'Copper', 101: 'Concrete', 102: 'Steel' },
         recipes: [
             {
-                id: CraftRecipeId.GeneratePower,
-                name: 'Generate Power',
-                category: CraftCategory.Refine,
+                id: CraftRecipeId.SmeltSteel,
+                name: 'Smelt Steel',
                 tier: 2,
-                inputs: [],
-                outputs: [],
+                inputs: [{ resourceId: 5, amount: 4 }],
+                outputs: [{ resourceId: 102, amount: 2 }],
                 durationSec: 60,
                 costCpu: '0',
             },
             {
                 id: CraftRecipeId.ForgeWcpu,
                 name: 'CPU Forge',
-                category: CraftCategory.Forge,
                 tier: 5,
                 inputs: [],
-                outputs: [],
+                outputs: [{ resourceId: 1, amount: 1 }],
                 durationSec: 3600,
                 costCpu: '100',
             },
         ],
         buildings: [
-            { type: BuildingType.Extractor, name: 'Extractor', buildCost: '2000' },
-            { type: BuildingType.Hub, name: 'Hub', buildCost: '5000' },
+            {
+                type: BuildingType.Mine,
+                onChainId: 4,
+                name: 'Mine',
+                kind: BuildingKind.Extractor,
+                tier: 1,
+                buildCost: '5',
+                buildTimeSec: 120,
+                buildInputs: [],
+                minableResources: [5, 6],
+                recipes: [],
+            },
+            {
+                type: BuildingType.SteelMill,
+                onChainId: 11,
+                name: 'Steel Mill',
+                kind: BuildingKind.Crafter,
+                tier: 2,
+                buildCost: '20',
+                buildTimeSec: 900,
+                buildInputs: [{ resourceId: 101, amount: 8 }],
+                minableResources: [],
+                recipes: [CraftRecipeId.SmeltSteel],
+            },
+            {
+                type: BuildingType.Hub,
+                onChainId: 23,
+                name: 'Hub',
+                kind: BuildingKind.Hub,
+                tier: 1,
+                buildCost: '40',
+                buildTimeSec: 120,
+                buildInputs: [],
+                minableResources: [],
+                recipes: [],
+            },
         ],
         reveal: { firstFree: true, reRevealCost: '0' },
     };

@@ -1,10 +1,21 @@
 import { isAddress, parseEventLogs, type Address, type Log } from 'viem';
 
-import type { MiningClaimResult, MiningServiceOptions, MiningStatusResult, IAppConfig, ICellClient } from './types.js';
+import type {
+    AppConfig,
+    MiningClaimResult,
+    MiningServiceOptions,
+    MiningStatusResult,
+    StartMiningInput,
+    StartMiningResult,
+    IAppConfig,
+    ICellClient,
+} from './types.js';
+import { BuildingKind, type BuildingView } from '../api/types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
 import { capByRoom } from '../map/storage.utils.js';
-import { CellProcessKind, type RevealCellReader } from '../map/types.js';
+import { CellProcessKind, type CellState, type RevealCellReader } from '../map/types.js';
+import { formatUnixSeconds, resourceLabel } from '../utils/format.utils.js';
 import type { IContractClient, WalletProvider } from '../wallet/types.js';
 
 export class MiningService {
@@ -104,6 +115,106 @@ export class MiningService {
         };
     }
 
+    async startMining(input: StartMiningInput): Promise<StartMiningResult> {
+        const config = await this.appConfig.load();
+        const wallet = this.wallet.get();
+        if (config.chainId !== wallet.getChainId()) {
+            throw new Error(
+                `Chain mismatch: the chain config is chainId ${config.chainId} but the wallet is on ${wallet.getChainId()}. Check NETWORK.`,
+            );
+        }
+
+        const cell = config.contracts.cell;
+        if (!isAddress(cell, { strict: false })) {
+            throw new Error(`Cell contract is not configured for network ${config.network}; cannot start mining.`);
+        }
+
+        await this.mapReader.refresh();
+        const state = this.mapReader.readRevealCell(input.tokenId);
+        const target = this.resolveMiningTarget(config, state, input, wallet.getAddress());
+
+        this.logger.info('starting mining', { tokenId: input.tokenId, target });
+        const txHash = await this.cellClient.startMining({ cell, tokenId: BigInt(input.tokenId), target });
+        const confirmed = await this.contracts.confirm(txHash, 'Start mining');
+        const started = this.decodeStarted(confirmed.logs, cell);
+
+        return {
+            tokenId: input.tokenId,
+            targetResourceId: target,
+            rate: started?.rate ?? null,
+            txHash: confirmed.txHash,
+            status: confirmed.status,
+            blockNumber: confirmed.blockNumber,
+        };
+    }
+
+    private resolveMiningTarget(
+        config: AppConfig,
+        state: CellState | null,
+        input: StartMiningInput,
+        address: string,
+    ): number {
+        if (state === null) {
+            throw new Error(`Cell ${input.tokenId} is not in the current map; reveal it or wait for the map to sync.`);
+        }
+        if (state.owner.toLowerCase() !== address.toLowerCase()) {
+            throw new Error(`You do not own cell ${input.tokenId} (owner ${state.owner}); only the owner can mine.`);
+        }
+        if (state.building === null) {
+            throw new Error(`Cell ${input.tokenId} has no building; build an extractor first, then start mining.`);
+        }
+        const view = config.buildings.find((b) => b.type === state.building?.type) ?? null;
+        if (view === null || view.kind !== BuildingKind.Extractor) {
+            const name = view?.name ?? state.building.type;
+            throw new Error(
+                `The ${name} on cell ${input.tokenId} is not an extractor and cannot mine — crafters run cpu_craft.`,
+            );
+        }
+        if (state.building.buildFinishAt !== null && state.building.buildFinishAt > Math.floor(Date.now() / 1000)) {
+            throw new Error(
+                `The ${view.name} on cell ${input.tokenId} is still under construction (ready ` +
+                    `${formatUnixSeconds(state.building.buildFinishAt)}); start mining once it finishes.`,
+            );
+        }
+        if (state.process !== null) {
+            throw new Error(
+                `Cell ${input.tokenId} has an active ${state.process.kind} process; ` +
+                    `claim or finish it before starting (or switching) mining.`,
+            );
+        }
+
+        const target = this.pickTarget(view, input.targetResourceId, config);
+        const deposit = state.resources.find((r) => r.resourceId === target)?.deposit ?? '0';
+        if (BigInt(deposit) === 0n) {
+            throw new Error(
+                `Cell ${input.tokenId} has no ${resourceLabel(config.resources, target)} deposit to mine ` +
+                    `(it may be depleted or was never revealed here).`,
+            );
+        }
+        return target;
+    }
+
+    private pickTarget(view: BuildingView, requested: number | null, config: AppConfig): number {
+        const minable = view.minableResources;
+        const mines = () => minable.map((id) => resourceLabel(config.resources, id)).join(', ');
+
+        if (requested === null) {
+            const [sole, ...rest] = minable;
+            if (sole !== undefined && rest.length === 0) {
+                return sole;
+            }
+            throw new Error(
+                `The ${view.name} mines several resources (${mines()}); pass targetResourceId to pick one.`,
+            );
+        }
+        if (!minable.includes(requested)) {
+            throw new Error(
+                `The ${view.name} cannot mine ${resourceLabel(config.resources, requested)}; it mines: ${mines()}.`,
+            );
+        }
+        return requested;
+    }
+
     private decodeMined(logs: Array<Log>, cell: Address): { resource: number; amount: bigint } | null {
         const events = parseEventLogs({ abi: CELL_ABI, eventName: 'ResourceMined', logs });
         const event = events.find((e) => e.address.toLowerCase() === cell.toLowerCase());
@@ -111,5 +222,14 @@ export class MiningService {
             return null;
         }
         return { resource: event.args.resource, amount: event.args.amount };
+    }
+
+    private decodeStarted(logs: Array<Log>, cell: Address): { resource: number; rate: number } | null {
+        const events = parseEventLogs({ abi: CELL_ABI, eventName: 'MiningStarted', logs });
+        const event = events.find((e) => e.address.toLowerCase() === cell.toLowerCase());
+        if (event === undefined) {
+            return null;
+        }
+        return { resource: event.args.resource, rate: event.args.rate };
     }
 }

@@ -18,7 +18,7 @@ import {
     WALLET_ADDRESS,
 } from './service-fakes.js';
 
-const EXTRACTOR: BuildInput = { tokenId: '42', buildingType: BuildingType.Extractor, targetResourceId: 3 };
+const EXTRACTOR: BuildInput = { tokenId: '42', buildingType: BuildingType.Mine };
 
 function makeService(opts: Parameters<typeof makeCellHarness>[1] = {}) {
     return makeCellHarness((deps) => new BuildService(deps), opts);
@@ -36,56 +36,49 @@ function decodeSent(
 }
 
 describe('BuildService', () => {
-    it('approves $CPU to the Cell, places the extractor, then starts mining', async () => {
+    it('approves $CPU to the Cell and places the extractor (no mining — that is a separate step)', async () => {
         const { service, contracts, allowance } = makeService({ approve: APPROVE_HASH });
 
         const result = await service.build(EXTRACTOR);
 
-        expect(allowance.calls).toEqual([{ token: CPU_TOKEN, spender: CELL, needed: parseEther('2000') }]);
-        expect(contracts.sent).toHaveLength(2);
+        expect(allowance.calls).toEqual([{ token: CPU_TOKEN, spender: CELL, needed: parseEther('5') }]);
+        expect(contracts.sent).toHaveLength(1);
         expect(contracts.sent[0]?.to).toBe(CELL);
 
         const place = decodeSent(contracts, 0);
         expect(place.functionName).toBe('place');
-        expect(place.args).toEqual([42n, 1]);
-
-        const mining = decodeSent(contracts, 1);
-        expect(mining.functionName).toBe('startMining');
-        expect(mining.args).toEqual([42n, 3]);
+        expect(place.args).toEqual([42n, 4]);
 
         expect(result.approveTxHash).toBe(APPROVE_HASH);
         expect(result.buildTxHash).not.toBeNull();
-        expect(result.miningTxHash).not.toBeNull();
         expect(result.alreadyBuilt).toBe(false);
-        expect(result.buildCost).toBe('2000');
+        expect(result.buildCost).toBe('5');
     });
 
-    it('builds a hub with a null target and sends no mining tx', async () => {
+    it('encodes the on-chain id from config — a hub places as id 23', async () => {
         const { service, contracts, allowance } = makeService();
 
-        const result = await service.build({ tokenId: '42', buildingType: BuildingType.Hub, targetResourceId: null });
+        await service.build({ tokenId: '42', buildingType: BuildingType.Hub });
 
-        expect(allowance.calls[0]?.needed).toBe(parseEther('5000'));
+        expect(allowance.calls[0]?.needed).toBe(parseEther('40'));
         expect(contracts.sent).toHaveLength(1);
         const place = decodeSent(contracts, 0);
         expect(place.functionName).toBe('place');
-        expect(place.args).toEqual([42n, 2]);
-        expect(result.miningTxHash).toBeNull();
+        expect(place.args).toEqual([42n, 23]);
     });
 
-    it('skips place and only starts mining when the extractor is already built', async () => {
+    it('is a no-op when the building is already in place (safe to retry an interrupted build)', async () => {
         const cell = makeCell({
             tokenId: '42',
             owner: WALLET_ADDRESS,
-            building: { type: BuildingType.Extractor, buildFinishAt: null },
+            building: { type: BuildingType.Mine, buildFinishAt: null },
         });
         const { service, contracts, allowance } = makeService({ cell });
 
         const result = await service.build(EXTRACTOR);
 
         expect(allowance.calls).toHaveLength(0);
-        expect(contracts.sent).toHaveLength(1);
-        expect(decodeSent(contracts, 0).functionName).toBe('startMining');
+        expect(contracts.sent).toHaveLength(0);
         expect(result.alreadyBuilt).toBe(true);
         expect(result.buildTxHash).toBeNull();
         expect(result.buildCost).toBe('0');
@@ -116,7 +109,7 @@ describe('BuildService', () => {
         const cell = makeCell({
             tokenId: '42',
             owner: WALLET_ADDRESS,
-            process: { kind: CellProcessKind.Mining, resource: 3, rate: 10, startAt: 1, stalled: false },
+            process: { kind: CellProcessKind.Mining, resource: 5, rate: 10, startAt: 1, stalled: false },
         });
         const { service, contracts } = makeService({ cell });
         await expect(service.build(EXTRACTOR)).rejects.toThrow(/active .*process/i);

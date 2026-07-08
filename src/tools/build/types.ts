@@ -4,15 +4,12 @@ import { BuildingType } from '../../api/types.js';
 
 export const buildInputSchema = {
     tokenId: z.string().describe('The tokenId of a revealed cell you own to build on.'),
-    buildingType: z.nativeEnum(BuildingType).describe('extractor (mines a resource deposit) or hub (trade).'),
-    targetResourceId: z
-        .number()
-        .int()
-        .nullable()
-        .default(null)
+    buildingType: z
+        .nativeEnum(BuildingType)
         .describe(
-            'For an extractor, the resource id (2–13) to mine — it must have an active deposit on the cell. ' +
-                'Must be null for a hub.',
+            'Which building to place — see cpu_get_game_config for the full catalog (kind, cost, mine/craft ' +
+                'bindings). An extractor mines a deposit (then start it with cpu_start_mining), a crafter runs a ' +
+                'recipe (cpu_craft), the hub routes transport and trade.',
         ),
 };
 
