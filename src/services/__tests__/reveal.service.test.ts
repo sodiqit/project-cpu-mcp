@@ -101,6 +101,9 @@ class FakeRevealCellReader {
     readRevealCell(): CellState | null {
         return this.state;
     }
+    getServerTime(): number {
+        return 0;
+    }
     async refresh(): Promise<void> {
         this.refreshes += 1;
         if (this.bumpTo !== null && this.state !== null) {

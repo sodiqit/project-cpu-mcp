@@ -33,7 +33,8 @@ export function makeMiningProcess(overrides: Partial<CellProcessMiningView> = {}
     return {
         kind: CellProcessKind.Mining,
         resource: 1,
-        rate: 1,
+        durationSec: 180,
+        batch: 77,
         startAt: 0,
         stalled: false,
         ...overrides,

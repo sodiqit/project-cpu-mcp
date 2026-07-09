@@ -151,7 +151,14 @@ describe('summarizeMap', () => {
             makeCell({
                 tokenId: 'm',
                 revealCount: 1,
-                process: { kind: CellProcessKind.Mining, resource: 1, rate: 1, startAt: 1, stalled: true },
+                process: {
+                    kind: CellProcessKind.Mining,
+                    resource: 1,
+                    durationSec: 180,
+                    batch: 77,
+                    startAt: 1,
+                    stalled: true,
+                },
             }),
             makeCell({
                 tokenId: 'c',

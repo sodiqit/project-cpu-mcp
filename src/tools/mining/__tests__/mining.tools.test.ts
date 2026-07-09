@@ -59,13 +59,16 @@ function claimHarness(outcome: MiningClaimResult | Error): Handler {
 }
 
 describe('get_mining_status tool', () => {
-    it('summarizes an active extractor with the resource name', async () => {
+    it('summarizes an active extractor with the batch, cycle timing, and resource name', async () => {
         const result = await statusHarness({
             tokenId: '42',
             active: true,
             targetResourceId: 3,
-            rate: 10,
+            batch: 77,
+            durationSec: 180,
             startAt: 1700,
+            cyclesMatured: 2,
+            nextBatchInSec: 30,
             claimable: '120',
             depositRemaining: '500',
             stalled: false,
@@ -75,7 +78,9 @@ describe('get_mining_status tool', () => {
 
         const header = result.content[0]?.text ?? '';
         expect(header).toMatch(/Silica \(#3\)/);
-        expect(header).toMatch(/120 claimable/);
+        expect(header).toMatch(/batch of 77 every 3 minutes/);
+        expect(header).toMatch(/120 claimable now \(2 cycles matured\)/);
+        expect(header).toMatch(/next batch in 30 seconds/);
         expect(header).toMatch(/500 left/);
 
         const parsed = JSON.parse(result.content[1]?.text ?? '{}') as MiningStatusResult;
@@ -87,8 +92,11 @@ describe('get_mining_status tool', () => {
             tokenId: '42',
             active: false,
             targetResourceId: null,
-            rate: null,
+            batch: null,
+            durationSec: null,
             startAt: null,
+            cyclesMatured: 0,
+            nextBatchInSec: null,
             claimable: '0',
             depositRemaining: '0',
             stalled: false,
@@ -116,7 +124,7 @@ describe('claim_mining tool', () => {
         expect(header).toMatch(/block 100/);
     });
 
-    it('reports a no-op claim when nothing has accrued', async () => {
+    it('reports a no-op claim when nothing has newly matured', async () => {
         const result = await claimHarness({
             tokenId: '42',
             resourceId: null,
@@ -126,7 +134,7 @@ describe('claim_mining tool', () => {
             blockNumber: '100',
         })({ tokenId: '42' });
 
-        expect(result.content[0]?.text).toMatch(/nothing newly accrued/i);
+        expect(result.content[0]?.text).toMatch(/nothing newly matured/i);
     });
 
     it('propagates service errors', async () => {

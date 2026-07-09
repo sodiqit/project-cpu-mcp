@@ -13,6 +13,7 @@ import type {
 import { BuildingKind, type BuildingView } from '../api/types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
+import { computeMaturation } from '../map/process.utils.js';
 import { capByRoom } from '../map/storage.utils.js';
 import { CellProcessKind, type CellState, type RevealCellReader } from '../map/types.js';
 import { formatUnixSeconds, resourceLabel } from '../utils/format.utils.js';
@@ -48,8 +49,11 @@ export class MiningService {
                 tokenId,
                 active: false,
                 targetResourceId: null,
-                rate: null,
+                batch: null,
+                durationSec: null,
                 startAt: null,
+                cyclesMatured: 0,
+                nextBatchInSec: null,
                 claimable: '0',
                 depositRemaining: '0',
                 stalled: false,
@@ -61,23 +65,32 @@ export class MiningService {
         const resource = state.resources.find((r) => r.resourceId === process.resource) ?? null;
         const deposit = resource?.deposit ?? '0';
         const storage = resource?.storage ?? null;
-        const nowSec = BigInt(Math.floor(Date.now() / 1000));
-        const startAt = BigInt(process.startAt);
-        const elapsed = nowSec > startAt ? nowSec - startAt : 0n;
-        const accrued = BigInt(process.rate) * elapsed;
         const depositRemaining = BigInt(deposit);
 
-        // On-chain the miner banks min(accrued, deposit, room); mirror that so a full box reports ~0
-        // claimable instead of a phantom amount.
-        const bankable = accrued < depositRemaining ? accrued : depositRemaining;
+        // Mining matures in whole cycles: each `durationSec` yields `batch` units, and a cycle in progress
+        // accrues nothing until it completes. On-chain the miner banks min(matured, deposit, room), so mirror
+        // that — a full box reports ~0 claimable and the final partial cycle drains the deposit to exactly 0.
+        const { cycles: cyclesMatured, nextCycleInSec } = computeMaturation({
+            startAt: process.startAt,
+            durationSec: process.durationSec,
+            now: this.mapReader.getServerTime(),
+        });
+        const grossMatured = BigInt(cyclesMatured) * BigInt(process.batch);
+        const bankable = grossMatured < depositRemaining ? grossMatured : depositRemaining;
         const claimable = capByRoom(bankable, storage);
+
+        // No next batch to wait for once the box is full (production idles) or the deposit is spent.
+        const nextBatchInSec = process.stalled || depositRemaining === 0n ? null : nextCycleInSec;
 
         return {
             tokenId,
             active: true,
             targetResourceId: process.resource,
-            rate: process.rate,
+            batch: process.batch,
+            durationSec: process.durationSec,
             startAt: process.startAt,
+            cyclesMatured,
+            nextBatchInSec,
             claimable: claimable.toString(),
             depositRemaining: deposit,
             stalled: process.stalled,
@@ -141,7 +154,8 @@ export class MiningService {
         return {
             tokenId: input.tokenId,
             targetResourceId: target,
-            rate: started?.rate ?? null,
+            batch: started?.batch ?? null,
+            durationSec: started?.durationSec ?? null,
             txHash: confirmed.txHash,
             status: confirmed.status,
             blockNumber: confirmed.blockNumber,
@@ -224,12 +238,15 @@ export class MiningService {
         return { resource: event.args.resource, amount: event.args.amount };
     }
 
-    private decodeStarted(logs: Array<Log>, cell: Address): { resource: number; rate: number } | null {
+    private decodeStarted(
+        logs: Array<Log>,
+        cell: Address,
+    ): { resource: number; durationSec: number; batch: number } | null {
         const events = parseEventLogs({ abi: CELL_ABI, eventName: 'MiningStarted', logs });
         const event = events.find((e) => e.address.toLowerCase() === cell.toLowerCase());
         if (event === undefined) {
             return null;
         }
-        return { resource: event.args.resource, rate: event.args.rate };
+        return { resource: event.args.resource, durationSec: event.args.durationSec, batch: Number(event.args.batch) };
     }
 }

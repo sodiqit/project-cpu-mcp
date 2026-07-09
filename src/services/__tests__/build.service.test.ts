@@ -109,7 +109,14 @@ describe('BuildService', () => {
         const cell = makeCell({
             tokenId: '42',
             owner: WALLET_ADDRESS,
-            process: { kind: CellProcessKind.Mining, resource: 5, rate: 10, startAt: 1, stalled: false },
+            process: {
+                kind: CellProcessKind.Mining,
+                resource: 5,
+                durationSec: 180,
+                batch: 77,
+                startAt: 1,
+                stalled: false,
+            },
         });
         const { service, contracts } = makeService({ cell });
         await expect(service.build(EXTRACTOR)).rejects.toThrow(/active .*process/i);

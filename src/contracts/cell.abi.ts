@@ -116,7 +116,8 @@ export const CELL_ABI = [
         inputs: [
             { name: 'tokenId', type: 'uint256', indexed: true, internalType: 'uint256' },
             { name: 'resource', type: 'uint16', indexed: false, internalType: 'uint16' },
-            { name: 'rate', type: 'uint32', indexed: false, internalType: 'uint32' },
+            { name: 'durationSec', type: 'uint32', indexed: false, internalType: 'uint32' },
+            { name: 'batch', type: 'uint64', indexed: false, internalType: 'uint64' },
             { name: 'startAt', type: 'uint64', indexed: false, internalType: 'uint64' },
         ],
         anonymous: false,
