@@ -13,6 +13,7 @@ import type {
 import { BuildingKind, type BuildingView } from '../api/types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
+import { computeMaturation } from '../map/process.utils.js';
 import { capByRoom } from '../map/storage.utils.js';
 import { CellProcessKind, type CellState, type RevealCellReader } from '../map/types.js';
 import { formatUnixSeconds, resourceLabel } from '../utils/format.utils.js';
@@ -65,21 +66,21 @@ export class MiningService {
         const deposit = resource?.deposit ?? '0';
         const storage = resource?.storage ?? null;
         const depositRemaining = BigInt(deposit);
-        const nowSec = Math.floor(Date.now() / 1000);
-        const elapsed = Math.max(0, nowSec - process.startAt);
 
         // Mining matures in whole cycles: each `durationSec` yields `batch` units, and a cycle in progress
         // accrues nothing until it completes. On-chain the miner banks min(matured, deposit, room), so mirror
         // that — a full box reports ~0 claimable and the final partial cycle drains the deposit to exactly 0.
-        const cyclesMatured = process.durationSec > 0 ? Math.floor(elapsed / process.durationSec) : 0;
+        const { cycles: cyclesMatured, nextCycleInSec } = computeMaturation({
+            startAt: process.startAt,
+            durationSec: process.durationSec,
+            now: this.mapReader.getServerTime(),
+        });
         const grossMatured = BigInt(cyclesMatured) * BigInt(process.batch);
         const bankable = grossMatured < depositRemaining ? grossMatured : depositRemaining;
         const claimable = capByRoom(bankable, storage);
 
-        const nextBatchInSec =
-            process.durationSec > 0 && !process.stalled && depositRemaining > 0n
-                ? process.durationSec - (elapsed % process.durationSec)
-                : null;
+        // No next batch to wait for once the box is full (production idles) or the deposit is spent.
+        const nextBatchInSec = process.stalled || depositRemaining === 0n ? null : nextCycleInSec;
 
         return {
             tokenId,

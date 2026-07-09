@@ -81,6 +81,10 @@ export class MapReader {
         return this.store.get(tokenId);
     }
 
+    getServerTime(): number {
+        return this.store.getServerTime();
+    }
+
     attention(ownerAddress: string | null, options: AttentionOptions): AttentionReport {
         const ownedCells = ownerAddress === null ? null : this.store.getByOwner(ownerAddress);
         return buildAttentionReport({

@@ -271,11 +271,21 @@ export class FakeContractClient implements IContractClient {
     }
 }
 
+// A large default so `startAt: 1` fixtures mature far more cycles than any cap — tests that need an exact
+// cycle count pass an explicit `serverTime`.
+export const DEFAULT_SERVER_TIME = 1_000_000_000;
+
 export class FakeMapReader implements RevealCellReader {
     public refreshed = 0;
-    constructor(private readonly cell: CellState | null = null) {}
+    constructor(
+        private readonly cell: CellState | null = null,
+        private readonly serverTime: number = DEFAULT_SERVER_TIME,
+    ) {}
     readRevealCell(): CellState | null {
         return this.cell;
+    }
+    getServerTime(): number {
+        return this.serverTime;
     }
     async refresh(): Promise<void> {
         this.refreshed += 1;
@@ -299,6 +309,7 @@ export type CellHarnessOptions = Partial<{
     config: AppConfig;
     approve: Hash | null | Error;
     cell: CellState | null;
+    serverTime: number;
 }>;
 
 export interface CellHarness<T> {
@@ -318,7 +329,7 @@ export function makeCellHarness<T>(
     const allowance = new FakeAllowance(opts.approve ?? null);
     const contracts = new FakeContractClient(opts.receipts ?? [], opts.logs ?? []);
     const cellClient = new CellClient({ contracts, logger: new NoopLogger() });
-    const mapReader = new FakeMapReader(opts.cell ?? null);
+    const mapReader = new FakeMapReader(opts.cell ?? null, opts.serverTime ?? DEFAULT_SERVER_TIME);
     const service = create({
         wallet,
         appConfig: new FakeAppConfig(opts.config ?? makeConfig()),

@@ -152,6 +152,8 @@ export interface MapStatus {
 
 export interface RevealCellReader {
     readRevealCell(tokenId: string): CellState | null;
+    // The map snapshot's server clock — the reference "now" for maturation, same domain as a process `startAt`.
+    getServerTime(): number;
     refresh(): Promise<void>;
 }
 

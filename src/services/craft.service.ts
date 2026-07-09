@@ -16,6 +16,7 @@ import type {
 import type { CraftStackView } from '../api/types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
+import { computeMaturation } from '../map/process.utils.js';
 import { warehouseRoom } from '../map/storage.utils.js';
 import { type CellResource, CellProcessKind, type RevealCellReader } from '../map/types.js';
 import { cpuFromWei } from '../utils/format.utils.js';
@@ -147,12 +148,12 @@ export class CraftService {
             };
         }
 
-        const nowSec = Math.floor(Date.now() / 1000);
-        const elapsed = Math.max(0, nowSec - process.startAt);
-        const matured =
-            process.durationSec > 0
-                ? Math.min(process.batches, Math.floor(elapsed / process.durationSec))
-                : process.batches;
+        const { cycles } = computeMaturation({
+            startAt: process.startAt,
+            durationSec: process.durationSec,
+            now: this.mapReader.getServerTime(),
+        });
+        const matured = process.durationSec > 0 ? Math.min(process.batches, cycles) : process.batches;
         const config = await this.appConfig.load();
         const outputs = config.recipes.find((r) => r.id === process.recipeId)?.outputs ?? [];
         // Matured batches only bank while every output fits; mirror the on-chain fitByRoom so a full

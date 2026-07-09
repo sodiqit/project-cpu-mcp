@@ -1,5 +1,5 @@
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, type Address, type Hex, type Log } from 'viem';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { BuildingType } from '../../api/types.js';
 import { CELL_ABI } from '../../contracts/cell.abi.js';
@@ -70,35 +70,29 @@ describe('MiningService.getStatus', () => {
     });
 
     it('matures whole cycles only — a cycle in progress banks nothing', async () => {
-        vi.useFakeTimers();
-        try {
-            const nowSec = 100_000;
-            vi.setSystemTime(nowSec * 1000);
-            // Two full 180s cycles plus 30s into the third.
-            const startAt = nowSec - (2 * 180 + 30);
-            const cell = makeCell({
-                tokenId: '42',
-                owner: WALLET_ADDRESS,
-                process: {
-                    kind: CellProcessKind.Mining,
-                    resource: 3,
-                    durationSec: 180,
-                    batch: 77,
-                    startAt,
-                    stalled: false,
-                },
-                resources: [{ resourceId: 3, deposit: '100000', balance: '0', strength: null, storage: null }],
-            });
-            const { service } = makeService({ cell });
+        const nowSec = 100_000;
+        // Two full 180s cycles plus 30s into the third, measured against the map's server clock.
+        const startAt = nowSec - (2 * 180 + 30);
+        const cell = makeCell({
+            tokenId: '42',
+            owner: WALLET_ADDRESS,
+            process: {
+                kind: CellProcessKind.Mining,
+                resource: 3,
+                durationSec: 180,
+                batch: 77,
+                startAt,
+                stalled: false,
+            },
+            resources: [{ resourceId: 3, deposit: '100000', balance: '0', strength: null, storage: null }],
+        });
+        const { service } = makeService({ cell, serverTime: nowSec });
 
-            const status = await service.getStatus('42');
+        const status = await service.getStatus('42');
 
-            expect(status.cyclesMatured).toBe(2);
-            expect(status.claimable).toBe('154'); // 2 × 77
-            expect(status.nextBatchInSec).toBe(150); // 180 − 30 into the current cycle
-        } finally {
-            vi.useRealTimers();
-        }
+        expect(status.cyclesMatured).toBe(2);
+        expect(status.claimable).toBe('154'); // 2 × 77
+        expect(status.nextBatchInSec).toBe(150); // 180 − 30 into the current cycle
     });
 
     it('drains the deposit to exactly zero on the final partial cycle', async () => {
