@@ -1,6 +1,8 @@
+import { formatDistanceStrict } from 'date-fns';
+
 import type { CraftStackView, RecipeView } from '../../api/types.js';
 import type { CraftClaimResult, CraftStartResult, CraftStatusResult } from '../../services/types.js';
-import { formatDuration, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
+import { resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
 
 function formatStacks(stacks: Array<CraftStackView>, resources: ResourceNames): string {
     if (stacks.length === 0) {
@@ -21,7 +23,7 @@ export function summarizeRecipes(recipes: Array<RecipeView>, resources: Resource
         .map(
             (r) =>
                 `${r.name} (${r.id}): ${formatStacks(r.inputs, resources)} → ${formatStacks(r.outputs, resources)}, ` +
-                `~${formatDuration(r.durationSec)}/batch, ${formatCost(r.costCpu)}`,
+                `~${formatDistanceStrict(0, r.durationSec * 1000)}/batch, ${formatCost(r.costCpu)}`,
         )
         .join('\n');
 }

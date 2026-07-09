@@ -121,8 +121,10 @@ describe('list_recipes tool', () => {
 
         const result = await handler({});
         const header = result.content[0]?.text ?? '';
-        expect(header).toMatch(/Smelt Steel \(smelt_steel\): 4 Iron \(#5\) → 2 Steel \(#102\), ~30s\/batch, free/);
-        expect(header).toMatch(/CPU Forge \(forge_wcpu\):.*~1h\/batch, 100 \$CPU\/batch/);
+        expect(header).toMatch(
+            /Smelt Steel \(smelt_steel\): 4 Iron \(#5\) → 2 Steel \(#102\), ~30 seconds\/batch, free/,
+        );
+        expect(header).toMatch(/CPU Forge \(forge_wcpu\):.*~1 hour\/batch, 100 \$CPU\/batch/);
     });
 });
 

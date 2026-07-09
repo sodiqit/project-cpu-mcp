@@ -78,9 +78,9 @@ describe('get_mining_status tool', () => {
 
         const header = result.content[0]?.text ?? '';
         expect(header).toMatch(/Silica \(#3\)/);
-        expect(header).toMatch(/batch of 77 every 3m/);
+        expect(header).toMatch(/batch of 77 every 3 minutes/);
         expect(header).toMatch(/120 claimable now \(2 cycles matured\)/);
-        expect(header).toMatch(/next batch in 30s/);
+        expect(header).toMatch(/next batch in 30 seconds/);
         expect(header).toMatch(/500 left/);
 
         const parsed = JSON.parse(result.content[1]?.text ?? '{}') as MiningStatusResult;

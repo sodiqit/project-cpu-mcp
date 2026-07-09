@@ -1,10 +1,12 @@
+import { formatDistanceStrict } from 'date-fns';
+
 import type { MiningClaimResult, MiningStatusResult, StartMiningResult } from '../../services/types.js';
-import { formatDuration, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
+import { resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
 
 export function summarizeMiningStart(r: StartMiningResult, resources: ResourceNames): string {
     const cycle =
         r.batch !== null && r.durationSec !== null
-            ? ` a batch of ${r.batch} every ${formatDuration(r.durationSec)}`
+            ? ` a batch of ${r.batch} every ${formatDistanceStrict(0, r.durationSec * 1000)}`
             : '';
     return (
         `Started mining ${resourceLabel(resources, r.targetResourceId)}${cycle} on cell ${r.tokenId}: ` +
@@ -19,10 +21,10 @@ export function summarizeMiningStatus(s: MiningStatusResult, resources: Resource
     }
     const cycle =
         s.batch !== null && s.durationSec !== null
-            ? `batch of ${s.batch} every ${formatDuration(s.durationSec)}. `
+            ? `batch of ${s.batch} every ${formatDistanceStrict(0, s.durationSec * 1000)}. `
             : '';
     const cycles = `${s.cyclesMatured} cycle${s.cyclesMatured === 1 ? '' : 's'} matured`;
-    const next = s.nextBatchInSec !== null ? `, next batch in ${formatDuration(s.nextBatchInSec)}` : '';
+    const next = s.nextBatchInSec !== null ? `, next batch in ${formatDistanceStrict(0, s.nextBatchInSec * 1000)}` : '';
     const depleted = s.depositRemaining === '0' ? ' Deposit depleted.' : '';
     const stalled = s.stalled
         ? ` Warehouse FULL (${s.warehouseUsed}/${s.warehouseCap}) — mining stalled; offload to resume.`
