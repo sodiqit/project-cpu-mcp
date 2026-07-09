@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { DEMOLISH_DESCRIPTION } from './constants.js';
 import { demolishInputSchema } from './types.js';
 import type { AppContext } from '../../types.js';
-import { resourceName } from '../../utils/format.utils.js';
+import { formatStacks } from '../../utils/format.utils.js';
 
 export function registerDemolishTool(server: McpServer, context: AppContext): void {
     server.registerTool(
@@ -13,9 +13,7 @@ export function registerDemolishTool(server: McpServer, context: AppContext): vo
             const result = await context.build.demolish({ tokenId: args.tokenId });
             const { resources } = await context.appConfig.load();
 
-            const consumed = result.inputsConsumed
-                .map((i) => `${i.amount} ${resourceName(resources, i.resourceId)}`)
-                .join(', ');
+            const consumed = formatStacks(resources, result.inputsConsumed);
             const consumedNote = consumed.length > 0 ? ` plus ${consumed} from its warehouse` : '';
             const header =
                 `Demolished the ${result.buildingType} on cell ${result.tokenId}: burned ${result.cpuBurned} $CPU` +

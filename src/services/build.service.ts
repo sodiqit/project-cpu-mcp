@@ -1,4 +1,4 @@
-import { isAddress, parseEther, type Address } from 'viem';
+import { isAddress, parseEther, type Address, type Hash } from 'viem';
 
 import type {
     AppConfig,
@@ -12,12 +12,13 @@ import type {
     IAppConfig,
     ICellClient,
 } from './types.js';
+import { assertWarehouseHas } from './warehouse.utils.js';
 import { BuildingKind } from '../api/types.js';
-import type { BuildingType, BuildingView, CraftStackView } from '../api/types.js';
+import type { BuildingType, BuildingView } from '../api/types.js';
 import type { ILogger } from '../logger/types.js';
-import { isInDemolishCooldown } from '../map/map.utils.js';
-import type { CellBuildingView, CellState, RevealCellReader } from '../map/types.js';
-import { cpuFromWei, formatUnixSeconds, resourceName } from '../utils/format.utils.js';
+import { demolishCooldownEnd } from '../map/map.utils.js';
+import type { CellState, RevealCellReader } from '../map/types.js';
+import { formatUnixSeconds } from '../utils/format.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
 
 export class BuildService {
@@ -81,22 +82,27 @@ export class BuildService {
         await this.mapReader.refresh();
         const state = this.mapReader.readRevealCell(input.tokenId);
         this.assertOwner(input.tokenId, state, wallet.getAddress(), 'demolish');
-        const building = this.requireBuilding(input.tokenId, state);
+        if (state === null || state.building === null) {
+            throw new Error(
+                `Cell ${input.tokenId} has no building to demolish (it may be empty, or not synced to the map ` +
+                    `yet — retry shortly).`,
+            );
+        }
+        const building = state.building;
         this.assertNoProcess(input.tokenId, state, 'demolish');
 
         const view = this.buildingView(config, building.type);
         this.assertHubIdle(input.tokenId, view, state);
-        this.assertWarehouseHas(config, input.tokenId, state, view.demolishCost.inputs, 'demolish');
+        assertWarehouseHas(config.resources, state, view.demolishCost.inputs, input.tokenId, 'demolish');
 
         // Demolish burns $CPU on-chain (`burnFrom`), so the Cell must be allowed to pull it — same approval the
         // build path uses. The warehouse inputs are debited internally and need no approval.
-        const cpuWei = parseEther(view.demolishCost.cpu);
-        const approveTxHash = cpuWei > 0n ? await this.allowance.ensureAllowance(cpuToken, cell, cpuWei) : null;
+        const approveTxHash = await this.approveCpuSpend(cpuToken, cell, view.demolishCost.cpu);
 
         this.logger.info('demolishing building', {
             tokenId: input.tokenId,
             buildingType: building.type,
-            cpuBurnedWei: cpuWei.toString(),
+            cpuBurned: view.demolishCost.cpu,
             network: config.network,
         });
         const txHash = await this.cellClient.demolish({ cell, tokenId });
@@ -120,9 +126,10 @@ export class BuildService {
         if (state === null) {
             return;
         }
-        if (isInDemolishCooldown(state, this.mapReader.getServerTime()) && state.demolishFinishAt !== null) {
+        const cooldownEnd = demolishCooldownEnd(state, this.mapReader.getServerTime());
+        if (cooldownEnd !== null) {
             throw new Error(
-                `Cell ${input.tokenId} is in demolition cooldown until ${formatUnixSeconds(state.demolishFinishAt)}; ` +
+                `Cell ${input.tokenId} is in demolition cooldown until ${formatUnixSeconds(cooldownEnd)}; ` +
                     `it cannot be rebuilt yet.`,
             );
         }
@@ -140,17 +147,8 @@ export class BuildService {
         }
     }
 
-    private requireBuilding(tokenId: string, state: CellState | null): CellBuildingView {
-        if (state === null || state.building === null) {
-            throw new Error(
-                `Cell ${tokenId} has no building to demolish (or the map is not synced — refresh with cpu_get_cell).`,
-            );
-        }
-        return state.building;
-    }
-
-    private assertNoProcess(tokenId: string, state: CellState | null, action: string): void {
-        if (state !== null && state.process !== null) {
+    private assertNoProcess(tokenId: string, state: CellState, action: string): void {
+        if (state.process !== null) {
             throw new Error(
                 `Cell ${tokenId} has an active ${state.process.kind} process; claim or finish it before you ${action}.`,
             );
@@ -169,28 +167,11 @@ export class BuildService {
         }
     }
 
-    // Both build and demolish debit refined inputs from the cell's liquid warehouse balance on-chain; surface a
-    // clear shortfall here instead of letting the tx revert with an opaque insufficient-balance error.
-    private assertWarehouseHas(
-        config: AppConfig,
-        tokenId: string,
-        state: CellState | null,
-        inputs: Array<CraftStackView>,
-        action: string,
-    ): void {
-        if (state === null) {
-            return;
-        }
-        for (const input of inputs) {
-            const held = state.resources.find((r) => r.resourceId === input.resourceId)?.balance ?? '0';
-            if (BigInt(held) < BigInt(input.amount)) {
-                const name = resourceName(config.resources, input.resourceId);
-                throw new Error(
-                    `Cell ${tokenId} needs ${input.amount} ${name} in its warehouse to ${action}, but holds ${held} ` +
-                        `(map may be stale — retry shortly).`,
-                );
-            }
-        }
+    // Approve the Cell to pull `decimalCpu` $CPU before a burn/spend; null when it's free or the allowance already
+    // covers it (`ensureAllowance` approves an unbounded amount when short). Shared by build and demolish.
+    private async approveCpuSpend(cpuToken: Address, cell: Address, decimalCpu: string): Promise<Hash | null> {
+        const wei = parseEther(decimalCpu);
+        return wei > 0n ? this.allowance.ensureAllowance(cpuToken, cell, wei) : null;
     }
 
     private async placeBuilding(
@@ -202,21 +183,20 @@ export class BuildService {
         state: CellState | null,
     ): Promise<BuildPlacement> {
         const view = this.buildingView(config, input.buildingType);
-        this.assertWarehouseHas(config, input.tokenId, state, view.buildInputs, 'build');
-        const costWei = parseEther(view.buildCost);
-        const approveTxHash = costWei > 0n ? await this.allowance.ensureAllowance(cpuToken, cell, costWei) : null;
+        assertWarehouseHas(config.resources, state, view.buildInputs, input.tokenId, 'build');
+        const approveTxHash = await this.approveCpuSpend(cpuToken, cell, view.buildCost);
 
         this.logger.info('placing building', {
             tokenId: input.tokenId,
             buildingType: input.buildingType,
             onChainId: view.onChainId,
-            costWei: costWei.toString(),
+            buildCost: view.buildCost,
             network: config.network,
         });
         const buildTxHash = await this.cellClient.place({ cell, tokenId, buildingType: view.onChainId });
         await this.contracts.confirm(buildTxHash, 'Build transaction');
 
-        return { buildTxHash, approveTxHash, buildCost: cpuFromWei(costWei.toString()) };
+        return { buildTxHash, approveTxHash, buildCost: view.buildCost };
     }
 
     private assertChain(config: AppConfig, wallet: WalletManager): void {

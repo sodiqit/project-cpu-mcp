@@ -13,6 +13,7 @@ import type {
     IAppConfig,
     ICellClient,
 } from './types.js';
+import { assertWarehouseHas } from './warehouse.utils.js';
 import type { CraftStackView } from '../api/types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
@@ -68,6 +69,13 @@ export class CraftService {
         if (recipe === undefined) {
             throw new Error(`Recipe ${input.recipeId} is not available on network ${config.network}.`);
         }
+
+        // Paid action — refresh, then verify the warehouse holds the per-batch inputs × batches before spending
+        // gas, instead of letting startCraft revert InsufficientLiquid after the $CPU approve.
+        await this.mapReader.refresh();
+        const state = this.mapReader.readRevealCell(input.tokenId);
+        const required = recipe.inputs.map((i) => ({ resourceId: i.resourceId, amount: i.amount * input.batches }));
+        assertWarehouseHas(config.resources, state, required, input.tokenId, 'craft');
 
         const totalCostWei = parseEther(recipe.costCpu) * BigInt(input.batches);
         let approveTxHash = null;

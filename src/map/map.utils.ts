@@ -140,9 +140,10 @@ export function isDepleted(cell: CellState): boolean {
     return cell.revealCount > 0 && cell.resources.length > 0 && cell.resources.every((r) => r.deposit === '0');
 }
 
-// A just-demolished cell is empty (building === null) but locked from rebuilding until demolishFinishAt.
-export function isInDemolishCooldown(cell: CellState, serverTime: number): boolean {
-    return cell.demolishFinishAt !== null && cell.demolishFinishAt > serverTime;
+// A just-demolished cell is empty (building === null) but locked from rebuilding until demolishFinishAt. Returns
+// that end timestamp while the cooldown is active, else null — callers get the value without a second null-check.
+export function demolishCooldownEnd(cell: CellState, serverTime: number): number | null {
+    return cell.demolishFinishAt !== null && cell.demolishFinishAt > serverTime ? cell.demolishFinishAt : null;
 }
 
 function countStatuses(cells: Array<CellState>): MapCellStatusCounts {

@@ -73,7 +73,7 @@ describe('demolish tool', () => {
             inputsConsumed: [{ resourceId: 101, amount: 2 }],
         });
         const header = (await harness(outcome)({ tokenId: '42' })).content[0]?.text ?? '';
-        expect(header).toMatch(/plus 2 Concrete from its warehouse/);
+        expect(header).toMatch(/plus 2 Concrete \(#101\) from its warehouse/);
     });
 
     it('propagates service errors', async () => {

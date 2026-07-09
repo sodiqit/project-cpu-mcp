@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CraftRecipeId } from '../../api/types.js';
 import { CELL_ABI } from '../../contracts/cell.abi.js';
-import { makeCell, makeStorage } from '../../map/__tests__/fixtures.js';
+import { makeCell, makeResource, makeStorage } from '../../map/__tests__/fixtures.js';
 import { CellProcessKind } from '../../map/types.js';
 import { TxStatus } from '../../wallet/types.js';
 import { recipeNameToUint64 } from '../cell.utils.js';
@@ -104,6 +104,15 @@ describe('CraftService.craft', () => {
         const { service, contracts } = makeService({ walletChainId: 8453 });
         await expect(service.craft(FORGE)).rejects.toThrow(/chain mismatch/i);
         expect(contracts.sent).toHaveLength(0);
+    });
+
+    it('refuses a craft when the warehouse lacks the recipe inputs (× batches) and sends no tx', async () => {
+        // SmeltSteel needs 4 Iron/batch × 2 batches = 8; the cell holds only 3.
+        const cell = makeCell({ tokenId: '42', resources: [makeResource({ resourceId: 5, balance: '3' })] });
+        const { service, contracts, allowance } = makeService({ cell });
+        await expect(service.craft(STEEL)).rejects.toThrow(/needs 8 Iron/i);
+        expect(contracts.sent).toHaveLength(0);
+        expect(allowance.calls).toHaveLength(0);
     });
 });
 
