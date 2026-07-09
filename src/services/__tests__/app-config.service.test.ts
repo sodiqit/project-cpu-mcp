@@ -46,6 +46,7 @@ function makeResponse(overrides: Partial<AppConfigResponse> = {}): AppConfigResp
                 buildCost: '5',
                 buildTimeSec: 120,
                 buildInputs: [],
+                demolishCost: { cpu: '2.5', inputs: [] },
                 minableResources: [5, 6],
                 recipes: [],
             },

@@ -13,9 +13,10 @@ interface ToolResult {
 
 type Handler = (args: unknown) => Promise<ToolResult>;
 
-function harness(inspection: CellInspection | null): Handler {
+function harness(inspection: CellInspection | null, serverTime = 0): Handler {
     const map = {
         inspectCell: (): CellInspection | null => inspection,
+        getServerTime: (): number => serverTime,
     };
     const wallet = { isReady: () => true, get: () => ({ getAddress: () => '0xMe' }) };
     const appConfig = {
@@ -47,6 +48,7 @@ const inspection: CellInspection = {
         revealPending: false,
         resources: [{ resourceId: 3, deposit: '100', balance: '0', strength: 3, storage: null }],
         building: { type: BuildingType.Mine, buildFinishAt: null },
+        demolishFinishAt: null,
         transitFeePerUnit: null,
         process: {
             kind: CellProcessKind.Mining,
@@ -86,5 +88,14 @@ describe('get_cell tool', () => {
     it('throws when the cell is not in the map', async () => {
         const handler = harness(null);
         await expect(handler({ tokenId: 'missing' })).rejects.toThrow(/not in the current map/i);
+    });
+
+    it('notes the demolition cooldown while the cell is still locked', async () => {
+        const cooling: CellInspection = {
+            ...inspection,
+            cell: { ...inspection.cell, building: null, demolishFinishAt: 500 },
+        };
+        const header = (await harness(cooling, 100)({ tokenId: '7' })).content[0]?.text ?? '';
+        expect(header).toMatch(/demolition cooldown until/i);
     });
 });

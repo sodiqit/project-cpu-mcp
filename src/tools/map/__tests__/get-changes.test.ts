@@ -21,6 +21,7 @@ const CHANGED: EnrichedCell = {
     revealPending: false,
     resources: [{ resourceId: 4, deposit: '50', balance: '0', strength: null, storage: null }],
     building: null,
+    demolishFinishAt: null,
     transitFeePerUnit: null,
     process: null,
     updated: 5,

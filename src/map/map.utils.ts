@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import { HEX_NEIGHBOR_OFFSETS } from './constants.js';
 import {
     type CellState,
@@ -7,13 +9,20 @@ import {
     type MapQuery,
     MapReadiness,
     MapScope,
-    type MapSnapshotResponse,
-    mapSnapshotResponseSchema,
+    type ParsedSnapshot,
     type MapSummary,
     type NeighborRef,
     NeighborRelation,
     type ResourceIndex,
 } from './types.js';
+
+// The snapshot envelope is parsed strictly (a malformed serverTime/version is a real protocol error), but each
+// cell is parsed tolerantly below — mirrors the socket path, which already drops rather than throws on one cell.
+const snapshotEnvelopeSchema = z.object({
+    serverTime: z.number(),
+    version: z.number(),
+    cells: z.array(z.unknown()),
+});
 
 // The single apply-if-newer predicate — shared by every write path so dedup stays consistent.
 export function isNewer(incoming: CellState, held: CellState | null): boolean {
@@ -29,8 +38,19 @@ export function parseCellState(raw: unknown): CellState | null {
     return result.success ? result.data : null;
 }
 
-export function parseSnapshot(raw: unknown): MapSnapshotResponse {
-    return mapSnapshotResponseSchema.parse(raw);
+export function parseSnapshot(raw: unknown): ParsedSnapshot {
+    const envelope = snapshotEnvelopeSchema.parse(raw);
+    const cells: Array<CellState> = [];
+    let dropped = 0;
+    for (const rawCell of envelope.cells) {
+        const cell = parseCellState(rawCell);
+        if (cell === null) {
+            dropped += 1;
+        } else {
+            cells.push(cell);
+        }
+    }
+    return { snapshot: { serverTime: envelope.serverTime, version: envelope.version, cells }, dropped };
 }
 
 function sameAddress(a: string, b: string): boolean {
@@ -118,6 +138,11 @@ export function filterCells(cells: Iterable<CellState>, query: MapQuery): Array<
 // A cell counts as depleted only after a reveal — an unrevealed cell has no deposits yet.
 export function isDepleted(cell: CellState): boolean {
     return cell.revealCount > 0 && cell.resources.length > 0 && cell.resources.every((r) => r.deposit === '0');
+}
+
+// A just-demolished cell is empty (building === null) but locked from rebuilding until demolishFinishAt.
+export function isInDemolishCooldown(cell: CellState, serverTime: number): boolean {
+    return cell.demolishFinishAt !== null && cell.demolishFinishAt > serverTime;
 }
 
 function countStatuses(cells: Array<CellState>): MapCellStatusCounts {

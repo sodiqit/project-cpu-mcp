@@ -71,6 +71,9 @@ export const cellStateSchema = z.object({
     revealPending: z.boolean().default(false),
     resources: z.array(cellResourceSchema),
     building: cellBuildingViewSchema.nullable().default(null),
+    // Set after a demolish and cleared on rebuild. `demolishFinishAt > serverTime` ⇒ the plot is still in its
+    // rebuild cooldown; `building` is null meanwhile, so this is the only signal the cell was just demolished.
+    demolishFinishAt: z.number().nullable().default(null),
     transitFeePerUnit: z.string().nullable().default(null),
     process: cellProcessViewSchema.nullable().default(null),
     updated: z.number(),
@@ -90,6 +93,13 @@ export type CellProcessCraftView = z.infer<typeof cellProcessCraftViewSchema>;
 export type CellProcessView = z.infer<typeof cellProcessViewSchema>;
 export type CellState = z.infer<typeof cellStateSchema>;
 export type MapSnapshotResponse = z.infer<typeof mapSnapshotResponseSchema>;
+
+export interface ParsedSnapshot {
+    snapshot: MapSnapshotResponse;
+    // Cells the tolerant parser skipped (schema-invalid — e.g. an unknown building/recipe id from a newer
+    // server); the rest of the snapshot still applies so one bad cell can't brick the whole map.
+    dropped: number;
+}
 
 export enum MapScope {
     Summary = 'summary',
@@ -260,6 +270,7 @@ export enum AttentionReason {
     DepositDepleted = 'deposit_depleted',
     DeliveryReady = 'delivery_ready',
     Unbuilt = 'unbuilt',
+    DemolishCooldown = 'demolish_cooldown',
 }
 
 export interface AttentionStorageBreakdown {

@@ -91,7 +91,6 @@ export enum CraftRecipeId {
     MakeChips = 'make_chips',
     MakeMemory = 'make_memory',
     MakeCooling = 'make_cooling',
-    MakeBattery = 'make_battery',
     MakeAccelerators = 'make_accelerators',
     MakeNetwork = 'make_network',
     ForgeWcpu = 'forge_wcpu',
@@ -121,6 +120,14 @@ export enum BuildingKind {
     Hub = 'hub',
 }
 
+/** Cost to demolish a building: `cpu` $CPU burned + `inputs` consumed from the cell's warehouse (no refund). */
+export interface DemolishCostView {
+    /** $CPU burned to tear it down, human-readable decimal. */
+    cpu: string;
+    /** Resources debited from the cell's warehouse (integer units). Ids → `resources`. */
+    inputs: Array<CraftStackView>;
+}
+
 /** Per-building catalog entry from `GET /api/v1/config`. */
 export interface BuildingView {
     type: BuildingType;
@@ -134,6 +141,8 @@ export interface BuildingView {
     buildTimeSec: number;
     /** Resources burned to construct it (integer units); empty for tier-1 extractors. Ids → `resources`. */
     buildInputs: Array<CraftStackView>;
+    /** Cost to tear it down — burned $CPU + warehouse resources consumed. */
+    demolishCost: DemolishCostView;
     /** Resource ids an extractor produces; empty for crafters/hub. Ids → `resources`. */
     minableResources: Array<number>;
     /** Recipe ids a crafter runs; empty for extractors/hub. */
@@ -180,7 +189,6 @@ export enum BuildingType {
     SiliconPlant = 'silicon_plant',
     WaferFab = 'wafer_fab',
     CoolingPlant = 'cooling_plant',
-    BatteryPlant = 'battery_plant',
     AcceleratorFab = 'accelerator_fab',
     NetworkAssembly = 'network_assembly',
     Datacenter = 'datacenter',

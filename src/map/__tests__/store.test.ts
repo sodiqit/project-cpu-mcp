@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { MapStore } from '../store.js';
 import { makeCell, makeSnapshot } from './fixtures.js';
 
+const NOW = 1_000_000;
+
 describe('MapStore', () => {
     let store: MapStore;
 
     beforeEach(() => {
-        store = new MapStore();
+        store = new MapStore(() => NOW);
     });
 
     describe('applyCell', () => {
@@ -43,6 +45,29 @@ describe('MapStore', () => {
             store.applySnapshot(makeSnapshot({ serverTime: 1234, version: 77, cells: [makeCell({ updated: 77 })] }));
             expect(store.getServerTime()).toBe(1234);
             expect(store.getSyncVersion()).toBe(77);
+        });
+
+        it('reports 0 server time until the first snapshot anchors the clock', () => {
+            expect(store.getServerTime()).toBe(0);
+        });
+
+        it('advances server time with the local clock between snapshots (no freeze)', () => {
+            let now = 2_000_000;
+            const live = new MapStore(() => now);
+            live.applySnapshot(makeSnapshot({ serverTime: 5000, version: 1, cells: [] }));
+            expect(live.getServerTime()).toBe(5000);
+            now += 30;
+            expect(live.getServerTime()).toBe(5030);
+        });
+
+        it('does not let a late, older snapshot rewind server time', () => {
+            let now = 2_000_000;
+            const live = new MapStore(() => now);
+            live.applySnapshot(makeSnapshot({ serverTime: 5000, version: 2, cells: [] }));
+            now += 100;
+            // A stale snapshot delivered late: server advanced only 50s over 100s of local time.
+            live.applySnapshot(makeSnapshot({ serverTime: 5050, version: 1, cells: [] }));
+            expect(live.getServerTime()).toBe(5100);
         });
 
         it('keeps the sync cursor at the server version even when a newer cell already arrived', () => {

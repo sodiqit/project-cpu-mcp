@@ -46,6 +46,7 @@ const CONFIG: AppConfig = {
             buildCost: '5',
             buildTimeSec: 120,
             buildInputs: [],
+            demolishCost: { cpu: '2.5', inputs: [] },
             minableResources: [5, 6],
             recipes: [],
         },
@@ -77,7 +78,7 @@ describe('get_game_config tool', () => {
 
         const header = result.content[0]?.text ?? '';
         expect(header).toMatch(/Network ethereum \(chainId 1\)/);
-        expect(header).toMatch(/Mine \(extractor, 5 \$CPU\)/);
+        expect(header).toMatch(/Mine \(extractor, build 5 \$CPU, demolish 2\.5 \$CPU\)/);
         expect(header).toMatch(/first reveal free, re-reveal 1000 \$CPU/);
         expect(header).toMatch(/1 recipe\(s\)/);
         expect(header).toMatch(/5:Iron/);

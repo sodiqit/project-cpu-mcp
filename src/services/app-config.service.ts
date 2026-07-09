@@ -44,7 +44,12 @@ export class AppConfigService implements IAppConfig {
             },
             resources: data.resources ?? {},
             recipes: data.recipes ?? [],
-            buildings: data.buildings ?? [],
+            // Default demolishCost so a client running against an older API (no demolish field) degrades to a
+            // free/no-op demolish pre-check rather than crashing on `undefined.cpu`; the chain stays the arbiter.
+            buildings: (data.buildings ?? []).map((b) => ({
+                ...b,
+                demolishCost: b.demolishCost ?? { cpu: '0', inputs: [] },
+            })),
             reveal: data.reveal ?? { firstFree: true, reRevealCost: '0' },
         };
         this.cached = config;

@@ -19,7 +19,12 @@ export class MapStore {
     // Live high-water mark of cell.updated, advanced by every applied cell. Drives the local
     // get_changes delta only — it never goes to the server, so it can't cause a `?since` skip.
     private latestUpdated = 0;
-    private serverTime = 0;
+    // Offset (serverTime − local seconds) captured at the last snapshot. getServerTime() projects it onto the
+    // live local clock, so "reference now" keeps advancing between resyncs instead of freezing at the snapshot.
+    private serverTimeOffsetSec: number | null = null;
+
+    // `nowSec` is injectable so tests get a deterministic clock; production uses wall-clock seconds.
+    constructor(private readonly nowSec: () => number = () => Math.floor(Date.now() / 1000)) {}
 
     applyCell(cell: CellState): boolean {
         const held = this.cells.get(cell.tokenId) ?? null;
@@ -41,8 +46,10 @@ export class MapStore {
         for (const cell of snapshot.cells) {
             this.applyCell(cell);
         }
-        if (snapshot.serverTime > this.serverTime) {
-            this.serverTime = snapshot.serverTime;
+        // Keep the freshest (largest) offset so a late, out-of-order older snapshot can't rewind "now".
+        const offset = snapshot.serverTime - this.nowSec();
+        if (this.serverTimeOffsetSec === null || offset > this.serverTimeOffsetSec) {
+            this.serverTimeOffsetSec = offset;
         }
         if (snapshot.version > this.syncVersion) {
             this.syncVersion = snapshot.version;
@@ -97,7 +104,7 @@ export class MapStore {
     }
 
     getServerTime(): number {
-        return this.serverTime;
+        return this.serverTimeOffsetSec === null ? 0 : this.nowSec() + this.serverTimeOffsetSec;
     }
 
     size(): number {

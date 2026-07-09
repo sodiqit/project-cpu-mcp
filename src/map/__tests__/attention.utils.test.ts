@@ -166,6 +166,19 @@ describe('buildAttentionReport', () => {
         expect(pending.items).toEqual([]);
     });
 
+    it('flags a just-demolished cell as demolition cooldown rather than unbuilt', () => {
+        // serverTime is 10; a future demolishFinishAt means the plot is still locked from rebuilding.
+        const cooling = report([{ tokenId: '10', revealCount: 1, building: null, demolishFinishAt: 100 }]);
+        expect(cooling.items).toHaveLength(1);
+        expect(cooling.items[0]?.reason).toBe(AttentionReason.DemolishCooldown);
+        expect(cooling.items[0]?.severity).toBe(AttentionSeverity.Info);
+        expect(cooling.items[0]?.arrivalAt).toBe(100);
+
+        // Once the cooldown has elapsed (<= serverTime), it is a plain unbuilt plot again.
+        const elapsed = report([{ tokenId: '11', revealCount: 1, building: null, demolishFinishAt: 5 }]);
+        expect(elapsed.items[0]?.reason).toBe(AttentionReason.Unbuilt);
+    });
+
     it('does not flag hubs for storage', () => {
         const r = report([
             {

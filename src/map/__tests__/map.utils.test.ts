@@ -7,6 +7,7 @@ import {
     hexDistance,
     isNewer,
     parseCellState,
+    parseSnapshot,
     summarizeMap,
 } from '../map.utils.js';
 import { type CellState, CellProcessKind, MapReadiness, MapScope, type MapQuery, NeighborRelation } from '../types.js';
@@ -15,6 +16,21 @@ import { makeCell } from './fixtures.js';
 function query(overrides: Partial<MapQuery>): MapQuery {
     return { scope: MapScope.All, tokenIds: null, around: null, ownerAddress: null, ...overrides };
 }
+
+describe('parseSnapshot', () => {
+    it('keeps valid cells and drops schema-invalid ones without failing the whole snapshot', () => {
+        const raw = { serverTime: 1000, version: 5, cells: [makeCell({ tokenId: '1' }), { tokenId: 'nope' }] };
+        const { snapshot, dropped } = parseSnapshot(raw);
+        expect(snapshot.serverTime).toBe(1000);
+        expect(snapshot.version).toBe(5);
+        expect(snapshot.cells.map((c) => c.tokenId)).toEqual(['1']);
+        expect(dropped).toBe(1);
+    });
+
+    it('throws on a malformed envelope (a real protocol error, not a stray cell)', () => {
+        expect(() => parseSnapshot({ version: 1 })).toThrow();
+    });
+});
 
 describe('isNewer', () => {
     it('is true when nothing is held', () => {
