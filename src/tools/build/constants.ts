@@ -5,13 +5,17 @@ export const BUILD_DESCRIPTION = [
     "cell's warehouse); the tool auto-approves the $CPU spend once, sends the on-chain place, and waits for",
     'confirmation. Building takes time — it is not usable until it finishes. Once ready, start an extractor with',
     '`cpu_start_mining` or a crafter with `cpu_craft`. A cell holds one building: re-running build on the same',
-    'building is a safe no-op; to switch buildings `cpu_demolish` first. Inspect the result with `cpu_get_cell`.',
+    'building is a safe no-op; to switch buildings `cpu_demolish` first (a just-demolished cell is locked from',
+    'rebuilding until its cooldown ends). Inspect the result with `cpu_get_cell`.',
 ].join(' ');
 
 export const DEMOLISH_DESCRIPTION = [
     'Remove the building from a Land cell you own, clearing it for a different building. Requires a session —',
-    'call `cpu_authenticate` first. The cell must have no active mining or craft process (claim or finish it',
-    'first); a `hub` can only be demolished when it is not mid-route or anchoring open trade lots. Deposits and',
-    'warehouse balances are preserved. Sends the on-chain demolish and waits for confirmation; the cleared',
-    'state appears on the map shortly after.',
+    'call `cpu_authenticate` first. Not free: it burns a fraction of the building’s build cost in $CPU',
+    '(auto-approved) and consumes some of its build materials from the cell’s warehouse (no refund) — see each',
+    "building's `demolishCost` in `cpu_get_game_config` for the exact amounts. The cell must have no active mining",
+    'or craft process (claim or finish it first); a `hub` can only be demolished when it is not mid-route or',
+    'anchoring open trade lots. Deposits and other warehouse balances are preserved. Afterward the plot is locked',
+    "from rebuilding for the building's build time (its `demolishFinishAt`); `cpu_get_cell`/`cpu_get_attention`",
+    'surface the cooldown.',
 ].join(' ');

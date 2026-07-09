@@ -2,13 +2,10 @@ import { formatDistanceStrict } from 'date-fns';
 
 import type { CraftStackView, RecipeView } from '../../api/types.js';
 import type { CraftClaimResult, CraftStartResult, CraftStatusResult } from '../../services/types.js';
-import { resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
+import { formatStacks as formatStackList, type ResourceNames } from '../../utils/format.utils.js';
 
 function formatStacks(stacks: Array<CraftStackView>, resources: ResourceNames): string {
-    if (stacks.length === 0) {
-        return 'nothing';
-    }
-    return stacks.map((s) => `${s.amount} ${resourceLabel(resources, s.resourceId)}`).join(' + ');
+    return stacks.length === 0 ? 'nothing' : formatStackList(resources, stacks, ' + ');
 }
 
 function formatCost(costCpu: string): string {
@@ -56,6 +53,6 @@ export function summarizeCraftClaim(r: CraftClaimResult, resources: ResourceName
     if (r.outputs.length === 0) {
         return `Nothing matured yet to claim on cell ${r.tokenId} (tx ${r.txHash}).`;
     }
-    const outs = r.outputs.map((o) => `${o.amount} ${resourceLabel(resources, o.resourceId)}`).join(' + ');
+    const outs = formatStackList(resources, r.outputs, ' + ');
     return `Claimed ${r.batches} batch(es) → ${outs} on cell ${r.tokenId}: tx ${r.txHash} confirmed in block ${r.blockNumber}.`;
 }

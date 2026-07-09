@@ -1,4 +1,4 @@
-import { isDepleted } from './map.utils.js';
+import { demolishCooldownEnd, isDepleted } from './map.utils.js';
 import {
     type AttentionItem,
     AttentionReason,
@@ -20,6 +20,7 @@ const REASON_SEVERITY: Record<AttentionReason, AttentionSeverity> = {
     [AttentionReason.DepositDepleted]: Warning,
     [AttentionReason.DeliveryReady]: Warning,
     [AttentionReason.Unbuilt]: Info,
+    [AttentionReason.DemolishCooldown]: Info,
 };
 
 const SEVERITY_RANK: Record<AttentionSeverity, number> = { [Critical]: 0, [Warning]: 1, [Info]: 2 };
@@ -126,7 +127,14 @@ function cellItems(cell: CellState, input: BuildAttentionInput): Array<Attention
         items.push(attentionItem(cell, AttentionReason.DepositDepleted, { resourceId: target, depositRemaining: '0' }));
     }
     if (cell.revealCount > 0 && cell.building === null && !cell.revealPending) {
-        items.push(attentionItem(cell, AttentionReason.Unbuilt));
+        // A just-demolished cell is empty but can't be rebuilt until its cooldown ends — flag the wait, not a
+        // missing building, so the caller isn't told to build somewhere it can't yet.
+        const cooldownEnd = demolishCooldownEnd(cell, input.serverTime);
+        if (cooldownEnd !== null) {
+            items.push(attentionItem(cell, AttentionReason.DemolishCooldown, { arrivalAt: cooldownEnd }));
+        } else {
+            items.push(attentionItem(cell, AttentionReason.Unbuilt));
+        }
     }
     return items;
 }

@@ -1,4 +1,4 @@
-import { isAddress, parseEther, type Address } from 'viem';
+import { isAddress, parseEther, type Address, type Hash } from 'viem';
 
 import type {
     AppConfig,
@@ -12,10 +12,13 @@ import type {
     IAppConfig,
     ICellClient,
 } from './types.js';
+import { assertWarehouseHas } from './warehouse.utils.js';
+import { BuildingKind } from '../api/types.js';
 import type { BuildingType, BuildingView } from '../api/types.js';
 import type { ILogger } from '../logger/types.js';
+import { demolishCooldownEnd } from '../map/map.utils.js';
 import type { CellState, RevealCellReader } from '../map/types.js';
-import { cpuFromWei } from '../utils/format.utils.js';
+import { formatUnixSeconds } from '../utils/format.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
 
 export class BuildService {
@@ -46,13 +49,16 @@ export class BuildService {
         const cpuToken = this.requireCpuToken(config);
         const tokenId = BigInt(input.tokenId);
 
+        // Paid action — pull a fresh snapshot so the pre-checks below gate on current on-chain state, not a
+        // possibly-stale local cache (mirrors mining's start path).
+        await this.mapReader.refresh();
         const state = this.mapReader.readRevealCell(input.tokenId);
         this.assertBuildable(input, state, wallet.getAddress());
 
         const alreadyBuilt = state?.building?.type === input.buildingType;
         const placement: BuildPlacement = alreadyBuilt
             ? { buildTxHash: null, approveTxHash: null, buildCost: '0' }
-            : await this.placeBuilding(config, cell, cpuToken, input, tokenId);
+            : await this.placeBuilding(config, cell, cpuToken, input, tokenId, state);
 
         return {
             tokenId: input.tokenId,
@@ -70,17 +76,45 @@ export class BuildService {
         this.assertChain(config, wallet);
 
         const cell = this.requireCell(config);
+        const cpuToken = this.requireCpuToken(config);
         const tokenId = BigInt(input.tokenId);
 
+        await this.mapReader.refresh();
         const state = this.mapReader.readRevealCell(input.tokenId);
         this.assertOwner(input.tokenId, state, wallet.getAddress(), 'demolish');
+        if (state === null || state.building === null) {
+            throw new Error(
+                `Cell ${input.tokenId} has no building to demolish (it may be empty, or not synced to the map ` +
+                    `yet — retry shortly).`,
+            );
+        }
+        const building = state.building;
+        this.assertNoProcess(input.tokenId, state, 'demolish');
 
-        this.logger.info('demolishing building', { tokenId: input.tokenId, network: config.network });
+        const view = this.buildingView(config, building.type);
+        this.assertHubIdle(input.tokenId, view, state);
+        assertWarehouseHas(config.resources, state, view.demolishCost.inputs, input.tokenId, 'demolish');
+
+        // Demolish burns $CPU on-chain (`burnFrom`), so the Cell must be allowed to pull it — same approval the
+        // build path uses. The warehouse inputs are debited internally and need no approval.
+        const approveTxHash = await this.approveCpuSpend(cpuToken, cell, view.demolishCost.cpu);
+
+        this.logger.info('demolishing building', {
+            tokenId: input.tokenId,
+            buildingType: building.type,
+            cpuBurned: view.demolishCost.cpu,
+            network: config.network,
+        });
         const txHash = await this.cellClient.demolish({ cell, tokenId });
         const confirmed = await this.contracts.confirm(txHash, 'Demolish transaction');
 
         return {
             tokenId: input.tokenId,
+            buildingType: building.type,
+            cpuBurned: view.demolishCost.cpu,
+            inputsConsumed: view.demolishCost.inputs,
+            rebuildCooldownSec: view.buildTimeSec,
+            approveTxHash,
             txHash: confirmed.txHash,
             status: confirmed.status,
             blockNumber: confirmed.blockNumber,
@@ -92,11 +126,14 @@ export class BuildService {
         if (state === null) {
             return;
         }
-        if (state.process !== null) {
+        const cooldownEnd = demolishCooldownEnd(state, this.mapReader.getServerTime());
+        if (cooldownEnd !== null) {
             throw new Error(
-                `Cell ${input.tokenId} has an active ${state.process.kind} process; claim or finish it before building.`,
+                `Cell ${input.tokenId} is in demolition cooldown until ${formatUnixSeconds(cooldownEnd)}; ` +
+                    `it cannot be rebuilt yet.`,
             );
         }
+        this.assertNoProcess(input.tokenId, state, 'build');
         if (state.building !== null && state.building.type !== input.buildingType) {
             throw new Error(
                 `Cell ${input.tokenId} already has a ${state.building.type}; demolish it before building a ${input.buildingType}.`,
@@ -110,28 +147,56 @@ export class BuildService {
         }
     }
 
+    private assertNoProcess(tokenId: string, state: CellState, action: string): void {
+        if (state.process !== null) {
+            throw new Error(
+                `Cell ${tokenId} has an active ${state.process.kind} process; claim or finish it before you ${action}.`,
+            );
+        }
+    }
+
+    // A hub anchoring open trade lots (reserved.lots > 0) reverts on-chain with CellBusy. Catch that common case
+    // here; the chain still guards in-flight routes, which aren't visible in the local snapshot.
+    private assertHubIdle(tokenId: string, view: BuildingView, state: CellState | null): void {
+        if (view.kind !== BuildingKind.Hub || state === null) {
+            return;
+        }
+        const anchorsLots = state.resources.some((r) => r.storage !== null && BigInt(r.storage.reserved.lots) > 0n);
+        if (anchorsLots) {
+            throw new Error(`Cell ${tokenId} hub anchors open trade lots; cancel them before demolishing.`);
+        }
+    }
+
+    // Approve the Cell to pull `decimalCpu` $CPU before a burn/spend; null when it's free or the allowance already
+    // covers it (`ensureAllowance` approves an unbounded amount when short). Shared by build and demolish.
+    private async approveCpuSpend(cpuToken: Address, cell: Address, decimalCpu: string): Promise<Hash | null> {
+        const wei = parseEther(decimalCpu);
+        return wei > 0n ? this.allowance.ensureAllowance(cpuToken, cell, wei) : null;
+    }
+
     private async placeBuilding(
         config: AppConfig,
         cell: Address,
         cpuToken: Address,
         input: BuildInput,
         tokenId: bigint,
+        state: CellState | null,
     ): Promise<BuildPlacement> {
         const view = this.buildingView(config, input.buildingType);
-        const costWei = parseEther(view.buildCost);
-        const approveTxHash = costWei > 0n ? await this.allowance.ensureAllowance(cpuToken, cell, costWei) : null;
+        assertWarehouseHas(config.resources, state, view.buildInputs, input.tokenId, 'build');
+        const approveTxHash = await this.approveCpuSpend(cpuToken, cell, view.buildCost);
 
         this.logger.info('placing building', {
             tokenId: input.tokenId,
             buildingType: input.buildingType,
             onChainId: view.onChainId,
-            costWei: costWei.toString(),
+            buildCost: view.buildCost,
             network: config.network,
         });
         const buildTxHash = await this.cellClient.place({ cell, tokenId, buildingType: view.onChainId });
         await this.contracts.confirm(buildTxHash, 'Build transaction');
 
-        return { buildTxHash, approveTxHash, buildCost: cpuFromWei(costWei.toString()) };
+        return { buildTxHash, approveTxHash, buildCost: view.buildCost };
     }
 
     private assertChain(config: AppConfig, wallet: WalletManager): void {

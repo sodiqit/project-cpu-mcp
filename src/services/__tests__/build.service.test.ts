@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { BuildingType } from '../../api/types.js';
 import { CELL_ABI } from '../../contracts/cell.abi.js';
-import { makeCell } from '../../map/__tests__/fixtures.js';
+import { makeCell, makeResource, makeStorage } from '../../map/__tests__/fixtures.js';
 import { CellProcessKind } from '../../map/types.js';
 import { TxStatus } from '../../wallet/types.js';
 import { BuildService } from '../build.service.js';
@@ -12,6 +12,7 @@ import {
     APPROVE_HASH,
     CELL,
     CPU_TOKEN,
+    DEFAULT_SERVER_TIME,
     type FakeContractClient,
     makeCellHarness,
     makeConfig,
@@ -123,6 +124,20 @@ describe('BuildService', () => {
         expect(contracts.sent).toHaveLength(0);
     });
 
+    it('rejects a build when the warehouse lacks the refined build inputs', async () => {
+        const cell = makeCell({
+            tokenId: '42',
+            owner: WALLET_ADDRESS,
+            resources: [makeResource({ resourceId: 101, balance: '3' })],
+        });
+        const { service, contracts, allowance } = makeService({ cell });
+        await expect(service.build({ tokenId: '42', buildingType: BuildingType.SteelMill })).rejects.toThrow(
+            /needs 8 Concrete/i,
+        );
+        expect(contracts.sent).toHaveLength(0);
+        expect(allowance.calls).toHaveLength(0);
+    });
+
     it('wraps an on-chain revert of the place', async () => {
         const { service } = makeService({ receipts: [TxStatus.Reverted] });
         await expect(service.build(EXTRACTOR)).rejects.toThrow(/build transaction reverted/i);
@@ -134,15 +149,93 @@ describe('BuildService', () => {
         expect(contracts.sent).toHaveLength(0);
     });
 
-    it('demolishes a building', async () => {
-        const cell = makeCell({ tokenId: '42', owner: WALLET_ADDRESS });
-        const { service, contracts } = makeService({ cell });
+    it('approves the burned $CPU and demolishes, reporting cost and cooldown', async () => {
+        const cell = makeCell({
+            tokenId: '42',
+            owner: WALLET_ADDRESS,
+            building: { type: BuildingType.Mine, buildFinishAt: null },
+        });
+        const { service, contracts, allowance } = makeService({ cell, approve: APPROVE_HASH });
 
         const result = await service.demolish({ tokenId: '42' });
 
+        expect(allowance.calls).toEqual([{ token: CPU_TOKEN, spender: CELL, needed: parseEther('2.5') }]);
         expect(contracts.sent).toHaveLength(1);
         expect(decodeSent(contracts, 0).functionName).toBe('demolish');
+        expect(result.approveTxHash).toBe(APPROVE_HASH);
+        expect(result.buildingType).toBe(BuildingType.Mine);
+        expect(result.cpuBurned).toBe('2.5');
+        expect(result.rebuildCooldownSec).toBe(120);
         expect(result.status).toBe(TxStatus.Success);
         expect(result.blockNumber).toBe('100');
+    });
+
+    it('refuses to demolish an empty cell (nothing to tear down)', async () => {
+        const cell = makeCell({ tokenId: '42', owner: WALLET_ADDRESS });
+        const { service, contracts, allowance } = makeService({ cell });
+        await expect(service.demolish({ tokenId: '42' })).rejects.toThrow(/no building to demolish/i);
+        expect(contracts.sent).toHaveLength(0);
+        expect(allowance.calls).toHaveLength(0);
+    });
+
+    it('refuses to demolish while a process is active', async () => {
+        const cell = makeCell({
+            tokenId: '42',
+            owner: WALLET_ADDRESS,
+            building: { type: BuildingType.Mine, buildFinishAt: null },
+            process: {
+                kind: CellProcessKind.Mining,
+                resource: 5,
+                durationSec: 180,
+                batch: 77,
+                startAt: 1,
+                stalled: false,
+            },
+        });
+        const { service, contracts } = makeService({ cell });
+        await expect(service.demolish({ tokenId: '42' })).rejects.toThrow(/active .*process/i);
+        expect(contracts.sent).toHaveLength(0);
+    });
+
+    it('refuses to demolish when the warehouse lacks the consumed inputs', async () => {
+        const cell = makeCell({
+            tokenId: '42',
+            owner: WALLET_ADDRESS,
+            building: { type: BuildingType.SteelMill, buildFinishAt: null },
+            resources: [makeResource({ resourceId: 101, balance: '1' })],
+        });
+        const { service, contracts } = makeService({ cell });
+        await expect(service.demolish({ tokenId: '42' })).rejects.toThrow(/needs 2 Concrete/i);
+        expect(contracts.sent).toHaveLength(0);
+    });
+
+    it('refuses to demolish a hub that still anchors open trade lots', async () => {
+        const cell = makeCell({
+            tokenId: '42',
+            owner: WALLET_ADDRESS,
+            building: { type: BuildingType.Hub, buildFinishAt: null },
+            resources: [
+                makeResource({
+                    resourceId: 5,
+                    storage: makeStorage({ reserved: { incomingTransport: '0', lots: '10' } }),
+                }),
+            ],
+        });
+        const { service, contracts, allowance } = makeService({ cell });
+        await expect(service.demolish({ tokenId: '42' })).rejects.toThrow(/anchors open trade lots/i);
+        expect(contracts.sent).toHaveLength(0);
+        expect(allowance.calls).toHaveLength(0);
+    });
+
+    it('blocks a rebuild while the cell is in demolition cooldown', async () => {
+        const cell = makeCell({
+            tokenId: '42',
+            owner: WALLET_ADDRESS,
+            building: null,
+            demolishFinishAt: DEFAULT_SERVER_TIME + 1000,
+        });
+        const { service, contracts } = makeService({ cell });
+        await expect(service.build(EXTRACTOR)).rejects.toThrow(/demolition cooldown/i);
+        expect(contracts.sent).toHaveLength(0);
     });
 });

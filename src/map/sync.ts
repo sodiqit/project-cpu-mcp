@@ -94,7 +94,11 @@ export class MapSync implements MapStatus {
             if (status !== HttpStatus.Ok) {
                 throw new Error(`snapshot request returned ${status}`);
             }
-            this.store.applySnapshot(parseSnapshot(data));
+            const { snapshot, dropped } = parseSnapshot(data);
+            this.store.applySnapshot(snapshot);
+            if (dropped > 0) {
+                this.logger.warn('dropped invalid cells from map snapshot', { dropped });
+            }
             this.logger.info('map snapshot loaded', { cells: this.store.size(), version: this.store.getSyncVersion() });
             this.markReady();
         } catch (error) {
@@ -110,11 +114,12 @@ export class MapSync implements MapStatus {
             if (status !== HttpStatus.Ok) {
                 throw new Error(`resync request returned ${status}`);
             }
-            const snapshot = parseSnapshot(data);
+            const { snapshot, dropped } = parseSnapshot(data);
             this.store.applySnapshot(snapshot);
             this.logger.info('map resynced', {
                 since,
                 changed: snapshot.cells.length,
+                dropped,
                 version: this.store.getSyncVersion(),
             });
         } catch (error) {

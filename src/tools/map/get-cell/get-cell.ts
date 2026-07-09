@@ -1,6 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import { demolishCooldownEnd } from '../../../map/map.utils.js';
 import type { AppContext } from '../../../types.js';
+import { formatUnixSeconds } from '../../../utils/format.utils.js';
 import { labelCell } from '../label.utils.js';
 import { getWalletAddress } from '../wallet.utils.js';
 import { GET_CELL_DESCRIPTION } from './constants.js';
@@ -18,7 +20,12 @@ export function registerGetCellTool(server: McpServer, context: AppContext): voi
 
             const { cell, neighbors } = inspection;
             const { resources } = await context.appConfig.load();
-            const header = `Cell ${cell.tokenId} @(${cell.x},${cell.y}) · ${neighbors.length} neighbours`;
+            const cooldownEnd = demolishCooldownEnd(cell, context.mapReader.getServerTime());
+            const cooldownNote =
+                cooldownEnd !== null
+                    ? ` · demolition cooldown until ${formatUnixSeconds(cooldownEnd)} (no rebuild yet)`
+                    : '';
+            const header = `Cell ${cell.tokenId} @(${cell.x},${cell.y}) · ${neighbors.length} neighbours${cooldownNote}`;
 
             const labeled = {
                 ...inspection,

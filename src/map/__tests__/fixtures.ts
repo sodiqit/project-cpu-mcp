@@ -64,6 +64,7 @@ export function makeCell(overrides: Partial<CellState> = {}): CellState {
         revealPending: false,
         resources: [],
         building: null,
+        demolishFinishAt: null,
         transitFeePerUnit: null,
         process: null,
         updated: 1,

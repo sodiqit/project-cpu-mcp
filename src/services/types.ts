@@ -5,6 +5,7 @@ import type {
     BuildingType,
     BuildingView,
     CraftRecipeId,
+    CraftStackView,
     LotAvailability,
     LotSort,
     RecipeView,
@@ -201,6 +202,14 @@ export interface DemolishInput {
 
 export interface DemolishResult {
     tokenId: string;
+    buildingType: BuildingType;
+    /** $CPU burned to tear it down (decimal). */
+    cpuBurned: string;
+    /** Warehouse resources consumed by the demolish (integer units); empty when none. */
+    inputsConsumed: Array<CraftStackView>;
+    /** Seconds the plot stays locked from rebuilding after this demolish (the tier's build time). */
+    rebuildCooldownSec: number;
+    approveTxHash: Hash | null;
     txHash: Hash;
     status: TxStatus;
     blockNumber: string;
