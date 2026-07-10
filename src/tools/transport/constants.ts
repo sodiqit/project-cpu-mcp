@@ -10,6 +10,16 @@ export const TRANSPORT_DESCRIPTION = [
     'pays no fee.',
 ].join(' ');
 
+export const ROUTE_NETWORK_DESCRIPTION = [
+    'The road map of the world (read-only): every legal waypoint — your revealed cells and all Hubs — as graph',
+    'nodes (owner, hub flag, per-unit transit fee, pos, connected-component id) plus every hop the contract',
+    'would accept as edges (pairs within radius(a)+radius(b) grid steps, with distances). Pass from/towards to',
+    'annotate each node with grid distance from the source and to the destination (a potential field to reason',
+    'over). Different component ids = a gap no chain can cross today — bridging it (build a Hub, buy land) is a',
+    'strategic decision. Routing over this map is YOUR job: pick the chain, then verify with',
+    'cpu_quote_transport. Use cpu_next_hops to zoom into one cell.',
+].join(' ');
+
 export const NEXT_HOPS_DESCRIPTION = [
     'Survey the legal next waypoints from a cell (read-only). Lists every eligible waypoint — your revealed cells',
     'and all Hubs — within one hop under the on-chain reach rule (hop ≤ radius(from)+radius(to) grid steps; a',

@@ -436,6 +436,40 @@ export interface NextHopsResult {
     note: string;
 }
 
+export interface RouteNetworkInput {
+    from: number | null;
+    towards: number | null;
+}
+
+export interface NetworkNodeView {
+    tokenId: string;
+    pos: CellCoord;
+    isOwn: boolean;
+    isHub: boolean;
+    owner: string;
+    transitFeePerUnit: string | null;
+    distFromSource: number | null;
+    distToTarget: number | null;
+    component: number;
+}
+
+export interface NetworkEdgeView {
+    a: string;
+    b: string;
+    distance: number;
+}
+
+export interface RouteNetworkResult {
+    from: string | null;
+    towards: string | null;
+    fromToTarget: number | null;
+    reach: { moveRadius: number; hubRadius: number };
+    components: number;
+    nodes: Array<NetworkNodeView>;
+    edges: Array<NetworkEdgeView>;
+    note: string;
+}
+
 export interface CraftServiceOptions {
     wallet: WalletProvider;
     appConfig: IAppConfig;

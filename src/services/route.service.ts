@@ -1,11 +1,14 @@
-import { DISTANCE_SCAN_CAP, NEXT_HOPS_NOTE } from './route.constants.js';
-import { distancesFrom, reachableWaypoints, type RouteNode } from './route.utils.js';
+import { DISTANCE_SCAN_CAP, NEXT_HOPS_NOTE, ROUTE_NETWORK_NOTE } from './route.constants.js';
+import { componentLabels, distancesFrom, networkEdges, reachableWaypoints, type RouteNode } from './route.utils.js';
 import type {
     IAppConfig,
+    NetworkNodeView,
     NextHopsInput,
     NextHopsResult,
     NextHopView,
     RouteCellReader,
+    RouteNetworkInput,
+    RouteNetworkResult,
     RouteServiceOptions,
 } from './types.js';
 import { BuildingType } from '../api/types.js';
@@ -95,6 +98,75 @@ export class RouteService {
             hops,
             note: NEXT_HOPS_NOTE,
         };
+    }
+
+    async network(input: RouteNetworkInput): Promise<RouteNetworkResult> {
+        const from = input.from === null ? null : String(input.from);
+        const towards = input.towards === null ? null : String(input.towards);
+
+        const config = await this.appConfig.load();
+        const routing = config.transport;
+        const address = this.wallet.get().getAddress().toLowerCase();
+
+        const nodes = new Map<string, RouteNode>();
+        const cellsByToken = new Map<string, CellState>();
+        for (const cell of this.mapReader.allCells()) {
+            cellsByToken.set(cell.tokenId, cell);
+            const isOwn = cell.owner.toLowerCase() === address;
+            const isHub = cell.building !== null && cell.building.type === BuildingType.Hub;
+            if (cell.revealCount === 0 || (!isOwn && !isHub)) {
+                continue;
+            }
+            nodes.set(cell.tokenId, { tokenId: cell.tokenId, isOwn, isHub });
+        }
+
+        const edges = networkEdges(nodes, routing.moveRadius, routing.hubRadius);
+        const components = componentLabels(nodes, edges);
+
+        const nodeTokens = new Set<number>([...nodes.keys()].map(Number));
+        const fromSource = from === null ? null : distancesFrom(Number(from), nodeTokens, DISTANCE_SCAN_CAP);
+        const toTarget =
+            towards === null
+                ? null
+                : distancesFrom(
+                      Number(towards),
+                      new Set([...nodeTokens, ...(from === null ? [] : [Number(from)])]),
+                      DISTANCE_SCAN_CAP,
+                  );
+
+        const views: Array<NetworkNodeView> = [...nodes.values()]
+            .sort((a, b) => Number(a.tokenId) - Number(b.tokenId))
+            .map((node) => {
+                const cell = cellsByToken.get(node.tokenId) as CellState;
+                return {
+                    tokenId: node.tokenId,
+                    pos: tokenIdToPos(node.tokenId),
+                    isOwn: node.isOwn,
+                    isHub: node.isHub,
+                    owner: cell.owner,
+                    transitFeePerUnit: !node.isOwn && node.isHub ? (cell.transitFeePerUnit ?? '0') : null,
+                    distFromSource: fromSource === null ? null : (fromSource.get(Number(node.tokenId)) ?? null),
+                    distToTarget: toTarget === null ? null : (toTarget.get(Number(node.tokenId)) ?? null),
+                    component: components.get(node.tokenId) as number,
+                };
+            });
+
+        const result: RouteNetworkResult = {
+            from,
+            towards,
+            fromToTarget: from === null || toTarget === null ? null : (toTarget.get(Number(from)) ?? null),
+            reach: { moveRadius: routing.moveRadius, hubRadius: routing.hubRadius },
+            components: new Set(components.values()).size,
+            nodes: views,
+            edges,
+            note: ROUTE_NETWORK_NOTE,
+        };
+        this.logger.info('surveyed route network', {
+            nodes: views.length,
+            edges: edges.length,
+            components: result.components,
+        });
+        return result;
     }
 
     private assertEligible(tokenId: string, nodes: Map<string, RouteNode>, cells: Map<string, CellState>): void {

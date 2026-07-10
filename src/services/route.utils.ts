@@ -37,6 +37,64 @@ export function reachableWaypoints(
     return result;
 }
 
+export interface NetworkEdge {
+    a: string;
+    b: string;
+    distance: number;
+}
+
+export function networkEdges(nodes: Map<string, RouteNode>, moveRadius: number, hubRadius: number): Array<NetworkEdge> {
+    const edges: Array<NetworkEdge> = [];
+    for (const node of nodes.values()) {
+        for (const { node: other, hopDistance } of reachableWaypoints(node, nodes, moveRadius, hubRadius)) {
+            if (Number(other.tokenId) > Number(node.tokenId)) {
+                edges.push({ a: node.tokenId, b: other.tokenId, distance: hopDistance });
+            }
+        }
+    }
+    return edges.sort((x, y) => Number(x.a) - Number(y.a) || Number(x.b) - Number(y.b));
+}
+
+export function componentLabels(nodes: Map<string, RouteNode>, edges: Array<NetworkEdge>): Map<string, number> {
+    const adjacency = new Map<string, Array<string>>();
+    const link = (from: string, to: string): void => {
+        const list = adjacency.get(from);
+        if (list === undefined) {
+            adjacency.set(from, [to]);
+        } else {
+            list.push(to);
+        }
+    };
+    for (const edge of edges) {
+        link(edge.a, edge.b);
+        link(edge.b, edge.a);
+    }
+    const labels = new Map<string, number>();
+    let component = 0;
+    const tokens = [...nodes.keys()].sort((x, y) => Number(x) - Number(y));
+    for (const token of tokens) {
+        if (labels.has(token)) {
+            continue;
+        }
+        let frontier = [token];
+        labels.set(token, component);
+        while (frontier.length > 0) {
+            const next: Array<string> = [];
+            for (const current of frontier) {
+                for (const neighbor of adjacency.get(current) ?? []) {
+                    if (!labels.has(neighbor)) {
+                        labels.set(neighbor, component);
+                        next.push(neighbor);
+                    }
+                }
+            }
+            frontier = next;
+        }
+        component += 1;
+    }
+    return labels;
+}
+
 export function distancesFrom(origin: number, targets: ReadonlySet<number>, maxSteps: number): Map<number, number> {
     const found = new Map<number, number>();
     if (targets.has(origin)) {

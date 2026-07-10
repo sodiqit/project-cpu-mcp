@@ -34,6 +34,7 @@ import { registerQuoteBuyTool } from './tools/trade/quote-buy/quote-buy.js';
 import { registerFinalizeDeliveryTool } from './tools/transport/finalize/finalize-delivery.js';
 import { registerGetTransportStatusTool } from './tools/transport/get-status/get-transport-status.js';
 import { registerListMyTransportsTool } from './tools/transport/list-mine/list-my-transports.js';
+import { registerRouteNetworkTool } from './tools/transport/network/route-network.js';
 import { registerNextHopsTool } from './tools/transport/next-hops/next-hops.js';
 import { registerQuoteTransportTool } from './tools/transport/quote/quote-transport.js';
 import { registerTransportTool } from './tools/transport/transport.js';
@@ -47,8 +48,9 @@ const SERVER_INSTRUCTIONS = [
     'Read the static rulebook once with `cpu_get_game_config` — resource catalog, the building catalog (each',
     "building's kind, cost, and what it mines or crafts), reveal cost, recipes, and contract addresses.",
     'The world is a finite sphere of 48,990 land cells identified only by tokenId (1..48990) — there are no',
-    'coordinates; adjacency comes from each cell’s `neighbors` list, and you plan routes yourself hop by hop —',
-    '`cpu_next_hops` shows the legal waypoints and distances from any cell.',
+    'coordinates; adjacency comes from each cell’s `neighbors` list, and you plan routes yourself:',
+    '`cpu_route_network` gives the full waypoint road map (nodes, legal hops, gaps), `cpu_next_hops` zooms into',
+    'one cell.',
     'The world map is loaded at startup and kept current in the background; read it with `cpu_get_map`',
     '(situational awareness), `cpu_get_cell` (inspect one cell), `cpu_get_changes` (react to other players since a',
     'given version), and `cpu_get_attention` (your owner-scoped to-do list of stalled/near-full/depleted/unbuilt',
@@ -63,7 +65,7 @@ const SERVER_INSTRUCTIONS = [
     '(mining or craft) stalls until you offload it (transport, sell, craft, or withdraw). A null cap means',
     'uncapped. `cpu_get_mining_status`/`cpu_get_craft_status` report the stall; `cpu_get_attention` lists every stalled or',
     'near-full cell at once.',
-    'Move resources between cells with `cpu_transport` (scout waypoints with `cpu_next_hops`, chain them, then preview',
+    'Move resources between cells with `cpu_transport` (read `cpu_route_network`, chain waypoints yourself, then preview',
     'cost with `cpu_quote_transport`) — one on-chain',
     'move that debits the source, pays the $CPU transit fee for any foreign Hub on the route, and escrows a',
     'time-delayed delivery. Track deliveries with `cpu_get_transport_status` / `cpu_list_my_transports`; a delivery is',
@@ -110,6 +112,7 @@ export async function createServer(context: AppContext): Promise<void> {
     registerStartMiningTool(server, context);
     registerGetMiningStatusTool(server, context);
     registerClaimMiningTool(server, context);
+    registerRouteNetworkTool(server, context);
     registerNextHopsTool(server, context);
     registerQuoteTransportTool(server, context);
     registerTransportTool(server, context);

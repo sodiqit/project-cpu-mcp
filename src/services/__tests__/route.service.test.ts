@@ -108,3 +108,47 @@ describe('RouteService.nextHops', () => {
         await expect(survey(cells, 72, 72)).rejects.toThrow(/must be different/);
     });
 });
+
+describe('RouteService.network', () => {
+    it('returns nodes with facts, legal edges and component labels', async () => {
+        const cells = [own('72'), own('73'), foreignHub('75', '0.5'), own('220'), own('221')];
+
+        const result = await makeService(cells).network({ from: null, towards: null });
+
+        expect(result.nodes.map((n) => n.tokenId)).toEqual(['72', '73', '75', '220', '221']);
+        expect(result.edges).toEqual([
+            { a: '72', b: '73', distance: 1 },
+            { a: '72', b: '75', distance: 3 },
+            { a: '73', b: '75', distance: 2 },
+            { a: '220', b: '221', distance: 1 },
+        ]);
+        expect(result.components).toBe(2);
+        const byToken = new Map(result.nodes.map((n) => [n.tokenId, n]));
+        expect(byToken.get('72')?.component).toBe(byToken.get('75')?.component);
+        expect(byToken.get('220')?.component).not.toBe(byToken.get('72')?.component);
+        expect(byToken.get('75')).toMatchObject({ isHub: true, transitFeePerUnit: '0.5', owner: RIVAL });
+        expect(byToken.get('73')?.pos).toEqual({ face: 0, i: 1, j: 3 });
+    });
+
+    it('annotates distance fields when from/towards are given', async () => {
+        const cells = [own('72'), own('73'), foreignHub('75', '0.5'), own('78')];
+
+        const result = await makeService(cells).network({ from: 72, towards: 78 });
+
+        expect(result.fromToTarget).toBe(6);
+        const byToken = new Map(result.nodes.map((n) => [n.tokenId, n]));
+        expect(byToken.get('75')).toMatchObject({ distFromSource: 3, distToTarget: 3 });
+        expect(byToken.get('73')).toMatchObject({ distFromSource: 1, distToTarget: 5 });
+        expect(byToken.get('72')).toMatchObject({ distFromSource: 0, distToTarget: 6 });
+    });
+
+    it('shows a disconnected target as a separate component', async () => {
+        const cells = [own('72'), own('73'), own('220')];
+
+        const result = await makeService(cells).network({ from: 72, towards: 220 });
+
+        const byToken = new Map(result.nodes.map((n) => [n.tokenId, n]));
+        expect(byToken.get('72')?.component).not.toBe(byToken.get('220')?.component);
+        expect(result.fromToTarget).toBeGreaterThan(0);
+    });
+});

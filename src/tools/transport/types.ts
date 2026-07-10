@@ -20,6 +20,17 @@ export const transportInputSchema = {
         .describe('Units to move, as a positive integer string (matches on-map resource balances).'),
 };
 
+export const routeNetworkInputSchema = {
+    from: tokenIdSchema
+        .nullable()
+        .default(null)
+        .describe('Optional source cell — annotates every waypoint with its grid distance from here.'),
+    towards: tokenIdSchema
+        .nullable()
+        .default(null)
+        .describe('Optional destination cell — annotates every waypoint with its remaining grid distance.'),
+};
+
 export const nextHopsInputSchema = {
     from: tokenIdSchema.describe('The cell to hop from (your revealed cell, or a Hub).'),
     towards: tokenIdSchema
