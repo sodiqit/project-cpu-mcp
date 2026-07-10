@@ -15,7 +15,6 @@ export function tokenIdToCell(tokenId: number): CellCoord {
     assertTokenIdInRange(tokenId);
     const zeroBased = tokenId - 1;
     const face = Math.floor(zeroBased / HEXES_PER_RHOMBUS);
-    // +1 skips the (0,0) pentagon vertex, which has no tokenId.
     const raw = (zeroBased % HEXES_PER_RHOMBUS) + 1;
     return { face, i: Math.floor(raw / GRID_FREQUENCY), j: raw % GRID_FREQUENCY };
 }

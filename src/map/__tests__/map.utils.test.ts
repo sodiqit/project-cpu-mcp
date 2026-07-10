@@ -63,8 +63,6 @@ describe('parseCellState', () => {
 });
 
 describe('classifyNeighbors', () => {
-    // Cell 72 sits in a rhombus interior, so its neighbor set is the closed-form {±1, ±70, ±71}:
-    // 1, 2, 71, 73, 142, 143.
     it('labels each grid neighbour owned / other / empty (case-insensitive owner)', () => {
         const grid = new Map<string, CellState>([
             ['71', makeCell({ tokenId: '71', owner: '0xME' })],
@@ -120,7 +118,6 @@ describe('buildResourceIndex', () => {
 });
 
 describe('filterCells', () => {
-    // 72→73 is one grid step, 72→74 two; 10000 is on another part of the sphere.
     const cells = [
         makeCell({ tokenId: '72', owner: '0xme' }),
         makeCell({ tokenId: '74', owner: '0xRival' }),

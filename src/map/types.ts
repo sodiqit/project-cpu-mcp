@@ -182,7 +182,6 @@ export interface MapReaderOptions {
 
 export interface AroundQuery {
     tokenId: string;
-    /** Grid steps (BFS ring number) around the center cell. */
     radius: number;
 }
 
@@ -193,14 +192,12 @@ export interface MapQuery {
     ownerAddress: string | null;
 }
 
-// The tokenId is always known from the grid; `Empty` means the cell is not in the map (unminted).
 export interface NeighborRef {
     tokenId: string;
     relation: NeighborRelation;
 }
 
 export interface EnrichedCell extends CellState {
-    /** Coarse position on the sphere; a proximity heuristic only — it wraps across face seams. */
     pos: CellCoord;
     neighbors: Array<NeighborRef>;
 }
@@ -245,7 +242,6 @@ export interface MapQueryResult {
 export interface CellInspection {
     cell: EnrichedCell;
     neighbors: Array<CellState>;
-    /** Grid steps (BFS) to the nearest owned cell; null when the wallet is unknown or it is farther than the scan cap. */
     distanceFromMine: number | null;
 }
 

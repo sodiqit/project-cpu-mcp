@@ -4,7 +4,6 @@ import { HEX_COUNT, NEIGHBOR_SLOTS } from './constants.js';
 
 let cachedTable: Uint16Array | null = null;
 
-// Explicit little-endian decode so the table reads identically on any platform.
 function decodeTable(): Uint16Array {
     const bytes = Buffer.from(ADJACENCY_BASE64, 'base64');
     const expected = HEX_COUNT * NEIGHBOR_SLOTS * 2;

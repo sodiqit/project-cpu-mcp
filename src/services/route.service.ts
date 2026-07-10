@@ -1,6 +1,5 @@
 import { parseEther } from 'viem';
 
-import { FALLBACK_HUB_RADIUS, FALLBACK_MOVE_RADIUS, FALLBACK_MOVE_TIME_PER_CELL_SEC } from './route.constants.js';
 import { planRoute, type RouteNode } from './route.utils.js';
 import type {
     IAppConfig,
@@ -10,7 +9,7 @@ import type {
     RouteHubFeeView,
     RouteServiceOptions,
 } from './types.js';
-import { BuildingType, type TransportRoutingView } from '../api/types.js';
+import { BuildingType } from '../api/types.js';
 import { parseTokenId } from '../geometry/token.utils.js';
 import type { ILogger } from '../logger/types.js';
 import type { CellState } from '../map/types.js';
@@ -40,11 +39,7 @@ export class RouteService {
         }
 
         const config = await this.appConfig.load();
-        const routing: TransportRoutingView = config.transport ?? {
-            moveRadius: FALLBACK_MOVE_RADIUS,
-            hubRadius: FALLBACK_HUB_RADIUS,
-            moveTimePerCellSec: FALLBACK_MOVE_TIME_PER_CELL_SEC,
-        };
+        const routing = config.transport;
         const address = this.wallet.get().getAddress().toLowerCase();
 
         const nodes = new Map<string, RouteNode>();

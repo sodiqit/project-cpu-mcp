@@ -77,8 +77,6 @@ describe('adjacency table invariants', () => {
     });
 
     it('matches the closed-form neighbor offsets on rhombus-interior cells', () => {
-        // Away from face edges the six lattice directions never cross a seam, so the neighbor set
-        // is exactly {±1, ±N, ±(N+1)} — this pins the bulk of the table against the formula.
         for (let tokenId = MIN_TOKEN_ID; tokenId <= MAX_TOKEN_ID; tokenId += 97) {
             const { i, j } = tokenIdToCell(tokenId);
             if (i < 2 || i > GRID_FREQUENCY - 2 || j < 2 || j > GRID_FREQUENCY - 2) {
@@ -108,7 +106,6 @@ describe('graph operations', () => {
     });
 
     it('kRing size is exactly 1+3r(r+1) away from pentagons and never above it', () => {
-        // An interior cell whose whole disk stays clear of the 12 degree-5 rims behaves like a flat hex grid.
         const interior = cellToTokenId({ face: 0, i: 35, j: 35 });
         for (const radius of [1, 2, 3, 5]) {
             const ring = kRing(interior, radius);

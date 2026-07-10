@@ -155,11 +155,6 @@ export interface RevealCostView {
     reRevealCost: string;
 }
 
-/**
- * Transport routing params from `GET /api/v1/config`. A hop between consecutive waypoints must be
- * within `radius(from) + radius(to)` grid steps, where a hub reaches `hubRadius` and any other
- * cell `moveRadius`; delivery time is `moveTimePerCellSec` per grid step of total path distance.
- */
 export interface TransportRoutingView {
     moveRadius: number;
     hubRadius: number;
@@ -178,8 +173,7 @@ export interface AppConfigResponse {
     buildings: Array<BuildingView>;
     /** First-reveal-free + re-reveal cost params. */
     reveal: RevealCostView;
-    // eslint-disable-next-line no-restricted-syntax -- absent until the server ships the field
-    transport?: TransportRoutingView | null;
+    transport: TransportRoutingView;
 }
 
 /** The building types a cell can hold — 6 tier-1 extractors, tier-2..5 crafters, and the Hub. */

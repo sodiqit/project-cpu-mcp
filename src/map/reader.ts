@@ -113,7 +113,6 @@ export class MapReader {
         };
     }
 
-    // The route planner reads the raw cell set; no enrichment so the copy stays cheap.
     allCells(): Array<CellState> {
         return [...this.store.values()];
     }

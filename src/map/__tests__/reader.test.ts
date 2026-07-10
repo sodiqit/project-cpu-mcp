@@ -70,7 +70,6 @@ describe('MapReader', () => {
     it('reports null distanceFromMine when no owned cell is within the scan cap', () => {
         const { reader } = makeReader([
             makeCell({ tokenId: '72', owner: '0xrival', updated: 50 }),
-            // On a different rhombus face — far beyond the 50-step scan cap.
             makeCell({ tokenId: '25000', owner: '0xme', updated: 50 }),
         ]);
 

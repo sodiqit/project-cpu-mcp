@@ -115,7 +115,6 @@ function matchesQuery(cell: CellState, query: MapQuery, aroundSet: ReadonlySet<s
 }
 
 export function filterCells(cells: Iterable<CellState>, query: MapQuery): Array<CellState> {
-    // The around disk is precomputed once (BFS over the grid), so the scan below is a set lookup per cell.
     const aroundSet =
         query.scope === MapScope.Around && query.around !== null
             ? new Set(ringDistances(query.around.tokenId, query.around.radius).keys())

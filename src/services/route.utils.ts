@@ -2,13 +2,10 @@ import { RouteOptimize } from './types.js';
 import { kRing } from '../geometry/graph.utils.js';
 import { parseTokenId } from '../geometry/token.utils.js';
 
-// A candidate waypoint: a revealed cell that is either the player's own or carries a Hub —
-// the only cells the Transport contract accepts as route nodes.
 export interface RouteNode {
     tokenId: string;
     isOwn: boolean;
     isHub: boolean;
-    /** Per-unit transit fee in $CPU wei this node charges the payer; 0 unless a foreign hub. */
     feePerUnitWei: bigint;
 }
 
@@ -22,7 +19,6 @@ export interface PlannedRoute {
     waypoints: Array<string>;
     legs: Array<PlannedLeg>;
     totalDistance: number;
-    /** Sum of per-unit fees over the route's foreign hubs, in $CPU wei. */
     feePerUnitWei: bigint;
 }
 
@@ -44,8 +40,6 @@ function nodeRadius(node: RouteNode, moveRadius: number, hubRadius: number): num
     return node.isHub ? hubRadius : moveRadius;
 }
 
-// The per-unit fee scales every route by the same shipment amount, so ranking by the per-unit sum
-// is equivalent to ranking by the absolute fee.
 function isBetter(candidate: PathCost, current: PathCost, optimize: RouteOptimize): boolean {
     if (optimize === RouteOptimize.Cheapest) {
         if (candidate.feePerUnitWei !== current.feePerUnitWei) {
@@ -59,11 +53,6 @@ function isBetter(candidate: PathCost, current: PathCost, optimize: RouteOptimiz
     return candidate.feePerUnitWei < current.feePerUnitWei;
 }
 
-/**
- * Dijkstra over the eligible-waypoint graph. An edge exists between waypoints A and B when their
- * grid distance is within `radius(A) + radius(B)` — the same hop rule the Transport contract
- * enforces. Returns null when no chain reaches `to`.
- */
 export function planRoute(args: PlanRouteArgs): PlannedRoute | null {
     const { nodes, from, to, moveRadius, hubRadius, optimize } = args;
     const byToken = new Map<string, RouteNode>(nodes.map((node) => [node.tokenId, node]));
@@ -76,7 +65,6 @@ export function planRoute(args: PlanRouteArgs): PlannedRoute | null {
     const best = new Map<string, PathCost>();
     const previous = new Map<string, string>();
     const settled = new Set<string>();
-    // The source pays its own node fee too (a route starting at a foreign hub is charged for it).
     best.set(from, { feePerUnitWei: fromNode.feePerUnitWei, distance: 0 });
 
     for (;;) {

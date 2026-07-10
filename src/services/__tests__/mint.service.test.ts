@@ -98,7 +98,7 @@ function makeConfig(contracts: Partial<AppContracts> = {}): AppConfig {
         recipes: [],
         buildings: [],
         reveal: { firstFree: true, reRevealCost: '0' },
-        transport: null,
+        transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2 },
     };
 }
 

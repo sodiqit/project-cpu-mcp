@@ -56,8 +56,7 @@ export interface AppConfig {
     buildings: Array<BuildingView>;
     /** First-reveal-free + re-reveal cost params. */
     reveal: RevealCostView;
-    /** Transport routing params (hop radii, travel time); null until the server exposes them. */
-    transport: TransportRoutingView | null;
+    transport: TransportRoutingView;
 }
 
 /** Provider of the chain config — implemented by AppConfigService; injected into RevealService. */
@@ -344,7 +343,6 @@ export interface TransportServiceOptions {
 }
 
 export interface TransportInput {
-    /** Waypoint tokenIds, `[source, …intermediate, target]`. */
     path: Array<string>;
     resourceId: number;
     amount: string;
@@ -398,14 +396,13 @@ export interface FinalizeResult {
     blockNumber: string;
 }
 
-// ---- Route planning (client-side, over the local map + the grid adjacency) ----
+// ---- Route planning ----
 
 export enum RouteOptimize {
     Cheapest = 'cheapest',
     Fastest = 'fastest',
 }
 
-/** Read-only map access the route planner needs — implemented by MapReader. */
 export interface RouteCellReader {
     allCells(): Array<CellState>;
 }
@@ -420,7 +417,6 @@ export interface RouteServiceOptions {
 export interface PlanRouteInput {
     from: string;
     to: string;
-    /** Units to ship; null skips the fee estimate. */
     amount: string | null;
     optimize: RouteOptimize;
 }
@@ -428,29 +424,22 @@ export interface PlanRouteInput {
 export interface RouteLegView {
     from: string;
     to: string;
-    /** Grid steps between the two waypoints. */
     distance: number;
 }
 
-/** A foreign hub on the planned route — it charges its transit fee per shipped unit. */
 export interface RouteHubFeeView {
     tokenId: string;
     owner: string;
-    /** $CPU per unit (decimal). */
     feePerUnit: string;
-    /** feePerUnit × amount in $CPU (decimal); null when no amount was given. */
     fee: string | null;
 }
 
 export interface PlanRouteResult {
-    /** Ready-to-send waypoint chain `[from, …, to]` for transport/trade tools. */
     waypoints: Array<string>;
     legs: Array<RouteLegView>;
     totalDistance: number;
     foreignHubs: Array<RouteHubFeeView>;
-    /** Total estimated transit fee in $CPU (decimal); null when no amount was given. */
     estimatedFee: string | null;
-    /** totalDistance × the configured travel time per grid step. */
     estimatedTravelSec: number;
     optimize: RouteOptimize;
     note: string;

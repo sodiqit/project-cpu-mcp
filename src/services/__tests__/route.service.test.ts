@@ -7,7 +7,7 @@ import { makeCell } from '../../map/__tests__/fixtures.js';
 import type { CellState } from '../../map/types.js';
 import type { WalletProvider } from '../../wallet/types.js';
 import { RouteService } from '../route.service.js';
-import { RouteOptimize, type AppConfig } from '../types.js';
+import { RouteOptimize } from '../types.js';
 
 const RIVAL = '0x000000000000000000000000000000000000beef';
 
@@ -25,11 +25,11 @@ function foreignHub(tokenId: string, feePerUnit: string): CellState {
     });
 }
 
-function makeService(cells: Array<CellState>, config: AppConfig = makeConfig()): RouteService {
+function makeService(cells: Array<CellState>): RouteService {
     const wallet = { get: () => ({ getAddress: () => WALLET_ADDRESS }) } as unknown as WalletProvider;
     return new RouteService({
         wallet,
-        appConfig: new FakeAppConfig(config),
+        appConfig: new FakeAppConfig(makeConfig()),
         mapReader: { allCells: () => cells },
         logger: new NoopLogger(),
     });
@@ -39,8 +39,6 @@ function plan(cells: Array<CellState>, from: string, to: string, optimize = Rout
     return makeService(cells).plan({ from, to, amount: '100', optimize });
 }
 
-// Interior lattice cells on face 0 (tokenId = i*70 + j): 72=(1,2), 73=(1,3), 76=(1,6), 78=(1,8);
-// 143..146=(2,3)..(2,6); a plain cell reaches 1, a hub 3.
 describe('RouteService.plan', () => {
     it('routes two adjacent own cells directly with no fee', async () => {
         const result = await plan([own('72'), own('73')], '72', '73');
@@ -54,7 +52,6 @@ describe('RouteService.plan', () => {
     });
 
     it('bridges an out-of-reach gap through a foreign hub and prices its fee', async () => {
-        // 72→78 is 6 steps — unreachable at cell reach 2; the hub at 75 spans 3+3.
         const result = await plan([own('72'), own('78'), foreignHub('75', '0.5')], '72', '78');
 
         expect(result.waypoints).toEqual(['72', '75', '78']);
@@ -69,8 +66,6 @@ describe('RouteService.plan', () => {
     });
 
     it('prefers a fee-free own-cell detour when optimizing for cost, and the shorter paid route when optimizing for speed', async () => {
-        // Direct 72→76 is 4 steps. The foreign hub at 74 covers it in 4 steps for a fee; the own
-        // relays on row 2 cover it in 5 steps for free.
         const cells = [own('72'), own('76'), foreignHub('74', '0.5'), own('143'), own('144'), own('145'), own('146')];
 
         const cheapest = await plan(cells, '72', '76', RouteOptimize.Cheapest);
@@ -95,15 +90,6 @@ describe('RouteService.plan', () => {
         expect(result.estimatedFee).toBeNull();
         expect(result.foreignHubs[0]?.fee).toBeNull();
         expect(result.foreignHubs[0]?.feePerUnit).toBe('0.5');
-    });
-
-    it('falls back to the built-in radii when the server config lacks transport params', async () => {
-        const config = { ...makeConfig(), transport: null };
-        const service = makeService([own('72'), own('78'), foreignHub('75', '0.5')], config);
-
-        const result = await service.plan({ from: '72', to: '78', amount: null, optimize: RouteOptimize.Cheapest });
-        expect(result.waypoints).toEqual(['72', '75', '78']);
-        expect(result.estimatedTravelSec).toBe(12);
     });
 
     it('rejects ineligible or unknown endpoints with specific errors', async () => {

@@ -396,7 +396,6 @@ export class TradeService {
     }
 }
 
-/** Validate a waypoint chain and convert it to the `uint256[]` the Trade and Transport calls take. */
 function toTokenIdArray(chain: Array<string>): Array<bigint> {
     return chain.map((tokenId) => BigInt(parseTokenId(tokenId)));
 }

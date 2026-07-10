@@ -4,8 +4,6 @@ import { MAX_TOKEN_ID, MIN_TOKEN_ID } from './constants.js';
 import { kRing } from './graph.utils.js';
 import type { CellCoord } from './types.js';
 
-// String-facing adapters: the rest of the client keys cells by decimal-string tokenIds.
-
 export function parseTokenId(tokenId: string): number {
     const value = /^[1-9][0-9]*$/.test(tokenId) ? Number(tokenId) : NaN;
     if (!Number.isInteger(value) || value < MIN_TOKEN_ID || value > MAX_TOKEN_ID) {
@@ -26,7 +24,6 @@ export function ringDistances(tokenId: string, radius: number): Map<string, numb
     return result;
 }
 
-// Distance to the nearest member of `targets`, or null when none is within `maxSteps`.
 export function nearestDistanceWithin(from: string, targets: ReadonlySet<string>, maxSteps: number): number | null {
     const start = parseTokenId(from);
     if (targets.has(from)) {
