@@ -4,9 +4,12 @@ name: Release
 # (version bump + changelog). Merging that Release PR tags the release, and the gated `publish`
 # job runs in the SAME workflow run — the bot's tag, made with GITHUB_TOKEN, can't trigger a
 # separate workflow, so publishing must live here behind `release_created`.
+# workflow_dispatch is the recovery path when that publish fails after the tag already exists:
+# it publishes whatever version is on main, and npm rejects duplicates, so it's idempotent.
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions: {}
 
@@ -28,7 +31,7 @@ jobs:
 
   publish:
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    if: ${{ needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -50,8 +53,10 @@ jobs:
       - run: pnpm run build
       - run: pnpm run test:unit
 
-      # Ensure npm is recent enough for OIDC trusted publishing
-      - run: npm install -g npm@latest
+      # Ensure npm is recent enough for OIDC trusted publishing. Pinned to 11: the npm 12.0.0
+      # tarball is missing the `sigstore` module libnpmpublish requires, so
+      # `npm publish --provenance` crashes with MODULE_NOT_FOUND under npm@latest.
+      - run: npm install -g npm@11
 
       # No NODE_AUTH_TOKEN — OIDC trusted publishing handles auth.
       # Configure the trusted publisher once on npmjs.com (repo + this workflow filename).
