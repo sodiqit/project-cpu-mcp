@@ -168,10 +168,11 @@ describe('graph operations', () => {
 });
 
 describe('token.utils string adapters', () => {
-    it('parseTokenId accepts the full range and rejects malformed input', () => {
+    it('parseTokenId accepts strings and numbers in range and rejects the rest', () => {
         expect(parseTokenId('1')).toBe(1);
+        expect(parseTokenId(72)).toBe(72);
         expect(parseTokenId(String(MAX_TOKEN_ID))).toBe(MAX_TOKEN_ID);
-        for (const bad of ['0', '48991', 'abc', '', '1.5', '-3', '01']) {
+        for (const bad of ['0', '48991', 'abc', '', '1.5', '-3', 0, MAX_TOKEN_ID + 1, 1.5]) {
             expect(() => parseTokenId(bad)).toThrow(/tokenId must be an integer/);
         }
     });

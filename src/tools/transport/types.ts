@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
-import { tokenIdStringSchema } from '../../geometry/types.js';
+import { tokenIdSchema } from '../../geometry/types.js';
 import { DeliveryFilter, RouteOptimize } from '../../services/types.js';
 
 export const transportInputSchema = {
     path: z
-        .array(tokenIdStringSchema)
+        .array(tokenIdSchema)
         .min(2)
         .describe(
             'Waypoint chain of cell tokenIds [source, ...intermediate, target]. Every waypoint must be revealed ' +
@@ -21,8 +21,8 @@ export const transportInputSchema = {
 };
 
 export const planRouteInputSchema = {
-    from: tokenIdStringSchema.describe('Source cell tokenId (your revealed cell, or a Hub).'),
-    to: tokenIdStringSchema.describe('Target cell tokenId (your revealed cell, or a Hub).'),
+    from: tokenIdSchema.describe('Source cell tokenId (your revealed cell, or a Hub).'),
+    to: tokenIdSchema.describe('Target cell tokenId (your revealed cell, or a Hub).'),
     amount: z
         .string()
         .regex(/^[1-9]\d*$/)

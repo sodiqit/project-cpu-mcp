@@ -43,7 +43,7 @@ const BUY_HASH = `0x${'2'.repeat(64)}` as Hash;
 const CANCEL_HASH = `0x${'3'.repeat(64)}` as Hash;
 
 const CREATE_INPUT = {
-    chain: ['72', '73'],
+    chain: [72, 73],
     resourceId: 3,
     value: '100',
     pricePerUnit: '0.5',
@@ -339,7 +339,7 @@ describe('TradeService.buyLot', () => {
 
         const result = await h.service.buyLot({
             lotId: '7',
-            chain: ['20', '75'],
+            chain: [20, 75],
             value: '10',
         });
 
@@ -375,7 +375,7 @@ describe('TradeService.buyLot', () => {
 
         const result = await h.service.buyLot({
             lotId: '7',
-            chain: ['20', '21'],
+            chain: [20, 21],
             value: '10',
         });
 
@@ -395,7 +395,7 @@ describe('TradeService.cancelLot', () => {
 
         const result = await h.service.cancelLot({
             lotId: '7',
-            chain: ['20', '72'],
+            chain: [20, 72],
         });
 
         expect(h.allowance.calls).toHaveLength(0);
@@ -422,7 +422,7 @@ describe('TradeService.quoteBuy', () => {
         const result = await h.service.quoteBuy({
             lotId: '7',
             value: '10',
-            chain: ['20', '75'],
+            chain: [20, 75],
         });
 
         expect(h.transportClient.quotes).toHaveLength(1);

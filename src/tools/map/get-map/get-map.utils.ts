@@ -19,7 +19,7 @@ export function buildMapQuery(scope: MapScope, args: GetMapArgs, ownerAddress: s
         if (args.aroundTokenId === null) {
             throw new Error('scope="around" requires aroundTokenId.');
         }
-        around = { tokenId: args.aroundTokenId, radius: args.radius ?? DEFAULT_AROUND_RADIUS };
+        around = { tokenId: String(args.aroundTokenId), radius: args.radius ?? DEFAULT_AROUND_RADIUS };
     }
 
     if (scope === MapScope.Cells && (args.tokenIds === null || args.tokenIds.length === 0)) {

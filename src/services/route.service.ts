@@ -1,5 +1,6 @@
 import { parseEther } from 'viem';
 
+import { ROUTE_VERIFY_NOTE } from './route.constants.js';
 import { planRoute, type RouteNode } from './route.utils.js';
 import type {
     IAppConfig,
@@ -10,13 +11,10 @@ import type {
     RouteServiceOptions,
 } from './types.js';
 import { BuildingType } from '../api/types.js';
-import { parseTokenId } from '../geometry/token.utils.js';
 import type { ILogger } from '../logger/types.js';
 import type { CellState } from '../map/types.js';
 import { cpuFromWei } from '../utils/format.utils.js';
 import type { WalletProvider } from '../wallet/types.js';
-
-const VERIFY_NOTE = 'Preview with cpu_quote_transport before moving — hop validity and fees are enforced on-chain.';
 
 export class RouteService {
     private readonly wallet: WalletProvider;
@@ -32,11 +30,11 @@ export class RouteService {
     }
 
     async plan(input: PlanRouteInput): Promise<PlanRouteResult> {
-        parseTokenId(input.from);
-        parseTokenId(input.to);
         if (input.from === input.to) {
             throw new Error('Source and target must be different cells.');
         }
+        const from = String(input.from);
+        const to = String(input.to);
 
         const config = await this.appConfig.load();
         const routing = config.transport;
@@ -59,20 +57,20 @@ export class RouteService {
             });
         }
 
-        this.assertEligible(input.from, nodes, cellsByToken, 'Source');
-        this.assertEligible(input.to, nodes, cellsByToken, 'Target');
+        this.assertEligible(from, nodes, cellsByToken, 'Source');
+        this.assertEligible(to, nodes, cellsByToken, 'Target');
 
         const plan = planRoute({
             nodes: [...nodes.values()],
-            from: input.from,
-            to: input.to,
+            from,
+            to,
             moveRadius: routing.moveRadius,
             hubRadius: routing.hubRadius,
             optimize: input.optimize,
         });
         if (plan === null) {
             throw new Error(
-                `No valid waypoint chain from ${input.from} to ${input.to}: every hop must span at most ` +
+                `No valid waypoint chain from ${from} to ${to}: every hop must span at most ` +
                     `radius(from)+radius(to) grid steps (${routing.moveRadius} for a plain cell, ` +
                     `${routing.hubRadius} for a Hub) between revealed cells you own or Hubs. ` +
                     'Build a Hub to bridge the gap, or route through closer cells.',
@@ -104,11 +102,11 @@ export class RouteService {
             estimatedFee: amount === null ? null : cpuFromWei((plan.feePerUnitWei * amount).toString()),
             estimatedTravelSec: plan.totalDistance * routing.moveTimePerCellSec,
             optimize: input.optimize,
-            note: VERIFY_NOTE,
+            note: ROUTE_VERIFY_NOTE,
         };
         this.logger.info('route planned', {
-            from: input.from,
-            to: input.to,
+            from,
+            to,
             waypoints: result.waypoints.length,
             totalDistance: result.totalDistance,
             foreignHubs: foreignHubs.length,

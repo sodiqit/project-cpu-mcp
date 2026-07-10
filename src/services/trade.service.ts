@@ -26,7 +26,6 @@ import {
 import type { ApiClient } from '../api/client.js';
 import { HttpStatus, type LotState, type LotView, type MarketResourceSummary } from '../api/types.js';
 import { TRADE_ABI } from '../contracts/trade.abi.js';
-import { parseTokenId } from '../geometry/token.utils.js';
 import type { ILogger } from '../logger/types.js';
 import { cpuFromWei } from '../utils/format.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
@@ -68,7 +67,7 @@ export class TradeService {
         const trade = this.resolveTrade(config);
         const transport = this.resolveTransport(config);
 
-        const tokenIds = toTokenIdArray(input.chain);
+        const tokenIds = input.chain.map((tokenId) => BigInt(tokenId));
         const value = BigInt(input.value);
         const price = parseEther(input.pricePerUnit);
 
@@ -138,7 +137,7 @@ export class TradeService {
         const value = BigInt(input.value);
         const saleWei = value * parseEther(lot.pricePerUnit);
 
-        const destTokenIds = toTokenIdArray(input.chain);
+        const destTokenIds = input.chain.map((tokenId) => BigInt(tokenId));
 
         this.logger.info('buying lot', { lotId: input.lotId, value: input.value, network: config.network });
 
@@ -197,7 +196,7 @@ export class TradeService {
         const lot = await this.getLot(input.lotId);
         const remaining = BigInt(lot.remaining);
 
-        const returnTokenIds = toTokenIdArray(input.chain);
+        const returnTokenIds = input.chain.map((tokenId) => BigInt(tokenId));
 
         this.logger.info('cancelling lot', { lotId: input.lotId, network: config.network });
 
@@ -254,7 +253,7 @@ export class TradeService {
             const quote = await this.transportClient.quoteRoute({
                 transport,
                 from: wallet.getAddress(),
-                tokenIds: toTokenIdArray(input.chain),
+                tokenIds: input.chain.map((tokenId) => BigInt(tokenId)),
                 res: lot.resourceId,
                 amount: value,
             });
@@ -394,10 +393,6 @@ export class TradeService {
         }
         return { config, wallet };
     }
-}
-
-function toTokenIdArray(chain: Array<string>): Array<bigint> {
-    return chain.map((tokenId) => BigInt(parseTokenId(tokenId)));
 }
 
 /** Serialise a query object to `?a=1&b=2`, dropping null fields and URL-encoding values. */

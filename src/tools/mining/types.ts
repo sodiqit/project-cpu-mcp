@@ -1,11 +1,13 @@
 import { z } from 'zod';
 
+import { tokenIdSchema } from '../../geometry/types.js';
+
 export const miningStatusInputSchema = {
-    tokenId: z.string().describe('The tokenId of the cell to inspect mining for.'),
+    tokenId: tokenIdSchema.transform(String).describe('The tokenId of the cell to inspect mining for.'),
 };
 
 export const startMiningInputSchema = {
-    tokenId: z.string().describe('The tokenId of a cell you own holding a finished extractor.'),
+    tokenId: tokenIdSchema.transform(String).describe('The tokenId of a cell you own holding a finished extractor.'),
     targetResourceId: z
         .number()
         .int()
@@ -18,7 +20,7 @@ export const startMiningInputSchema = {
 };
 
 export const claimMiningInputSchema = {
-    tokenId: z
-        .string()
+    tokenId: tokenIdSchema
+        .transform(String)
         .describe('The tokenId of a cell you own with an extractor, to bank its matured mining batches.'),
 };

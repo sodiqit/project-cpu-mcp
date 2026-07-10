@@ -1,6 +1,5 @@
 import { RouteOptimize } from './types.js';
 import { kRing } from '../geometry/graph.utils.js';
-import { parseTokenId } from '../geometry/token.utils.js';
 
 export interface RouteNode {
     tokenId: string;
@@ -89,7 +88,7 @@ export function planRoute(args: PlanRouteArgs): PlannedRoute | null {
 
         const currentNode = byToken.get(currentToken) as RouteNode;
         const reach = nodeRadius(currentNode, moveRadius, hubRadius) + hubRadius;
-        for (const [neighborToken, distance] of kRing(parseTokenId(currentToken), reach)) {
+        for (const [neighborToken, distance] of kRing(Number(currentToken), reach)) {
             const neighbor = byToken.get(String(neighborToken));
             if (neighbor === undefined || neighbor.tokenId === currentToken || distance === 0) {
                 continue;
@@ -128,7 +127,7 @@ export function planRoute(args: PlanRouteArgs): PlannedRoute | null {
     for (const token of waypoints.slice(1)) {
         const next = byToken.get(token) as RouteNode;
         const reach = nodeRadius(prev, moveRadius, hubRadius) + nodeRadius(next, moveRadius, hubRadius);
-        const distance = kRing(parseTokenId(prev.tokenId), reach).get(parseTokenId(next.tokenId)) as number;
+        const distance = kRing(Number(prev.tokenId), reach).get(Number(next.tokenId)) as number;
         legs.push({ from: prev.tokenId, to: next.tokenId, distance });
         totalDistance += distance;
         prev = next;

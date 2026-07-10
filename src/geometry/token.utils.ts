@@ -2,14 +2,14 @@ import { neighbors } from './adjacency.js';
 import { tokenIdToCell } from './cell.utils.js';
 import { MAX_TOKEN_ID, MIN_TOKEN_ID } from './constants.js';
 import { kRing } from './graph.utils.js';
-import type { CellCoord } from './types.js';
+import { tokenIdSchema, type CellCoord } from './types.js';
 
-export function parseTokenId(tokenId: string): number {
-    const value = /^[1-9][0-9]*$/.test(tokenId) ? Number(tokenId) : NaN;
-    if (!Number.isInteger(value) || value < MIN_TOKEN_ID || value > MAX_TOKEN_ID) {
+export function parseTokenId(tokenId: string | number): number {
+    const parsed = tokenIdSchema.safeParse(tokenId);
+    if (!parsed.success) {
         throw new Error(`tokenId must be an integer in [${MIN_TOKEN_ID}, ${MAX_TOKEN_ID}], got "${tokenId}"`);
     }
-    return value;
+    return parsed.data;
 }
 
 export function neighborTokenIds(tokenId: string): Array<string> {

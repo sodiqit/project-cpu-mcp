@@ -343,7 +343,7 @@ export interface TransportServiceOptions {
 }
 
 export interface TransportInput {
-    path: Array<string>;
+    path: Array<number>;
     resourceId: number;
     amount: string;
 }
@@ -415,8 +415,8 @@ export interface RouteServiceOptions {
 }
 
 export interface PlanRouteInput {
-    from: string;
-    to: string;
+    from: number;
+    to: number;
     amount: string | null;
     optimize: RouteOptimize;
 }
@@ -520,7 +520,7 @@ export interface TradeServiceOptions {
 
 export interface CreateLotInput {
     /** Waypoint tokenIds, `[source, …waypoints, hub]`. */
-    chain: Array<string>;
+    chain: Array<number>;
     resourceId: number;
     value: string;
     pricePerUnit: string;
@@ -529,21 +529,21 @@ export interface CreateLotInput {
 export interface BuyLotInput {
     lotId: string;
     /** Waypoint tokenIds, `[hub, …waypoints, buyerDest]`. */
-    chain: Array<string>;
+    chain: Array<number>;
     value: string;
 }
 
 export interface CancelLotInput {
     lotId: string;
     /** Waypoint tokenIds, `[hub, …waypoints, sellerDest]` — routes the unsold remainder home. */
-    chain: Array<string>;
+    chain: Array<number>;
 }
 
 export interface QuoteBuyInput {
     lotId: string;
     value: string;
     /** Waypoint tokenIds, `[hub, …waypoints, buyerDest]`; null for a seller-only estimate. */
-    chain: Array<string> | null;
+    chain: Array<number> | null;
 }
 
 /** Filters for `GET /api/v1/trade/lots`. All fields nullable — omit to leave unset. */

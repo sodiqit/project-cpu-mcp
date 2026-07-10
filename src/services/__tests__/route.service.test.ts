@@ -35,13 +35,13 @@ function makeService(cells: Array<CellState>): RouteService {
     });
 }
 
-function plan(cells: Array<CellState>, from: string, to: string, optimize = RouteOptimize.Cheapest) {
+function plan(cells: Array<CellState>, from: number, to: number, optimize = RouteOptimize.Cheapest) {
     return makeService(cells).plan({ from, to, amount: '100', optimize });
 }
 
 describe('RouteService.plan', () => {
     it('routes two adjacent own cells directly with no fee', async () => {
-        const result = await plan([own('72'), own('73')], '72', '73');
+        const result = await plan([own('72'), own('73')], 72, 73);
 
         expect(result.waypoints).toEqual(['72', '73']);
         expect(result.legs).toEqual([{ from: '72', to: '73', distance: 1 }]);
@@ -52,7 +52,7 @@ describe('RouteService.plan', () => {
     });
 
     it('bridges an out-of-reach gap through a foreign hub and prices its fee', async () => {
-        const result = await plan([own('72'), own('78'), foreignHub('75', '0.5')], '72', '78');
+        const result = await plan([own('72'), own('78'), foreignHub('75', '0.5')], 72, 78);
 
         expect(result.waypoints).toEqual(['72', '75', '78']);
         expect(result.totalDistance).toBe(6);
@@ -62,18 +62,18 @@ describe('RouteService.plan', () => {
     });
 
     it('throws an actionable error when no chain exists', async () => {
-        await expect(plan([own('72'), own('78')], '72', '78')).rejects.toThrow(/No valid waypoint chain/);
+        await expect(plan([own('72'), own('78')], 72, 78)).rejects.toThrow(/No valid waypoint chain/);
     });
 
     it('prefers a fee-free own-cell detour when optimizing for cost, and the shorter paid route when optimizing for speed', async () => {
         const cells = [own('72'), own('76'), foreignHub('74', '0.5'), own('143'), own('144'), own('145'), own('146')];
 
-        const cheapest = await plan(cells, '72', '76', RouteOptimize.Cheapest);
+        const cheapest = await plan(cells, 72, 76, RouteOptimize.Cheapest);
         expect(cheapest.estimatedFee).toBe('0');
         expect(cheapest.foreignHubs).toEqual([]);
         expect(cheapest.totalDistance).toBe(5);
 
-        const fastest = await plan(cells, '72', '76', RouteOptimize.Fastest);
+        const fastest = await plan(cells, 72, 76, RouteOptimize.Fastest);
         expect(fastest.totalDistance).toBe(4);
         expect(fastest.waypoints).toEqual(['72', '74', '76']);
         expect(fastest.estimatedFee).toBe('50');
@@ -81,8 +81,8 @@ describe('RouteService.plan', () => {
 
     it('skips the fee estimate when no amount is given', async () => {
         const result = await makeService([own('72'), own('78'), foreignHub('75', '0.5')]).plan({
-            from: '72',
-            to: '78',
+            from: 72,
+            to: 78,
             amount: null,
             optimize: RouteOptimize.Cheapest,
         });
@@ -99,10 +99,9 @@ describe('RouteService.plan', () => {
             own('74', { revealCount: 0 }),
         ];
 
-        await expect(plan(cells, '72', '99')).rejects.toThrow(/not in the current map/);
-        await expect(plan(cells, '72', '73')).rejects.toThrow(/not an eligible waypoint/);
-        await expect(plan(cells, '72', '74')).rejects.toThrow(/not revealed/);
-        await expect(plan(cells, '72', '72')).rejects.toThrow(/must be different/);
-        await expect(plan(cells, 'abc', '73')).rejects.toThrow(/tokenId must be an integer/);
+        await expect(plan(cells, 72, 99)).rejects.toThrow(/not in the current map/);
+        await expect(plan(cells, 72, 73)).rejects.toThrow(/not an eligible waypoint/);
+        await expect(plan(cells, 72, 74)).rejects.toThrow(/not revealed/);
+        await expect(plan(cells, 72, 72)).rejects.toThrow(/must be different/);
     });
 });

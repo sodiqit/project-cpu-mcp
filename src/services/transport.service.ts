@@ -18,7 +18,6 @@ import {
 } from './types.js';
 import type { ApiClient } from '../api/client.js';
 import { HttpStatus, type DeliveriesResponse, type DeliveryResponse } from '../api/types.js';
-import { parseTokenId } from '../geometry/token.utils.js';
 import type { ILogger } from '../logger/types.js';
 import { cpuFromWei } from '../utils/format.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
@@ -156,7 +155,7 @@ export class TransportService {
         return {
             transport: this.resolveTransport(config),
             from: wallet.getAddress(),
-            tokenIds: input.path.map((tokenId) => BigInt(parseTokenId(tokenId))),
+            tokenIds: input.path.map((tokenId) => BigInt(tokenId)),
             res: input.resourceId,
             amount: BigInt(input.amount),
         };

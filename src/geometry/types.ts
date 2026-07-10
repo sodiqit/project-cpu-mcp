@@ -8,9 +8,4 @@ export interface CellCoord {
     j: number;
 }
 
-export const tokenIdStringSchema = z
-    .string()
-    .regex(/^[1-9][0-9]*$/, 'tokenId must be a positive integer string')
-    .refine((value) => value.length <= 5 && Number(value) <= MAX_TOKEN_ID, {
-        message: `tokenId must be an integer in [${MIN_TOKEN_ID}, ${MAX_TOKEN_ID}]`,
-    });
+export const tokenIdSchema = z.coerce.number().int().min(MIN_TOKEN_ID).max(MAX_TOKEN_ID);

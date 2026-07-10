@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { tokenIdStringSchema } from '../../../geometry/types.js';
+import { tokenIdSchema } from '../../../geometry/types.js';
 import { DEFAULT_AROUND_RADIUS, MAX_AROUND_RADIUS } from '../../../map/constants.js';
 import { MapScope } from '../../../map/types.js';
 
@@ -15,7 +15,7 @@ export const getMapInputSchema = {
         .nullable()
         .default(null)
         .describe('Required for scope="cells": the cell tokenIds to return.'),
-    aroundTokenId: tokenIdStringSchema.nullable().default(null).describe('Center cell tokenId for scope="around".'),
+    aroundTokenId: tokenIdSchema.nullable().default(null).describe('Center cell tokenId for scope="around".'),
     radius: z
         .number()
         .int()
@@ -31,6 +31,6 @@ export const getMapInputSchema = {
 export interface GetMapArgs {
     scope: MapScope | null;
     tokenIds: Array<string> | null;
-    aroundTokenId: string | null;
+    aroundTokenId: number | null;
     radius: number | null;
 }
