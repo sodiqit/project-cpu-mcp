@@ -16,6 +16,10 @@ export function nodeRadius(node: RouteNode, moveRadius: number, hubRadius: numbe
     return node.isHub ? hubRadius : moveRadius;
 }
 
+export function pairReach(a: RouteNode, b: RouteNode, moveRadius: number, hubRadius: number): number {
+    return nodeRadius(a, moveRadius, hubRadius) + nodeRadius(b, moveRadius, hubRadius) - 1;
+}
+
 export function reachableWaypoints(
     from: RouteNode,
     nodes: Map<string, RouteNode>,
@@ -24,12 +28,12 @@ export function reachableWaypoints(
 ): Array<ReachableWaypoint> {
     const fromRadius = nodeRadius(from, moveRadius, hubRadius);
     const result: Array<ReachableWaypoint> = [];
-    for (const [token, distance] of kRing(Number(from.tokenId), fromRadius + hubRadius)) {
+    for (const [token, distance] of kRing(Number(from.tokenId), fromRadius + hubRadius - 1)) {
         if (distance === 0) {
             continue;
         }
         const node = nodes.get(String(token));
-        if (node === undefined || distance > fromRadius + nodeRadius(node, moveRadius, hubRadius)) {
+        if (node === undefined || distance > pairReach(from, node, moveRadius, hubRadius)) {
             continue;
         }
         result.push({ node, hopDistance: distance });

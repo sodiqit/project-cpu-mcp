@@ -85,14 +85,15 @@ describe('RouteService.nextHops', () => {
                 revealCount: 1,
                 building: { type: BuildingType.Hub, buildFinishAt: null },
             }),
+            own('75'),
             own('76'),
         ];
 
         const result = await survey(cells, 72);
 
         expect(result.fromIsHub).toBe(true);
-        expect(result.hops.map((h) => h.tokenId)).toEqual(['76']);
-        expect(result.hops[0]?.hopDistance).toBe(4);
+        expect(result.hops.map((h) => h.tokenId)).toEqual(['75']);
+        expect(result.hops[0]?.hopDistance).toBe(3);
     });
 
     it('rejects ineligible or unknown origins with specific errors', async () => {
@@ -142,14 +143,23 @@ describe('RouteService.network', () => {
         expect(byToken.get('72')).toMatchObject({ distFromSource: 0, distToTarget: 6 });
     });
 
-    it('treats a rival-owned strip without hubs as passable emptiness, not a wall', async () => {
-        const cells = [own('72'), makeCell({ tokenId: '73', owner: RIVAL, revealCount: 1 }), own('74')];
+    it('a single foreign cell between plain cells is a wall; a hub reaches across', async () => {
+        const rival = makeCell({ tokenId: '73', owner: RIVAL, revealCount: 1 });
 
-        const result = await makeService(cells).network({ from: null, towards: null });
+        const walled = await makeService([own('72'), rival, own('74')]).network({ from: null, towards: null });
+        expect(walled.nodes.map((n) => n.tokenId)).toEqual(['72', '74']);
+        expect(walled.edges).toEqual([]);
+        expect(walled.components).toBe(2);
 
-        expect(result.nodes.map((n) => n.tokenId)).toEqual(['72', '74']);
-        expect(result.edges).toEqual([{ a: '72', b: '74', distance: 2 }]);
-        expect(result.components).toBe(1);
+        const hub72 = makeCell({
+            tokenId: '72',
+            owner: WALLET_ADDRESS,
+            revealCount: 1,
+            building: { type: BuildingType.Hub, buildFinishAt: null },
+        });
+        const bridged = await makeService([hub72, rival, own('74')]).network({ from: null, towards: null });
+        expect(bridged.edges).toEqual([{ a: '72', b: '74', distance: 2 }]);
+        expect(bridged.components).toBe(1);
     });
 
     it('shows a disconnected target as a separate component', async () => {
