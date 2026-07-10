@@ -17,7 +17,8 @@ export const ROUTE_NETWORK_DESCRIPTION = [
     'annotate each node with grid distance from the source and to the destination (a potential field to reason',
     'over). Different component ids = a gap no chain can cross today — bridging it (build a Hub, buy land) is a',
     'strategic decision. Routing over this map is YOUR job: pick the chain, then verify with',
-    'cpu_quote_transport. Use cpu_next_hops to zoom into one cell.',
+    'cpu_quote_transport. WHEN: the heavy read — call once to plan a journey or after a big replan; for point',
+    'checks while executing, use the cheap cpu_next_hops instead of re-reading the whole map.',
 ].join(' ');
 
 export const NEXT_HOPS_DESCRIPTION = [
@@ -27,5 +28,7 @@ export const NEXT_HOPS_DESCRIPTION = [
     'its per-unit transit fee, and — when `towards` is given — the remaining grid distance to the target',
     '(a compass, not a route). Planning is YOUR job: pick each hop yourself (cheap vs short vs whose hub you',
     'trust), chain them into `path`, and verify with cpu_quote_transport. An empty list means the route ends',
-    'here — build a Hub to bridge the gap or approach from other cells.',
+    'here — build a Hub to bridge the gap or approach from other cells. WHEN: the cheap point check — call it',
+    'right before each leg and after cpu_get_changes shows movement (hubs get demolished, fees change while',
+    'goods travel); replan via cpu_route_network only when a local fix is impossible.',
 ].join(' ');
