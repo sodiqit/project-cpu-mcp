@@ -16,8 +16,8 @@ function makeService(opts: Parameters<typeof makeCellHarness>[1] = {}) {
 function minedLog(resource: number, amount: bigint): Log {
     const topics = encodeEventTopics({ abi: CELL_ABI, eventName: 'ResourceMined', args: { tokenId: 42n } });
     const data = encodeAbiParameters(
-        [{ type: 'uint16' }, { type: 'uint64' }, { type: 'uint64' }],
-        [resource, amount, 0n],
+        [{ type: 'uint16' }, { type: 'uint64' }, { type: 'uint64' }, { type: 'uint64' }],
+        [resource, amount, amount, 0n],
     );
     return { address: CELL as Address, topics, data, ...LOG_META } as unknown as Log;
 }

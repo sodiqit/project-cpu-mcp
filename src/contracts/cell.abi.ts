@@ -36,7 +36,7 @@ export const CELL_ABI = [
         name: 'place',
         inputs: [
             { name: 'tokenId', type: 'uint256', internalType: 'uint256' },
-            { name: 'newType', type: 'uint8', internalType: 'uint8' },
+            { name: 'newType', type: 'uint16', internalType: 'uint16' },
         ],
         outputs: [],
         stateMutability: 'nonpayable',
@@ -91,7 +91,7 @@ export const CELL_ABI = [
         name: 'BuildingPlaced',
         inputs: [
             { name: 'tokenId', type: 'uint256', indexed: true, internalType: 'uint256' },
-            { name: 'buildingType', type: 'uint8', indexed: false, internalType: 'uint8' },
+            { name: 'buildingType', type: 'uint16', indexed: false, internalType: 'uint16' },
             { name: 'buildFinishAt', type: 'uint64', indexed: false, internalType: 'uint64' },
             { name: 'inputResources', type: 'uint16[]', indexed: false, internalType: 'uint16[]' },
             { name: 'inputAmounts', type: 'uint64[]', indexed: false, internalType: 'uint64[]' },
@@ -103,7 +103,10 @@ export const CELL_ABI = [
         name: 'BuildingDemolished',
         inputs: [
             { name: 'tokenId', type: 'uint256', indexed: true, internalType: 'uint256' },
-            { name: 'buildingType', type: 'uint8', indexed: false, internalType: 'uint8' },
+            { name: 'buildingType', type: 'uint16', indexed: false, internalType: 'uint16' },
+            { name: 'demolishFinishAt', type: 'uint64', indexed: false, internalType: 'uint64' },
+            { name: 'inputResources', type: 'uint16[]', indexed: false, internalType: 'uint16[]' },
+            { name: 'inputAmounts', type: 'uint64[]', indexed: false, internalType: 'uint64[]' },
         ],
         anonymous: false,
     },
@@ -126,6 +129,7 @@ export const CELL_ABI = [
             { name: 'tokenId', type: 'uint256', indexed: true, internalType: 'uint256' },
             { name: 'resource', type: 'uint16', indexed: false, internalType: 'uint16' },
             { name: 'amount', type: 'uint64', indexed: false, internalType: 'uint64' },
+            { name: 'drained', type: 'uint64', indexed: false, internalType: 'uint64' },
             { name: 'startAt', type: 'uint64', indexed: false, internalType: 'uint64' },
         ],
         anonymous: false,
