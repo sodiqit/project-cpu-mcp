@@ -9,7 +9,7 @@ export const transportInputSchema = {
         .min(2)
         .describe(
             'Waypoint chain of cell tokenIds [source, ...intermediate, target]. Every waypoint must be revealed ' +
-                'and eligible (your own cell, or a Hub); each hop must span at most radius(from)+radius(to) grid ' +
+                'and eligible (your own cell, or a Hub); each hop must span at most radius(from)+radius(to)−1 grid ' +
                 'steps (a plain cell reaches moveRadius, a Hub hubRadius — see get_game_config transport). ' +
                 'Scout legal hops with cpu_next_hops and chain them yourself; the Transport contract validates.',
         ),

@@ -1,4 +1,4 @@
-import type { Address, Hash, Hex, Log } from 'viem';
+import type { Abi, Address, Hash, Hex, Log } from 'viem';
 
 import type { ApiClient } from '../../api/client.js';
 import { BuildingKind, BuildingType, CraftRecipeId } from '../../api/types.js';
@@ -260,7 +260,7 @@ export class FakeContractClient implements IContractClient {
         this.reads.push(params);
         return undefined as T;
     }
-    async send(tx: TransactionRequest): Promise<Hash> {
+    async send(tx: TransactionRequest, _errorAbi: Abi | null): Promise<Hash> {
         this.sent.push(tx);
         return `0x${String(this.sent.length).padStart(64, '0')}` as Hash;
     }

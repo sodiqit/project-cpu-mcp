@@ -43,7 +43,7 @@ export class TransportClient implements ITransportClient {
             amount: params.amount.toString(),
             maxFeeWei: params.maxFee.toString(),
         });
-        return this.contracts.send({ to: params.transport, data, value: null });
+        return this.contracts.send({ to: params.transport, data, value: null }, TRANSPORT_ABI);
     }
 
     async finalize(params: FinalizeParams): Promise<Hash> {
@@ -56,6 +56,6 @@ export class TransportClient implements ITransportClient {
             transport: params.transport,
             ids: params.ids.map((id) => id.toString()),
         });
-        return this.contracts.send({ to: params.transport, data, value: null });
+        return this.contracts.send({ to: params.transport, data, value: null }, TRANSPORT_ABI);
     }
 }

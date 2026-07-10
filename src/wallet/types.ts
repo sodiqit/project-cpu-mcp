@@ -56,7 +56,8 @@ export interface ConfirmedTx {
 
 export interface IContractClient {
     read<T>(params: ReadContractParams): Promise<T>;
-    send(tx: TransactionRequest): Promise<Hash>;
+    /** `errorAbi` decodes custom-error reverts into readable names; pass null when no ABI applies. */
+    send(tx: TransactionRequest, errorAbi: Abi | null): Promise<Hash>;
     confirm(hash: Hash, revertLabel: string): Promise<ConfirmedTx>;
 }
 

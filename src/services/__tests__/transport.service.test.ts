@@ -1,4 +1,4 @@
-import { encodeAbiParameters, encodeEventTopics, type Hash, type Log } from 'viem';
+import { type Abi, encodeAbiParameters, encodeEventTopics, type Hash, type Log } from 'viem';
 import { describe, expect, it } from 'vitest';
 
 import type { ApiClient } from '../../api/client.js';
@@ -82,7 +82,7 @@ class FakeContractClient implements IContractClient {
     async read<T>(_params: ReadContractParams): Promise<T> {
         return undefined as T;
     }
-    async send(tx: TransactionRequest): Promise<Hash> {
+    async send(tx: TransactionRequest, _errorAbi: Abi | null): Promise<Hash> {
         this.sent.push(tx);
         return MOVE_HASH;
     }

@@ -1,4 +1,4 @@
-import { formatEther, parseEther, type Hash } from 'viem';
+import { type Abi, formatEther, parseEther, type Hash } from 'viem';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NoopLogger } from '../../logger/noop.logger.js';
@@ -80,7 +80,7 @@ class FakeContractClient implements IContractClient {
         this.reads.push(params);
         return undefined as T;
     }
-    async send(tx: TransactionRequest): Promise<Hash> {
+    async send(tx: TransactionRequest, _errorAbi: Abi | null): Promise<Hash> {
         this.sent.push(tx);
         return REQUEST_HASH;
     }

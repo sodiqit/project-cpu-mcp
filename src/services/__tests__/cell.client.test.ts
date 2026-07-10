@@ -1,4 +1,4 @@
-import { decodeFunctionData, zeroAddress, type Address, type Hash } from 'viem';
+import { type Abi, decodeFunctionData, zeroAddress, type Address, type Hash } from 'viem';
 import { describe, expect, it } from 'vitest';
 
 import { CELL_ABI } from '../../contracts/cell.abi.js';
@@ -17,7 +17,7 @@ class FakeContracts implements IContractClient {
     async read<T>(params: ReadContractParams): Promise<T> {
         return this.reads[params.functionName] as T;
     }
-    async send(tx: TransactionRequest): Promise<Hash> {
+    async send(tx: TransactionRequest, _errorAbi: Abi | null): Promise<Hash> {
         this.sent.push(tx);
         return SENT;
     }
