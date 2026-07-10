@@ -148,6 +148,23 @@ describe('graph operations', () => {
         const faces = new Set(chain.map((token) => tokenIdToCell(token).face));
         expect(faces.size).toBeGreaterThan(1);
     });
+
+    it('findPath stays shortest on long near-antipodal routes', () => {
+        const pairs: Array<[number, number]> = [
+            [cellToTokenId({ face: 0, i: 35, j: 35 }), cellToTokenId({ face: 9, i: 35, j: 35 })],
+            [cellToTokenId({ face: 1, i: 5, j: 60 }), cellToTokenId({ face: 7, i: 60, j: 5 })],
+            [1, cellToTokenId({ face: 6, i: 40, j: 20 })],
+        ];
+        for (const [from, to] of pairs) {
+            const path = findPath(from, to) as Array<number>;
+            expect(path[0]).toBe(from);
+            expect(path[path.length - 1]).toBe(to);
+            for (let k = 1; k < path.length; k++) {
+                expect(neighbors(path[k - 1] as number)).toContain(path[k]);
+            }
+            expect(path.length - 1).toBe(gridDistanceWithin(from, to, 300));
+        }
+    });
 });
 
 describe('token.utils string adapters', () => {

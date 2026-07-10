@@ -17,13 +17,13 @@ function decodeTable(): Uint16Array {
     return table;
 }
 
-function table(): Uint16Array {
+export function adjacencyTable(): Uint16Array {
     return (cachedTable ??= decodeTable());
 }
 
 export function neighbors(tokenId: number): Array<number> {
     assertTokenIdInRange(tokenId);
-    const packed = table();
+    const packed = adjacencyTable();
     const base = (tokenId - 1) * NEIGHBOR_SLOTS;
     const result: Array<number> = [];
     for (let slot = 0; slot < NEIGHBOR_SLOTS; slot++) {
