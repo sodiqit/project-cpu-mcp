@@ -142,6 +142,16 @@ describe('RouteService.network', () => {
         expect(byToken.get('72')).toMatchObject({ distFromSource: 0, distToTarget: 6 });
     });
 
+    it('treats a rival-owned strip without hubs as passable emptiness, not a wall', async () => {
+        const cells = [own('72'), makeCell({ tokenId: '73', owner: RIVAL, revealCount: 1 }), own('74')];
+
+        const result = await makeService(cells).network({ from: null, towards: null });
+
+        expect(result.nodes.map((n) => n.tokenId)).toEqual(['72', '74']);
+        expect(result.edges).toEqual([{ a: '72', b: '74', distance: 2 }]);
+        expect(result.components).toBe(1);
+    });
+
     it('shows a disconnected target as a separate component', async () => {
         const cells = [own('72'), own('73'), own('220')];
 
