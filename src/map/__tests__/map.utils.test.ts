@@ -1,17 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
+import { makeCell } from './fixtures.js';
 import {
     buildResourceIndex,
     classifyNeighbors,
     filterCells,
-    hexDistance,
     isNewer,
     parseCellState,
     parseSnapshot,
     summarizeMap,
 } from '../map.utils.js';
 import { type CellState, CellProcessKind, MapReadiness, MapScope, type MapQuery, NeighborRelation } from '../types.js';
-import { makeCell } from './fixtures.js';
 
 function query(overrides: Partial<MapQuery>): MapQuery {
     return { scope: MapScope.All, tokenIds: null, around: null, ownerAddress: null, ...overrides };
@@ -19,12 +18,19 @@ function query(overrides: Partial<MapQuery>): MapQuery {
 
 describe('parseSnapshot', () => {
     it('keeps valid cells and drops schema-invalid ones without failing the whole snapshot', () => {
-        const raw = { serverTime: 1000, version: 5, cells: [makeCell({ tokenId: '1' }), { tokenId: 'nope' }] };
+        const raw = { serverTime: 1000, version: 5, cells: [makeCell({ tokenId: '1' }), { tokenId: 42 }] };
         const { snapshot, dropped } = parseSnapshot(raw);
         expect(snapshot.serverTime).toBe(1000);
         expect(snapshot.version).toBe(5);
         expect(snapshot.cells.map((c) => c.tokenId)).toEqual(['1']);
         expect(dropped).toBe(1);
+    });
+
+    it('tolerates stray extra fields on a cell (transitional server payloads)', () => {
+        const raw = { serverTime: 1, version: 1, cells: [{ ...makeCell({ tokenId: '7' }), x: 3, y: -2 }] };
+        const { snapshot, dropped } = parseSnapshot(raw);
+        expect(snapshot.cells.map((c) => c.tokenId)).toEqual(['7']);
+        expect(dropped).toBe(0);
     });
 
     it('throws on a malformed envelope (a real protocol error, not a stray cell)', () => {
@@ -45,22 +51,6 @@ describe('isNewer', () => {
     });
 });
 
-describe('hexDistance', () => {
-    it('is zero for the same coordinate', () => {
-        expect(hexDistance(2, -3, 2, -3)).toBe(0);
-    });
-
-    it('is one for adjacent hexes', () => {
-        expect(hexDistance(0, 0, 1, 0)).toBe(1);
-        expect(hexDistance(0, 0, 0, 1)).toBe(1);
-        expect(hexDistance(0, 0, -1, 1)).toBe(1);
-    });
-
-    it('is symmetric', () => {
-        expect(hexDistance(0, 0, 3, -1)).toBe(hexDistance(3, -1, 0, 0));
-    });
-});
-
 describe('parseCellState', () => {
     it('returns the cell for a valid payload', () => {
         expect(parseCellState(makeCell())).not.toBeNull();
@@ -73,19 +63,33 @@ describe('parseCellState', () => {
 });
 
 describe('classifyNeighbors', () => {
-    it('labels each of the six neighbours owned / other / empty (case-insensitive owner)', () => {
+    it('labels each grid neighbour owned / other / empty (case-insensitive owner)', () => {
         const grid = new Map<string, CellState>([
-            ['1,0', makeCell({ tokenId: 'a', x: 1, y: 0, owner: '0xME' })],
-            ['0,1', makeCell({ tokenId: 'b', x: 0, y: 1, owner: '0xrival' })],
+            ['71', makeCell({ tokenId: '71', owner: '0xME' })],
+            ['73', makeCell({ tokenId: '73', owner: '0xrival' })],
         ]);
-        const getByCoord = (x: number, y: number): CellState | null => grid.get(`${x},${y}`) ?? null;
+        const getByTokenId = (tokenId: string): CellState | null => grid.get(tokenId) ?? null;
 
-        const refs = classifyNeighbors(makeCell({ x: 0, y: 0 }), getByCoord, '0xme');
+        const refs = classifyNeighbors(makeCell({ tokenId: '72' }), getByTokenId, '0xme');
 
         expect(refs).toHaveLength(6);
-        expect(refs.filter((r) => r.relation === NeighborRelation.Owned)).toHaveLength(1);
-        expect(refs.filter((r) => r.relation === NeighborRelation.Other)).toHaveLength(1);
+        expect(refs.map((r) => r.tokenId).sort((a, b) => Number(a) - Number(b))).toEqual([
+            '1',
+            '2',
+            '71',
+            '73',
+            '142',
+            '143',
+        ]);
+        expect(refs.filter((r) => r.relation === NeighborRelation.Owned).map((r) => r.tokenId)).toEqual(['71']);
+        expect(refs.filter((r) => r.relation === NeighborRelation.Other).map((r) => r.tokenId)).toEqual(['73']);
         expect(refs.filter((r) => r.relation === NeighborRelation.Empty)).toHaveLength(4);
+    });
+
+    it('returns five refs for a pentagon-rim cell', () => {
+        const refs = classifyNeighbors(makeCell({ tokenId: '1' }), () => null, null);
+        expect(refs).toHaveLength(5);
+        expect(refs.every((r) => r.relation === NeighborRelation.Empty)).toBe(true);
     });
 });
 
@@ -101,8 +105,6 @@ describe('buildResourceIndex', () => {
             }),
             makeCell({
                 tokenId: '2',
-                x: 1,
-                y: 0,
                 resources: [{ resourceId: 1, deposit: '0', balance: '7', strength: null, storage: null }],
             }),
         ];
@@ -117,9 +119,9 @@ describe('buildResourceIndex', () => {
 
 describe('filterCells', () => {
     const cells = [
-        makeCell({ tokenId: '1', x: 0, y: 0, owner: '0xme' }),
-        makeCell({ tokenId: '2', x: 2, y: 0, owner: '0xRival' }),
-        makeCell({ tokenId: '3', x: 5, y: 0, owner: '0xme' }),
+        makeCell({ tokenId: '72', owner: '0xme' }),
+        makeCell({ tokenId: '74', owner: '0xRival' }),
+        makeCell({ tokenId: '10000', owner: '0xme' }),
     ];
 
     it('returns everything for scope=all', () => {
@@ -132,17 +134,20 @@ describe('filterCells', () => {
 
     it('matches owner case-insensitively for scope=mine', () => {
         const result = filterCells(cells, query({ scope: MapScope.Mine, ownerAddress: '0xME' }));
-        expect(result.map((c) => c.tokenId)).toEqual(['1', '3']);
+        expect(result.map((c) => c.tokenId)).toEqual(['72', '10000']);
     });
 
     it('includes the radius boundary for scope=around', () => {
-        const result = filterCells(cells, query({ scope: MapScope.Around, around: { x: 0, y: 0, radius: 2 } }));
-        expect(result.map((c) => c.tokenId)).toEqual(['1', '2']);
+        const near = filterCells(cells, query({ scope: MapScope.Around, around: { tokenId: '72', radius: 1 } }));
+        expect(near.map((c) => c.tokenId)).toEqual(['72']);
+
+        const wider = filterCells(cells, query({ scope: MapScope.Around, around: { tokenId: '72', radius: 2 } }));
+        expect(wider.map((c) => c.tokenId)).toEqual(['72', '74']);
     });
 
     it('matches the token set for scope=cells', () => {
-        const result = filterCells(cells, query({ scope: MapScope.Cells, tokenIds: ['3'] }));
-        expect(result.map((c) => c.tokenId)).toEqual(['3']);
+        const result = filterCells(cells, query({ scope: MapScope.Cells, tokenIds: ['10000'] }));
+        expect(result.map((c) => c.tokenId)).toEqual(['10000']);
     });
 });
 

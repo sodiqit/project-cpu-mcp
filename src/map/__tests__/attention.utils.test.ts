@@ -220,8 +220,6 @@ describe('withExtraItems', () => {
         const base = report([{ tokenId: 'z', revealCount: 1, building: null }]);
         const extra: AttentionItem = {
             tokenId: 'd',
-            x: 0,
-            y: 0,
             severity: AttentionSeverity.Warning,
             reason: AttentionReason.DeliveryReady,
             resourceId: 3,

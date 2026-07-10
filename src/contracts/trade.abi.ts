@@ -6,8 +6,7 @@ export const TRADE_ABI = [
         type: 'function',
         name: 'createLot',
         inputs: [
-            { name: 'xs', type: 'int256[]', internalType: 'int256[]' },
-            { name: 'ys', type: 'int256[]', internalType: 'int256[]' },
+            { name: 'tokenIds', type: 'uint256[]', internalType: 'uint256[]' },
             { name: 'res', type: 'uint16', internalType: 'uint16' },
             { name: 'value', type: 'uint128', internalType: 'uint128' },
             { name: 'price', type: 'uint128', internalType: 'uint128' },
@@ -22,8 +21,7 @@ export const TRADE_ABI = [
         inputs: [
             { name: 'lotId', type: 'uint256', internalType: 'uint256' },
             { name: 'value', type: 'uint128', internalType: 'uint128' },
-            { name: 'destXs', type: 'int256[]', internalType: 'int256[]' },
-            { name: 'destYs', type: 'int256[]', internalType: 'int256[]' },
+            { name: 'destTokenIds', type: 'uint256[]', internalType: 'uint256[]' },
             { name: 'maxFee', type: 'uint256', internalType: 'uint256' },
         ],
         outputs: [],
@@ -34,8 +32,7 @@ export const TRADE_ABI = [
         name: 'cancel',
         inputs: [
             { name: 'lotId', type: 'uint256', internalType: 'uint256' },
-            { name: 'returnXs', type: 'int256[]', internalType: 'int256[]' },
-            { name: 'returnYs', type: 'int256[]', internalType: 'int256[]' },
+            { name: 'returnTokenIds', type: 'uint256[]', internalType: 'uint256[]' },
             { name: 'maxFee', type: 'uint256', internalType: 'uint256' },
         ],
         outputs: [],
@@ -86,7 +83,6 @@ export const TRADE_ABI = [
         anonymous: false,
     },
     { type: 'error', name: 'ZeroAddress', inputs: [] },
-    { type: 'error', name: 'ArrayLengthMismatch', inputs: [] },
     { type: 'error', name: 'PathTooShort', inputs: [] },
     { type: 'error', name: 'InvalidValue', inputs: [] },
     { type: 'error', name: 'InvalidPrice', inputs: [] },

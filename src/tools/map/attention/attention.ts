@@ -14,18 +14,12 @@ import { getWalletAddress } from '../wallet.utils.js';
 
 const DELIVERIES_UNREACHABLE = 'Deliveries could not be loaded (server unreachable); showing map-based items only.';
 
-// A delivery isn't a cell, so it borrows the target cell's coords from the map.
-function deliveryItem(context: AppContext, d: DeliveryView) {
-    const cell = context.mapReader.readRevealCell(d.targetTokenId);
-    return attentionItem(
-        { tokenId: d.targetTokenId, x: cell?.x ?? 0, y: cell?.y ?? 0 },
-        AttentionReason.DeliveryReady,
-        {
-            resourceId: d.resourceId,
-            deliveryId: d.deliveryId,
-            arrivalAt: d.arrivalAt,
-        },
-    );
+function deliveryItem(d: DeliveryView) {
+    return attentionItem({ tokenId: d.targetTokenId }, AttentionReason.DeliveryReady, {
+        resourceId: d.resourceId,
+        deliveryId: d.deliveryId,
+        arrivalAt: d.arrivalAt,
+    });
 }
 
 export function registerGetAttentionTool(server: McpServer, context: AppContext): void {
@@ -57,7 +51,7 @@ export function registerGetAttentionTool(server: McpServer, context: AppContext)
                     const ready = await context.transport.listReadyToFinalizeForOwner(target);
                     report = withExtraItems(
                         mapReport,
-                        ready.map((d) => deliveryItem(context, d)),
+                        ready.map((d) => deliveryItem(d)),
                         null,
                     );
                 } catch (error) {

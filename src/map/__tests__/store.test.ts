@@ -75,7 +75,7 @@ describe('MapStore', () => {
             // the cursor must stay at 50 so a later `?since=50` still backfills the (50, 100] gap.
             store.applyCell(makeCell({ tokenId: '1', updated: 100, owner: '0xlive' }));
 
-            store.applySnapshot(makeSnapshot({ version: 50, cells: [makeCell({ tokenId: '2', x: 1, updated: 40 })] }));
+            store.applySnapshot(makeSnapshot({ version: 50, cells: [makeCell({ tokenId: '2', updated: 40 })] }));
 
             expect(store.getSyncVersion()).toBe(50);
             expect(store.getLatestUpdated()).toBe(100);
@@ -84,15 +84,9 @@ describe('MapStore', () => {
 
     it('looks cells up by owner case-insensitively', () => {
         store.applyCell(makeCell({ tokenId: '1', owner: '0xME' }));
-        store.applyCell(makeCell({ tokenId: '2', x: 1, owner: '0xrival' }));
+        store.applyCell(makeCell({ tokenId: '2', owner: '0xrival' }));
 
         expect(store.getByOwner('0xme').map((c) => c.tokenId)).toEqual(['1']);
-    });
-
-    it('looks cells up by coordinate', () => {
-        store.applyCell(makeCell({ tokenId: '1', x: 3, y: -2 }));
-        expect(store.getByCoord(3, -2)?.tokenId).toBe('1');
-        expect(store.getByCoord(9, 9)).toBeNull();
     });
 
     it('returns null for an unknown token', () => {
@@ -101,7 +95,7 @@ describe('MapStore', () => {
 
     it('changedSince returns only cells updated after the version', () => {
         store.applyCell(makeCell({ tokenId: '1', updated: 10 }));
-        store.applyCell(makeCell({ tokenId: '2', x: 1, updated: 30 }));
+        store.applyCell(makeCell({ tokenId: '2', updated: 30 }));
 
         expect(store.changedSince(20).map((c) => c.tokenId)).toEqual(['2']);
         expect(store.changedSince(0)).toHaveLength(2);

@@ -43,10 +43,7 @@ const BUY_HASH = `0x${'2'.repeat(64)}` as Hash;
 const CANCEL_HASH = `0x${'3'.repeat(64)}` as Hash;
 
 const CREATE_INPUT = {
-    chain: [
-        { x: 0, y: 0 },
-        { x: 1, y: 0 },
-    ],
+    chain: [72, 73],
     resourceId: 3,
     value: '100',
     pricePerUnit: '0.5',
@@ -56,8 +53,6 @@ function lotView(over: Partial<LotView> = {}): LotView {
     return {
         id: '7',
         hubTokenId: '20',
-        hubX: 1,
-        hubY: 0,
         sellerAddress: WALLET_ADDRESS,
         resourceId: 3,
         listed: '100',
@@ -65,7 +60,7 @@ function lotView(over: Partial<LotView> = {}): LotView {
         pricePerUnit: parseEther('0.5').toString(),
         tradeFeePct: 0,
         state: LotState.Open,
-        distanceFromCenter: null,
+        distanceFromAnchor: null,
         createdAt: 1700,
         updated: 1700,
         ...over,
@@ -344,10 +339,7 @@ describe('TradeService.buyLot', () => {
 
         const result = await h.service.buyLot({
             lotId: '7',
-            chain: [
-                { x: 5, y: 5 },
-                { x: 6, y: 6 },
-            ],
+            chain: [20, 75],
             value: '10',
         });
 
@@ -383,10 +375,7 @@ describe('TradeService.buyLot', () => {
 
         const result = await h.service.buyLot({
             lotId: '7',
-            chain: [
-                { x: 1, y: 0 },
-                { x: 2, y: 0 },
-            ],
+            chain: [20, 21],
             value: '10',
         });
 
@@ -406,10 +395,7 @@ describe('TradeService.cancelLot', () => {
 
         const result = await h.service.cancelLot({
             lotId: '7',
-            chain: [
-                { x: 6, y: 6 },
-                { x: 0, y: 0 },
-            ],
+            chain: [20, 72],
         });
 
         expect(h.allowance.calls).toHaveLength(0);
@@ -436,10 +422,7 @@ describe('TradeService.quoteBuy', () => {
         const result = await h.service.quoteBuy({
             lotId: '7',
             value: '10',
-            chain: [
-                { x: 5, y: 5 },
-                { x: 6, y: 6 },
-            ],
+            chain: [20, 75],
         });
 
         expect(h.transportClient.quotes).toHaveLength(1);
@@ -511,8 +494,6 @@ describe('TradeService reads', () => {
             limit: null,
             offset: null,
             aroundTokenId: null,
-            centerX: null,
-            centerY: null,
             radius: null,
         });
 

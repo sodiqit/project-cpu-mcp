@@ -41,8 +41,7 @@ function harness(inspection: CellInspection | null, serverTime = 0): Handler {
 const inspection: CellInspection = {
     cell: {
         tokenId: '7',
-        x: 0,
-        y: 0,
+        pos: { face: 0, i: 0, j: 7 },
         owner: '0xrival',
         revealCount: 1,
         revealPending: false,
@@ -59,7 +58,7 @@ const inspection: CellInspection = {
             stalled: false,
         },
         updated: 10,
-        neighbors: [{ x: 1, y: 0, tokenId: 'mine', relation: NeighborRelation.Owned }],
+        neighbors: [{ tokenId: '8', relation: NeighborRelation.Owned }],
     },
     neighbors: [],
     distanceFromMine: 2,

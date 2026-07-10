@@ -25,8 +25,7 @@ import type { IContractClient, WalletManager, WalletProvider } from '../wallet/t
 interface Route {
     transport: Address;
     from: Address;
-    xs: Array<bigint>;
-    ys: Array<bigint>;
+    tokenIds: Array<bigint>;
     res: number;
     amount: bigint;
 }
@@ -156,8 +155,7 @@ export class TransportService {
         return {
             transport: this.resolveTransport(config),
             from: wallet.getAddress(),
-            xs: input.path.map((p) => BigInt(p.x)),
-            ys: input.path.map((p) => BigInt(p.y)),
+            tokenIds: input.path.map((tokenId) => BigInt(tokenId)),
             res: input.resourceId,
             amount: BigInt(input.amount),
         };

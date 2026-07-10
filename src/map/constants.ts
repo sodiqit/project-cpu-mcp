@@ -16,17 +16,6 @@ export const CELL_UPDATE_EVENT = 'cell_update';
 // Must match the string emitted by socket.io-client.
 export const SERVER_INITIATED_DISCONNECT_REASON = 'io server disconnect';
 
-// Axial hex neighbour offsets (6 directions) for the cube convention where `z = -x - y`, i.e.
-// `hexDistance = (|dx| + |dy| + |dx + dy|) / 2`. Order is irrelevant to callers.
-export const HEX_NEIGHBOR_OFFSETS: ReadonlyArray<readonly [number, number]> = [
-    [1, 0],
-    [1, -1],
-    [0, -1],
-    [-1, 0],
-    [-1, 1],
-    [0, 1],
-];
-
 export const DEFAULT_POLL_INTERVAL_MS = 30_000;
 export const DEFAULT_RECONNECT_GRACE_MS = 5_000;
 export const STARTUP_FETCH_RETRY_MS = 10_000;

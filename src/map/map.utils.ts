@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { HEX_NEIGHBOR_OFFSETS } from './constants.js';
 import {
     type CellState,
     cellStateSchema,
@@ -15,6 +14,7 @@ import {
     NeighborRelation,
     type ResourceIndex,
 } from './types.js';
+import { neighborTokenIds, ringDistances } from '../geometry/token.utils.js';
 
 // The snapshot envelope is parsed strictly (a malformed serverTime/version is a real protocol error), but each
 // cell is parsed tolerantly below — mirrors the socket path, which already drops rather than throws on one cell.
@@ -27,10 +27,6 @@ const snapshotEnvelopeSchema = z.object({
 // The single apply-if-newer predicate — shared by every write path so dedup stays consistent.
 export function isNewer(incoming: CellState, held: CellState | null): boolean {
     return held === null || incoming.updated > held.updated;
-}
-
-export function hexDistance(ax: number, ay: number, bx: number, by: number): number {
-    return (Math.abs(ax - bx) + Math.abs(ay - by) + Math.abs(ax + ay - bx - by)) / 2;
 }
 
 export function parseCellState(raw: unknown): CellState | null {
@@ -59,16 +55,14 @@ function sameAddress(a: string, b: string): boolean {
 
 export function classifyNeighbors(
     cell: CellState,
-    getByCoord: (x: number, y: number) => CellState | null,
+    getByTokenId: (tokenId: string) => CellState | null,
     ownerAddress: string | null,
 ): Array<NeighborRef> {
-    return HEX_NEIGHBOR_OFFSETS.map(([dx, dy]) => {
-        const x = cell.x + dx;
-        const y = cell.y + dy;
-        const neighbor = getByCoord(x, y);
+    return neighborTokenIds(cell.tokenId).map((tokenId) => {
+        const neighbor = getByTokenId(tokenId);
 
         if (neighbor === null) {
-            return { x, y, tokenId: null, relation: NeighborRelation.Empty };
+            return { tokenId, relation: NeighborRelation.Empty };
         }
 
         const relation =
@@ -76,7 +70,7 @@ export function classifyNeighbors(
                 ? NeighborRelation.Owned
                 : NeighborRelation.Other;
 
-        return { x, y, tokenId: neighbor.tokenId, relation };
+        return { tokenId, relation };
     });
 }
 
@@ -90,8 +84,6 @@ export function buildResourceIndex(cells: Array<CellState>): ResourceIndex {
             const key = String(resource.resourceId);
             const location = {
                 tokenId: cell.tokenId,
-                x: cell.x,
-                y: cell.y,
                 deposit: resource.deposit,
                 balance: resource.balance,
             };
@@ -107,17 +99,14 @@ export function buildResourceIndex(cells: Array<CellState>): ResourceIndex {
     return index;
 }
 
-function matchesQuery(cell: CellState, query: MapQuery): boolean {
+function matchesQuery(cell: CellState, query: MapQuery, aroundSet: ReadonlySet<string> | null): boolean {
     switch (query.scope) {
         case MapScope.All:
             return true;
         case MapScope.Mine:
             return query.ownerAddress !== null && sameAddress(cell.owner, query.ownerAddress);
         case MapScope.Around:
-            return (
-                query.around !== null &&
-                hexDistance(cell.x, cell.y, query.around.x, query.around.y) <= query.around.radius
-            );
+            return aroundSet !== null && aroundSet.has(cell.tokenId);
         case MapScope.Cells:
             return query.tokenIds !== null && query.tokenIds.includes(cell.tokenId);
         case MapScope.Summary:
@@ -126,9 +115,13 @@ function matchesQuery(cell: CellState, query: MapQuery): boolean {
 }
 
 export function filterCells(cells: Iterable<CellState>, query: MapQuery): Array<CellState> {
+    const aroundSet =
+        query.scope === MapScope.Around && query.around !== null
+            ? new Set(ringDistances(query.around.tokenId, query.around.radius).keys())
+            : null;
     const result: Array<CellState> = [];
     for (const cell of cells) {
-        if (matchesQuery(cell, query)) {
+        if (matchesQuery(cell, query, aroundSet)) {
             result.push(cell);
         }
     }

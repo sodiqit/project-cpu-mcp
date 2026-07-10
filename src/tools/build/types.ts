@@ -1,9 +1,10 @@
 import { z } from 'zod';
 
 import { BuildingType } from '../../api/types.js';
+import { tokenIdSchema } from '../../geometry/types.js';
 
 export const buildInputSchema = {
-    tokenId: z.string().describe('The tokenId of a revealed cell you own to build on.'),
+    tokenId: tokenIdSchema.transform(String).describe('The tokenId of a revealed cell you own to build on.'),
     buildingType: z
         .nativeEnum(BuildingType)
         .describe(
@@ -14,5 +15,5 @@ export const buildInputSchema = {
 };
 
 export const demolishInputSchema = {
-    tokenId: z.string().describe('The tokenId of a cell you own whose building to remove.'),
+    tokenId: tokenIdSchema.transform(String).describe('The tokenId of a cell you own whose building to remove.'),
 };

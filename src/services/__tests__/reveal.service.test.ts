@@ -26,7 +26,7 @@ import {
 const REQUEST_HASH = `0x${'e'.repeat(64)}` as Hash;
 
 function revealState(over: Partial<CellState> = {}): CellState {
-    return { tokenId: '42', x: 1, y: -2, owner: WALLET_ADDRESS, revealCount: 0, ...over } as unknown as CellState;
+    return { tokenId: '42', owner: WALLET_ADDRESS, revealCount: 0, ...over } as unknown as CellState;
 }
 
 class FakeAppConfig implements IAppConfig {
@@ -164,7 +164,7 @@ describe('RevealService', () => {
         const result = await p;
 
         expect(h.allowance.calls).toHaveLength(0);
-        expect(h.cellClient.requests).toEqual([{ cell: CELL, x: 1n, y: -2n, value: 1_250n }]);
+        expect(h.cellClient.requests).toEqual([{ cell: CELL, tokenId: 42n, value: 1_250n }]);
         expect(result.genesis).toBe(true);
         expect(result.fee).toBe(formatEther(1_000n));
         expect(result.reRevealCost).toBe('0');

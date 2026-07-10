@@ -52,6 +52,7 @@ function makeResponse(overrides: Partial<AppConfigResponse> = {}): AppConfigResp
             },
         ],
         reveal: { firstFree: true, reRevealCost: '1000' },
+        transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2 },
         ...overrides,
     };
 }

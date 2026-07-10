@@ -66,7 +66,7 @@ function harness(
     return { handler: captured, queries };
 }
 
-const NULL_ARGS = { scope: null, tokenIds: null, centerX: null, centerY: null, radius: null };
+const NULL_ARGS = { scope: null, tokenIds: null, aroundTokenId: null, radius: null };
 
 describe('get_map tool', () => {
     it('defaults to scope=mine when the wallet is ready', async () => {
@@ -85,7 +85,7 @@ describe('get_map tool', () => {
 
     it('rejects scope=around without a centre', async () => {
         const { handler } = harness(true);
-        await expect(handler({ ...NULL_ARGS, scope: MapScope.Around })).rejects.toThrow(/centerX/i);
+        await expect(handler({ ...NULL_ARGS, scope: MapScope.Around })).rejects.toThrow(/aroundTokenId/i);
     });
 
     it('rejects scope=cells with no tokenIds', async () => {

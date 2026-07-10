@@ -155,6 +155,12 @@ export interface RevealCostView {
     reRevealCost: string;
 }
 
+export interface TransportRoutingView {
+    moveRadius: number;
+    hubRadius: number;
+    moveTimePerCellSec: number;
+}
+
 /** `GET /api/v1/config?network=` response — chainId + contract addresses for one network. */
 export interface AppConfigResponse {
     network: string;
@@ -167,6 +173,7 @@ export interface AppConfigResponse {
     buildings: Array<BuildingView>;
     /** First-reveal-free + re-reveal cost params. */
     reveal: RevealCostView;
+    transport: TransportRoutingView;
 }
 
 /** The building types a cell can hold — 6 tier-1 extractors, tier-2..5 crafters, and the Hub. */
@@ -193,11 +200,6 @@ export enum BuildingType {
     NetworkAssembly = 'network_assembly',
     Datacenter = 'datacenter',
     Hub = 'hub',
-}
-
-export interface TransportCoord {
-    x: number;
-    y: number;
 }
 
 export enum DeliveryTargetKind {
@@ -252,8 +254,6 @@ export enum LotSort {
 export interface LotView {
     id: string;
     hubTokenId: string;
-    hubX: number;
-    hubY: number;
     sellerAddress: string;
     resourceId: number;
     listed: string;
@@ -263,8 +263,8 @@ export interface LotView {
     /** Hub trade-fee % snapshot at listing — currently always 0 (placeholder; not applied to fees). */
     tradeFeePct: number;
     state: LotState;
-    /** Hex steps from the zone center when a zone is supplied, else `null`. */
-    distanceFromCenter: number | null;
+    /** Grid steps from the zone anchor cell when a zone is supplied, else `null`. */
+    distanceFromAnchor: number | null;
     /** Listing time, unix seconds. */
     createdAt: number;
     /** Last projection update, unix seconds. */
@@ -274,8 +274,6 @@ export interface LotView {
 /** One `GET /api/v1/trade/markets` row per `(hub, resource)` — the compact scout view. */
 export interface MarketResourceSummary {
     hubTokenId: string;
-    hubX: number;
-    hubY: number;
     resourceId: number;
     openLots: number;
     openRemaining: string;
@@ -284,5 +282,6 @@ export interface MarketResourceSummary {
     tradeFeePct: number | null;
     incomingLots: number;
     incomingRemaining: string;
-    distanceFromCenter: number | null;
+    /** Grid steps from the zone anchor cell when a zone is supplied, else `null`. */
+    distanceFromAnchor: number | null;
 }

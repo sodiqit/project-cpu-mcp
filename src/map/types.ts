@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { MapStore } from './store.js';
 import { BuildingType } from '../api/types.js';
+import type { CellCoord } from '../geometry/types.js';
 import type { ILogger } from '../logger/types.js';
 
 export enum CellProcessKind {
@@ -64,8 +65,6 @@ export const cellProcessViewSchema = z.discriminatedUnion('kind', [
 
 export const cellStateSchema = z.object({
     tokenId: z.string(),
-    x: z.number(),
-    y: z.number(),
     owner: z.string(),
     revealCount: z.number(),
     revealPending: z.boolean().default(false),
@@ -182,8 +181,7 @@ export interface MapReaderOptions {
 }
 
 export interface AroundQuery {
-    x: number;
-    y: number;
+    tokenId: string;
     radius: number;
 }
 
@@ -195,20 +193,17 @@ export interface MapQuery {
 }
 
 export interface NeighborRef {
-    x: number;
-    y: number;
-    tokenId: string | null;
+    tokenId: string;
     relation: NeighborRelation;
 }
 
 export interface EnrichedCell extends CellState {
+    pos: CellCoord;
     neighbors: Array<NeighborRef>;
 }
 
 export interface ResourceLocation {
     tokenId: string;
-    x: number;
-    y: number;
     deposit: string;
     balance: string;
 }
@@ -281,8 +276,6 @@ export interface AttentionStorageBreakdown {
 
 export interface AttentionItem {
     tokenId: string;
-    x: number;
-    y: number;
     severity: AttentionSeverity;
     reason: AttentionReason;
     // Decorated with resourceName at the tool layer. null for cell-level reasons (unbuilt).

@@ -10,11 +10,12 @@ import type {
     LotSort,
     RecipeView,
     RevealCostView,
-    TransportCoord,
+    TransportRoutingView,
 } from '../api/types.js';
 import type { Network } from '../config/types.js';
+import type { CellCoord } from '../geometry/types.js';
 import type { ILogger } from '../logger/types.js';
-import type { RevealCellReader } from '../map/types.js';
+import type { CellState, RevealCellReader } from '../map/types.js';
 import type { SessionManager } from '../session/manager.js';
 import type { IContractClient, TxStatus, WalletManager, WalletProvider } from '../wallet/types.js';
 
@@ -56,6 +57,7 @@ export interface AppConfig {
     buildings: Array<BuildingView>;
     /** First-reveal-free + re-reveal cost params. */
     reveal: RevealCostView;
+    transport: TransportRoutingView;
 }
 
 /** Provider of the chain config — implemented by AppConfigService; injected into RevealService. */
@@ -86,8 +88,7 @@ export interface CellClientOptions {
 
 export interface RequestRevealParams {
     cell: Address;
-    x: bigint;
-    y: bigint;
+    tokenId: bigint;
     value: bigint;
 }
 
@@ -150,8 +151,6 @@ export interface RevealServiceOptions {
 
 export interface RevealResult {
     tokenId: string;
-    x: number;
-    y: number;
     genesis: boolean;
     txHash: Hash;
     status: TxStatus;
@@ -304,8 +303,7 @@ export interface TransportClientOptions {
 export interface QuoteRouteParams {
     transport: Address;
     from: Address;
-    xs: Array<bigint>;
-    ys: Array<bigint>;
+    tokenIds: Array<bigint>;
     res: number;
     amount: bigint;
 }
@@ -318,8 +316,7 @@ export interface RouteQuote {
 
 export interface MoveParams {
     transport: Address;
-    xs: Array<bigint>;
-    ys: Array<bigint>;
+    tokenIds: Array<bigint>;
     res: number;
     amount: bigint;
     maxFee: bigint;
@@ -347,7 +344,7 @@ export interface TransportServiceOptions {
 }
 
 export interface TransportInput {
-    path: Array<TransportCoord>;
+    path: Array<number>;
     resourceId: number;
     amount: string;
 }
@@ -398,6 +395,79 @@ export interface FinalizeResult {
     txHash: Hash;
     status: TxStatus;
     blockNumber: string;
+}
+
+// ---- Route survey ----
+
+export interface RouteCellReader {
+    allCells(): Array<CellState>;
+}
+
+export interface RouteServiceOptions {
+    wallet: WalletProvider;
+    appConfig: IAppConfig;
+    mapReader: RouteCellReader;
+    logger: ILogger;
+}
+
+export interface NextHopsInput {
+    from: number;
+    towards: number | null;
+}
+
+export interface NextHopView {
+    tokenId: string;
+    pos: CellCoord;
+    hopDistance: number;
+    isOwn: boolean;
+    isHub: boolean;
+    owner: string;
+    transitFeePerUnit: string | null;
+    distanceToTarget: number | null;
+}
+
+export interface NextHopsResult {
+    from: string;
+    fromIsHub: boolean;
+    towards: string | null;
+    targetDistance: number | null;
+    reach: { moveRadius: number; hubRadius: number };
+    hops: Array<NextHopView>;
+    note: string;
+}
+
+export interface RouteNetworkInput {
+    from: number | null;
+    towards: number | null;
+}
+
+export interface NetworkNodeView {
+    tokenId: string;
+    pos: CellCoord;
+    isOwn: boolean;
+    isHub: boolean;
+    owner: string;
+    transitFeePerUnit: string | null;
+    distFromSource: number | null;
+    distToTarget: number | null;
+    component: number;
+}
+
+export interface NetworkEdgeView {
+    a: string;
+    b: string;
+    distance: number;
+}
+
+export interface RouteNetworkResult {
+    from: string | null;
+    towards: string | null;
+    fromToTarget: number | null;
+    reach: { moveRadius: number; hubRadius: number };
+    components: number;
+    nodes: Array<NetworkNodeView>;
+    edges: Array<NetworkEdgeView>;
+    note: string;
 }
 
 export interface CraftServiceOptions {
@@ -474,8 +544,8 @@ export interface TradeServiceOptions {
 }
 
 export interface CreateLotInput {
-    /** `[source, …waypoints, hub]`. */
-    chain: Array<TransportCoord>;
+    /** Waypoint tokenIds, `[source, …waypoints, hub]`. */
+    chain: Array<number>;
     resourceId: number;
     value: string;
     pricePerUnit: string;
@@ -483,22 +553,22 @@ export interface CreateLotInput {
 
 export interface BuyLotInput {
     lotId: string;
-    /** `[hub, …waypoints, buyerDest]`. */
-    chain: Array<TransportCoord>;
+    /** Waypoint tokenIds, `[hub, …waypoints, buyerDest]`. */
+    chain: Array<number>;
     value: string;
 }
 
 export interface CancelLotInput {
     lotId: string;
-    /** `[hub, …waypoints, sellerDest]` — the return shipment that routes the unsold remainder home. */
-    chain: Array<TransportCoord>;
+    /** Waypoint tokenIds, `[hub, …waypoints, sellerDest]` — routes the unsold remainder home. */
+    chain: Array<number>;
 }
 
 export interface QuoteBuyInput {
     lotId: string;
     value: string;
-    /** `[hub, …waypoints, buyerDest]`; null for a seller-only estimate. */
-    chain: Array<TransportCoord> | null;
+    /** Waypoint tokenIds, `[hub, …waypoints, buyerDest]`; null for a seller-only estimate. */
+    chain: Array<number> | null;
 }
 
 /** Filters for `GET /api/v1/trade/lots`. All fields nullable — omit to leave unset. */
@@ -513,8 +583,6 @@ export interface ListLotsQuery {
     limit: number | null;
     offset: number | null;
     aroundTokenId: number | null;
-    centerX: number | null;
-    centerY: number | null;
     radius: number | null;
 }
 
@@ -523,8 +591,6 @@ export interface MarketsQuery {
     hub: number | null;
     resourceId: number | null;
     aroundTokenId: number | null;
-    centerX: number | null;
-    centerY: number | null;
     radius: number | null;
 }
 
@@ -535,8 +601,7 @@ export interface TradeClientOptions {
 
 export interface CreateLotParams {
     trade: Address;
-    xs: Array<bigint>;
-    ys: Array<bigint>;
+    tokenIds: Array<bigint>;
     res: number;
     /** Units to list. */
     value: bigint;
@@ -549,16 +614,14 @@ export interface BuyLotParams {
     trade: Address;
     lotId: bigint;
     value: bigint;
-    destXs: Array<bigint>;
-    destYs: Array<bigint>;
+    destTokenIds: Array<bigint>;
     maxFee: bigint;
 }
 
 export interface CancelLotParams {
     trade: Address;
     lotId: bigint;
-    returnXs: Array<bigint>;
-    returnYs: Array<bigint>;
+    returnTokenIds: Array<bigint>;
     maxFee: bigint;
 }
 

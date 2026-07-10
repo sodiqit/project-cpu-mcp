@@ -38,10 +38,7 @@ const MOVE_HASH = `0x${'1'.repeat(64)}` as Hash;
 const FINALIZE_HASH = `0x${'2'.repeat(64)}` as Hash;
 
 const INPUT = {
-    path: [
-        { x: 0, y: 0 },
-        { x: 1, y: 0 },
-    ],
+    path: [72, 73],
     resourceId: 3,
     amount: '100',
 };

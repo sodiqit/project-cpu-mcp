@@ -22,6 +22,7 @@ import { CraftService } from './services/craft.service.js';
 import { MiningService } from './services/mining.service.js';
 import { MintService } from './services/mint.service.js';
 import { RevealService } from './services/reveal.service.js';
+import { RouteService } from './services/route.service.js';
 import { SwapService } from './services/swap.service.js';
 import { TradeClient } from './services/trade.client.js';
 import { TradeService } from './services/trade.service.js';
@@ -100,6 +101,7 @@ async function main(): Promise<void> {
         reconnectGraceMs: DEFAULT_RECONNECT_GRACE_MS,
     });
     const mapReader = new MapReader({ store, status: mapSync });
+    const route = new RouteService({ wallet, appConfig, mapReader, logger: logger.child('route') });
 
     const withdraw = new WithdrawService({
         wallet,
@@ -161,6 +163,7 @@ async function main(): Promise<void> {
         craft,
         mining,
         transport,
+        route,
         trade,
         swap,
         mint,

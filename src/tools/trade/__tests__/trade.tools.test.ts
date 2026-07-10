@@ -94,8 +94,6 @@ const buyResult: BuyLotResult = {
 const lot: LotView = {
     id: 'lot-1',
     hubTokenId: '5',
-    hubX: 2,
-    hubY: 0,
     sellerAddress: '0xseller',
     resourceId: 3,
     listed: '100',
@@ -103,15 +101,13 @@ const lot: LotView = {
     pricePerUnit: '0.5',
     tradeFeePct: 0,
     state: LotState.Open,
-    distanceFromCenter: 3,
+    distanceFromAnchor: 3,
     createdAt: 1700,
     updated: 1700,
 };
 
 const market: MarketResourceSummary = {
     hubTokenId: '5',
-    hubX: 2,
-    hubY: 0,
     resourceId: 3,
     openLots: 2,
     openRemaining: '150',
@@ -119,7 +115,7 @@ const market: MarketResourceSummary = {
     tradeFeePct: 0,
     incomingLots: 1,
     incomingRemaining: '50',
-    distanceFromCenter: 3,
+    distanceFromAnchor: 3,
 };
 
 describe('create_lot / cancel_lot tools', () => {
@@ -219,7 +215,7 @@ describe('discovery read tools', () => {
     it('get_markets renders a scout row', async () => {
         const handler = capture(registerGetMarketsTool, { trade: { getMarkets: async () => [market] } });
         const result = await handler({} as never);
-        expect(result.content[0]?.text).toMatch(/Hub 5 @\(2,0\)/);
+        expect(result.content[0]?.text).toMatch(/Hub 5 · /);
         expect(result.content[0]?.text).toMatch(/2 open/);
         expect(result.content[0]?.text).toMatch(/from 0.4 \$CPU/);
     });

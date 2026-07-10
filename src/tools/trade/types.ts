@@ -1,11 +1,8 @@
 import { z } from 'zod';
 
 import { LotAvailability, LotSort, LotState } from '../../api/types.js';
-
-const coord = z.object({
-    x: z.number().describe('Axial hex x.'),
-    y: z.number().describe('Axial hex y.'),
-});
+import { MAX_ROUTE_RADIUS } from '../../geometry/constants.js';
+import { tokenIdSchema } from '../../geometry/types.js';
 
 const positiveIntString = z
     .string()
@@ -14,11 +11,11 @@ const positiveIntString = z
 
 export const createLotInputSchema = {
     chain: z
-        .array(coord)
+        .array(tokenIdSchema)
         .min(2)
         .describe(
-            '[source, ...waypoints, hub] in axial hex — first node is your source cell, last is the listing Hub. ' +
-                'A route through a foreign Hub is paid in $CPU; the API validates the physics.',
+            'Waypoint tokenIds [source, ...waypoints, hub] — first node is your source cell, last is the listing ' +
+                'Hub. A route through a foreign Hub is paid in $CPU. Scout waypoints with cpu_next_hops.',
         ),
     resourceId: z.number().int().describe('Resource type id to list (must have a balance at the source cell).'),
     value: positiveIntString.describe('Units to list, as a positive integer string.'),
@@ -31,11 +28,11 @@ export const createLotInputSchema = {
 export const buyLotInputSchema = {
     lotId: z.string().describe('The lot id to buy from (from list_lots / get_lot / get_markets).'),
     chain: z
-        .array(coord)
+        .array(tokenIdSchema)
         .min(2)
         .describe(
-            '[hub, ...waypoints, destination] — first node is the lot Hub, last is your own revealed cell where ' +
-                'the goods are delivered.',
+            'Waypoint tokenIds [hub, ...waypoints, destination] — first node is the lot Hub, last is your own ' +
+                'revealed cell where the goods are delivered. Scout waypoints with cpu_next_hops.',
         ),
     value: positiveIntString.describe('Units to buy, as a positive integer string (≤ the lot remaining).'),
 };
@@ -43,11 +40,12 @@ export const buyLotInputSchema = {
 export const cancelLotInputSchema = {
     lotId: z.string().describe('The lot id to cancel (must be yours).'),
     chain: z
-        .array(coord)
+        .array(tokenIdSchema)
         .min(2)
         .describe(
-            '[hub, ...waypoints, destination] for the return shipment — first node is the lot Hub, last is your ' +
-                'own revealed cell where the unsold units return. A route through a foreign Hub is paid in $CPU.',
+            'Waypoint tokenIds [hub, ...waypoints, destination] for the return shipment — first node is the lot ' +
+                'Hub, last is your own revealed cell where the unsold units return. A route through a foreign Hub ' +
+                'is paid in $CPU.',
         ),
 };
 
@@ -55,18 +53,18 @@ export const quoteBuyInputSchema = {
     lotId: z.string().describe('The lot id to preview a buy on.'),
     value: positiveIntString.describe('Units to buy, as a positive integer string.'),
     chain: z
-        .array(coord)
+        .array(tokenIdSchema)
         .min(2)
         .nullable()
         .default(null)
         .describe(
-            '[hub, ...waypoints, destination] to include transit fees (the exact total buy_lot would charge); omit ' +
-                'for a seller-only estimate (price × value).',
+            'Waypoint tokenIds [hub, ...waypoints, destination] to include transit fees (the exact total buy_lot ' +
+                'would charge); omit for a seller-only estimate (price × value).',
         ),
 };
 
 export const listLotsInputSchema = {
-    hub: z.number().int().nullable().default(null).describe('Filter to a Hub by its cell token id.'),
+    hub: tokenIdSchema.nullable().default(null).describe('Filter to a Hub by its cell token id.'),
     resourceId: z.number().int().nullable().default(null).describe('Filter by resource id.'),
     seller: z.string().nullable().default(null).describe('Filter by seller address.'),
     minPrice: z.string().nullable().default(null).describe('Minimum price per unit ($CPU decimal string).'),
@@ -76,27 +74,36 @@ export const listLotsInputSchema = {
         .nullable()
         .default(null)
         .describe('open (default) | incoming (paid & en route) | all.'),
-    sort: z.nativeEnum(LotSort).nullable().default(null).describe('price_asc | recent | nearest.'),
-    limit: z.number().int().nullable().default(null).describe('Page size (default 50, max 200).'),
-    offset: z.number().int().nullable().default(null).describe('Page offset.'),
-    aroundTokenId: z
-        .number()
-        .int()
+    sort: z
+        .nativeEnum(LotSort)
         .nullable()
         .default(null)
-        .describe('Zone center as a cell token id (alternative to centerX/centerY).'),
-    centerX: z.number().int().nullable().default(null).describe('Zone center x (with centerY).'),
-    centerY: z.number().int().nullable().default(null).describe('Zone center y (with centerX).'),
-    radius: z.number().int().nullable().default(null).describe('Zone radius in hex steps.'),
+        .describe('price_asc | recent | nearest (nearest requires aroundTokenId).'),
+    limit: z.number().int().nullable().default(null).describe('Page size (default 50, max 200).'),
+    offset: z.number().int().nullable().default(null).describe('Page offset.'),
+    aroundTokenId: tokenIdSchema.nullable().default(null).describe('Zone anchor as a cell token id.'),
+    radius: z
+        .number()
+        .int()
+        .min(0)
+        .max(MAX_ROUTE_RADIUS)
+        .nullable()
+        .default(null)
+        .describe(`Zone radius in grid steps around aroundTokenId (server clamps to ${MAX_ROUTE_RADIUS}).`),
 };
 
 export const marketsInputSchema = {
-    hub: z.number().int().nullable().default(null).describe('Filter to a Hub by its cell token id.'),
+    hub: tokenIdSchema.nullable().default(null).describe('Filter to a Hub by its cell token id.'),
     resourceId: z.number().int().nullable().default(null).describe('Filter by resource id.'),
-    aroundTokenId: z.number().int().nullable().default(null).describe('Zone center as a cell token id.'),
-    centerX: z.number().int().nullable().default(null).describe('Zone center x (with centerY).'),
-    centerY: z.number().int().nullable().default(null).describe('Zone center y (with centerX).'),
-    radius: z.number().int().nullable().default(null).describe('Zone radius in hex steps.'),
+    aroundTokenId: tokenIdSchema.nullable().default(null).describe('Zone anchor as a cell token id.'),
+    radius: z
+        .number()
+        .int()
+        .min(0)
+        .max(MAX_ROUTE_RADIUS)
+        .nullable()
+        .default(null)
+        .describe(`Zone radius in grid steps around aroundTokenId (server clamps to ${MAX_ROUTE_RADIUS}).`),
 };
 
 export const getLotInputSchema = {

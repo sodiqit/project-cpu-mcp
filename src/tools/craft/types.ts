@@ -1,9 +1,10 @@
 import { z } from 'zod';
 
 import { CraftRecipeId } from '../../api/types.js';
+import { tokenIdSchema } from '../../geometry/types.js';
 
 export const craftInputSchema = {
-    tokenId: z.string().describe('The tokenId of a cell you own to craft on.'),
+    tokenId: tokenIdSchema.transform(String).describe('The tokenId of a cell you own to craft on.'),
     recipeId: z.nativeEnum(CraftRecipeId).describe('Which recipe to run — see list_recipes for inputs/outputs/cost.'),
     batches: z
         .number()
@@ -15,5 +16,5 @@ export const craftInputSchema = {
 };
 
 export const craftCellInputSchema = {
-    tokenId: z.string().describe('The tokenId of the cell whose craft processes to act on.'),
+    tokenId: tokenIdSchema.transform(String).describe('The tokenId of the cell whose craft processes to act on.'),
 };

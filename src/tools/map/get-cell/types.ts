@@ -1,5 +1,5 @@
-import { z } from 'zod';
+import { tokenIdSchema } from '../../../geometry/types.js';
 
 export const getCellInputSchema = {
-    tokenId: z.string().describe('The cell tokenId to inspect.'),
+    tokenId: tokenIdSchema.transform(String).describe('The cell tokenId to inspect.'),
 };

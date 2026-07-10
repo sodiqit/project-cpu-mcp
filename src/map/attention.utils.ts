@@ -36,16 +36,14 @@ export interface BuildAttentionInput {
     extractorBuildingTypes: Set<string>;
 }
 
-// Every item shares this shape; a reason + coords + a few `extra` fields is all that varies.
+// Every item shares this shape; a reason + a few `extra` fields is all that varies.
 export function attentionItem(
-    loc: { tokenId: string; x: number; y: number },
+    loc: { tokenId: string },
     reason: AttentionReason,
     extra: Partial<AttentionItem> = {},
 ): AttentionItem {
     return {
         tokenId: loc.tokenId,
-        x: loc.x,
-        y: loc.y,
         severity: REASON_SEVERITY[reason],
         reason,
         resourceId: null,

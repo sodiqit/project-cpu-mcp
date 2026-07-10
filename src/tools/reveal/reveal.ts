@@ -17,7 +17,7 @@ export function registerRevealTool(server: McpServer, context: AppContext): void
                 ? `Deposits are revealed — read them with get_cell ${result.tokenId}.`
                 : `Deposits are drawn asynchronously by Pyth Entropy and were not ready yet — poll get_cell ${result.tokenId} shortly.`;
             const header =
-                `Requested reveal for cell ${result.tokenId} @(${result.x},${result.y}) — ${cost}, ` +
+                `Requested reveal for cell ${result.tokenId} — ${cost}, ` +
                 `paid ${result.fee} ETH fee.${approve} request tx ${result.txHash} confirmed in block ` +
                 `${result.blockNumber}. ${outcome}`;
 

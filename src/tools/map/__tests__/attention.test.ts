@@ -22,8 +22,6 @@ function mapReport(): AttentionReport {
         items: [
             {
                 tokenId: '1',
-                x: 0,
-                y: 0,
                 severity: AttentionSeverity.Critical,
                 reason: AttentionReason.StalledMining,
                 resourceId: 3,
@@ -37,8 +35,6 @@ function mapReport(): AttentionReport {
             },
             {
                 tokenId: '2',
-                x: 1,
-                y: 0,
                 severity: AttentionSeverity.Info,
                 reason: AttentionReason.Unbuilt,
                 resourceId: null,
@@ -86,7 +82,6 @@ function harness(opts: Partial<HarnessOpts> = {}): Handler {
                       note: null,
                   }
                 : mapReport(),
-        readRevealCell: () => ({ x: 4, y: 4 }),
     };
     const wallet = { isReady: () => walletReady, get: () => ({ getAddress: () => '0xMe' }) };
     const appConfig = {

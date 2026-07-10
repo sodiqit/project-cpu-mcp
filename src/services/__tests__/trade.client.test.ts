@@ -41,8 +41,7 @@ describe('TradeClient', () => {
         const { client, contracts } = makeClient();
         const hash = await client.createLot({
             trade: TRADE,
-            xs: [0n, 1n],
-            ys: [0n, 0n],
+            tokenIds: [72n, 73n],
             res: 3,
             value: 100n,
             price: 500000000000000000n,
@@ -55,24 +54,24 @@ describe('TradeClient', () => {
         expect(tx.value).toBeNull();
         const decoded = decodeFunctionData({ abi: TRADE_ABI, data: tx.data });
         expect(decoded.functionName).toBe('createLot');
-        expect(decoded.args).toEqual([[0n, 1n], [0n, 0n], 3, 100n, 500000000000000000n, 1100n]);
+        expect(decoded.args).toEqual([[72n, 73n], 3, 100n, 500000000000000000n, 1100n]);
     });
 
     it('encodes buy', async () => {
         const { client, contracts } = makeClient();
-        await client.buy({ trade: TRADE, lotId: 7n, value: 10n, destXs: [1n, 2n], destYs: [0n, 0n], maxFee: 0n });
+        await client.buy({ trade: TRADE, lotId: 7n, value: 10n, destTokenIds: [73n, 74n], maxFee: 0n });
 
         const decoded = decodeFunctionData({ abi: TRADE_ABI, data: sentTx(contracts).data });
         expect(decoded.functionName).toBe('buy');
-        expect(decoded.args).toEqual([7n, 10n, [1n, 2n], [0n, 0n], 0n]);
+        expect(decoded.args).toEqual([7n, 10n, [73n, 74n], 0n]);
     });
 
     it('encodes cancel', async () => {
         const { client, contracts } = makeClient();
-        await client.cancel({ trade: TRADE, lotId: 7n, returnXs: [2n, 1n], returnYs: [0n, 0n], maxFee: 5n });
+        await client.cancel({ trade: TRADE, lotId: 7n, returnTokenIds: [74n, 73n], maxFee: 5n });
 
         const decoded = decodeFunctionData({ abi: TRADE_ABI, data: sentTx(contracts).data });
         expect(decoded.functionName).toBe('cancel');
-        expect(decoded.args).toEqual([7n, [2n, 1n], [0n, 0n], 5n]);
+        expect(decoded.args).toEqual([7n, [74n, 73n], 5n]);
     });
 });

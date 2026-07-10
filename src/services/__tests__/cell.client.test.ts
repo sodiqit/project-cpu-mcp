@@ -44,7 +44,7 @@ describe('CellClient', () => {
 
     it('encodes requestReveal and sends it with the fee value', async () => {
         const { client, contracts } = makeClient({});
-        const hash = await client.requestReveal({ cell: CELL, x: 3n, y: -4n, value: 5n });
+        const hash = await client.requestReveal({ cell: CELL, tokenId: 42n, value: 5n });
 
         expect(hash).toBe(SENT);
         const tx = contracts.sent[0];
@@ -55,6 +55,6 @@ describe('CellClient', () => {
         expect(tx.value).toBe(5n);
         const decoded = decodeFunctionData({ abi: CELL_ABI, data: tx.data });
         expect(decoded.functionName).toBe('requestReveal');
-        expect(decoded.args).toEqual([3n, -4n]);
+        expect(decoded.args).toEqual([42n]);
     });
 });

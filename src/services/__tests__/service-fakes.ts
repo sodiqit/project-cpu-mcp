@@ -112,6 +112,7 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
             },
         ],
         reveal: { firstFree: true, reRevealCost: '0' },
+        transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2 },
     };
 }
 

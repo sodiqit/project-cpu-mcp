@@ -1,5 +1,5 @@
 import { buildAttentionReport } from './attention.utils.js';
-import { buildResourceIndex, classifyNeighbors, filterCells, hexDistance, summarizeMap } from './map.utils.js';
+import { buildResourceIndex, classifyNeighbors, filterCells, summarizeMap } from './map.utils.js';
 import type { MapStore } from './store.js';
 import {
     type AttentionReport,
@@ -15,6 +15,8 @@ import {
     type MapStatus,
     type ResourceIndex,
 } from './types.js';
+import { MAX_ROUTE_RADIUS } from '../geometry/constants.js';
+import { nearestDistanceWithin, tokenIdToPos } from '../geometry/token.utils.js';
 
 export interface AttentionOptions {
     nearFullPct: number;
@@ -111,10 +113,15 @@ export class MapReader {
         };
     }
 
+    allCells(): Array<CellState> {
+        return [...this.store.values()];
+    }
+
     private enrich(cell: CellState, ownerAddress: string | null): EnrichedCell {
         return {
             ...cell,
-            neighbors: classifyNeighbors(cell, (x, y) => this.store.getByCoord(x, y), ownerAddress),
+            pos: tokenIdToPos(cell.tokenId),
+            neighbors: classifyNeighbors(cell, (tokenId) => this.store.get(tokenId), ownerAddress),
         };
     }
 
@@ -122,16 +129,15 @@ export class MapReader {
         if (ownerAddress === null) {
             return null;
         }
-        let nearest: number | null = null;
-        for (const owned of this.store.getByOwner(ownerAddress)) {
-            if (owned.tokenId === cell.tokenId) {
-                continue;
-            }
-            const distance = hexDistance(cell.x, cell.y, owned.x, owned.y);
-            if (nearest === null || distance < nearest) {
-                nearest = distance;
+        const owned = new Set<string>();
+        for (const cellState of this.store.getByOwner(ownerAddress)) {
+            if (cellState.tokenId !== cell.tokenId) {
+                owned.add(cellState.tokenId);
             }
         }
-        return nearest;
+        if (owned.size === 0) {
+            return null;
+        }
+        return nearestDistanceWithin(cell.tokenId, owned, MAX_ROUTE_RADIUS);
     }
 }

@@ -26,7 +26,7 @@ export class TransportClient implements ITransportClient {
             address: params.transport,
             abi: TRANSPORT_ABI,
             functionName: 'quoteRoute',
-            args: [params.from, params.xs, params.ys, params.res, params.amount],
+            args: [params.from, params.tokenIds, params.res, params.amount],
         });
         return { totalFee, totalDistance, arrivalAt };
     }
@@ -35,7 +35,7 @@ export class TransportClient implements ITransportClient {
         const data = encodeFunctionData({
             abi: TRANSPORT_ABI,
             functionName: 'move',
-            args: [params.xs, params.ys, params.res, params.amount, params.maxFee],
+            args: [params.tokenIds, params.res, params.amount, params.maxFee],
         });
         this.logger.info('submitting transport move', {
             transport: params.transport,

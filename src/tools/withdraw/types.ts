@@ -1,9 +1,10 @@
 import { z } from 'zod';
 
 import { WITHDRAW_MAX_UNITS } from './constants.js';
+import { tokenIdSchema } from '../../geometry/types.js';
 
 export const withdrawInputSchema = {
-    tokenId: z.string().describe('The tokenId of a cell you own holding wCPU to cash out.'),
+    tokenId: tokenIdSchema.transform(String).describe('The tokenId of a cell you own holding wCPU to cash out.'),
     amount: z
         .string()
         .regex(/^\d+$/, 'amount must be a whole number of wCPU units (e.g. "100")')

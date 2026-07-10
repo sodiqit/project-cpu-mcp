@@ -1,25 +1,42 @@
 import { z } from 'zod';
 
+import { tokenIdSchema } from '../../geometry/types.js';
 import { DeliveryFilter } from '../../services/types.js';
-
-const coord = z.object({
-    x: z.number().describe('Axial hex x.'),
-    y: z.number().describe('Axial hex y.'),
-});
 
 export const transportInputSchema = {
     path: z
-        .array(coord)
+        .array(tokenIdSchema)
         .min(2)
         .describe(
-            'Waypoint chain [source, ...intermediate, target] in axial hex coords. Each hop must be within reach, ' +
-                'and every waypoint revealed and eligible (your own cell, or a Hub). The Transport contract validates the route.',
+            'Waypoint chain of cell tokenIds [source, ...intermediate, target]. Every waypoint must be revealed ' +
+                'and eligible (your own cell, or a Hub); each hop must span at most radius(from)+radius(to) grid ' +
+                'steps (a plain cell reaches moveRadius, a Hub hubRadius — see get_game_config transport). ' +
+                'Scout legal hops with cpu_next_hops and chain them yourself; the Transport contract validates.',
         ),
     resourceId: z.number().int().describe('Resource type id to move (must have a balance at the source cell).'),
     amount: z
         .string()
         .regex(/^[1-9]\d*$/)
         .describe('Units to move, as a positive integer string (matches on-map resource balances).'),
+};
+
+export const routeNetworkInputSchema = {
+    from: tokenIdSchema
+        .nullable()
+        .default(null)
+        .describe('Optional source cell — annotates every waypoint with its grid distance from here.'),
+    towards: tokenIdSchema
+        .nullable()
+        .default(null)
+        .describe('Optional destination cell — annotates every waypoint with its remaining grid distance.'),
+};
+
+export const nextHopsInputSchema = {
+    from: tokenIdSchema.describe('The cell to hop from (your revealed cell, or a Hub).'),
+    towards: tokenIdSchema
+        .nullable()
+        .default(null)
+        .describe('Optional destination — adds the remaining grid distance to it for each candidate (a compass).'),
 };
 
 export const getTransportStatusInputSchema = {
