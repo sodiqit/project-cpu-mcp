@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/sodiqit/project-cpu-mcp/compare/v0.6.0...v0.6.1) (2026-07-10)
+
+
+### Bug Fixes
+
+* align Cell ABI with the deployed contract ([#24](https://github.com/sodiqit/project-cpu-mcp/issues/24)) ([cfe8fc5](https://github.com/sodiqit/project-cpu-mcp/commit/cfe8fc5f7b23309e89a330b9923a5dd2380ecd2c))
+
 ## [0.6.0](https://github.com/sodiqit/project-cpu-mcp/compare/v0.5.0...v0.6.0) (2026-07-10)
 
 
