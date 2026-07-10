@@ -15,7 +15,7 @@ export const createLotInputSchema = {
         .min(2)
         .describe(
             'Waypoint tokenIds [source, ...waypoints, hub] — first node is your source cell, last is the listing ' +
-                'Hub. A route through a foreign Hub is paid in $CPU. Use cpu_plan_route to build a valid chain.',
+                'Hub. A route through a foreign Hub is paid in $CPU. Scout waypoints with cpu_next_hops.',
         ),
     resourceId: z.number().int().describe('Resource type id to list (must have a balance at the source cell).'),
     value: positiveIntString.describe('Units to list, as a positive integer string.'),
@@ -32,7 +32,7 @@ export const buyLotInputSchema = {
         .min(2)
         .describe(
             'Waypoint tokenIds [hub, ...waypoints, destination] — first node is the lot Hub, last is your own ' +
-                'revealed cell where the goods are delivered. Use cpu_plan_route to build a valid chain.',
+                'revealed cell where the goods are delivered. Scout waypoints with cpu_next_hops.',
         ),
     value: positiveIntString.describe('Units to buy, as a positive integer string (≤ the lot remaining).'),
 };

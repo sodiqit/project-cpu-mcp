@@ -7,7 +7,6 @@ import { makeCell } from '../../map/__tests__/fixtures.js';
 import type { CellState } from '../../map/types.js';
 import type { WalletProvider } from '../../wallet/types.js';
 import { RouteService } from '../route.service.js';
-import { RouteOptimize } from '../types.js';
 
 const RIVAL = '0x000000000000000000000000000000000000beef';
 
@@ -35,73 +34,77 @@ function makeService(cells: Array<CellState>): RouteService {
     });
 }
 
-function plan(cells: Array<CellState>, from: number, to: number, optimize = RouteOptimize.Cheapest) {
-    return makeService(cells).plan({ from, to, amount: '100', optimize });
+function survey(cells: Array<CellState>, from: number, towards: number | null = null) {
+    return makeService(cells).nextHops({ from, towards });
 }
 
-describe('RouteService.plan', () => {
-    it('routes two adjacent own cells directly with no fee', async () => {
-        const result = await plan([own('72'), own('73')], 72, 73);
+describe('RouteService.nextHops', () => {
+    it('lists own cells within cell reach and hubs within hub reach, with their facts', async () => {
+        const cells = [own('72'), own('73'), own('76'), foreignHub('75', '0.5')];
 
-        expect(result.waypoints).toEqual(['72', '73']);
-        expect(result.legs).toEqual([{ from: '72', to: '73', distance: 1 }]);
-        expect(result.totalDistance).toBe(1);
-        expect(result.foreignHubs).toEqual([]);
-        expect(result.estimatedFee).toBe('0');
-        expect(result.estimatedTravelSec).toBe(2);
-    });
+        const result = await survey(cells, 72);
 
-    it('bridges an out-of-reach gap through a foreign hub and prices its fee', async () => {
-        const result = await plan([own('72'), own('78'), foreignHub('75', '0.5')], 72, 78);
-
-        expect(result.waypoints).toEqual(['72', '75', '78']);
-        expect(result.totalDistance).toBe(6);
-        expect(result.foreignHubs).toEqual([{ tokenId: '75', owner: RIVAL, feePerUnit: '0.5', fee: '50' }]);
-        expect(result.estimatedFee).toBe('50');
-        expect(result.estimatedTravelSec).toBe(12);
-    });
-
-    it('throws an actionable error when no chain exists', async () => {
-        await expect(plan([own('72'), own('78')], 72, 78)).rejects.toThrow(/No valid waypoint chain/);
-    });
-
-    it('prefers a fee-free own-cell detour when optimizing for cost, and the shorter paid route when optimizing for speed', async () => {
-        const cells = [own('72'), own('76'), foreignHub('74', '0.5'), own('143'), own('144'), own('145'), own('146')];
-
-        const cheapest = await plan(cells, 72, 76, RouteOptimize.Cheapest);
-        expect(cheapest.estimatedFee).toBe('0');
-        expect(cheapest.foreignHubs).toEqual([]);
-        expect(cheapest.totalDistance).toBe(5);
-
-        const fastest = await plan(cells, 72, 76, RouteOptimize.Fastest);
-        expect(fastest.totalDistance).toBe(4);
-        expect(fastest.waypoints).toEqual(['72', '74', '76']);
-        expect(fastest.estimatedFee).toBe('50');
-    });
-
-    it('skips the fee estimate when no amount is given', async () => {
-        const result = await makeService([own('72'), own('78'), foreignHub('75', '0.5')]).plan({
-            from: 72,
-            to: 78,
-            amount: null,
-            optimize: RouteOptimize.Cheapest,
+        expect(result.from).toBe('72');
+        expect(result.fromIsHub).toBe(false);
+        expect(result.reach).toEqual({ moveRadius: 1, hubRadius: 3 });
+        expect(result.hops.map((h) => h.tokenId)).toEqual(['73', '75']);
+        expect(result.hops[0]).toMatchObject({ tokenId: '73', hopDistance: 1, isOwn: true, transitFeePerUnit: null });
+        expect(result.hops[1]).toMatchObject({
+            tokenId: '75',
+            hopDistance: 3,
+            isHub: true,
+            owner: RIVAL,
+            transitFeePerUnit: '0.5',
         });
-
-        expect(result.estimatedFee).toBeNull();
-        expect(result.foreignHubs[0]?.fee).toBeNull();
-        expect(result.foreignHubs[0]?.feePerUnit).toBe('0.5');
+        expect(result.hops[1]?.pos).toEqual({ face: 0, i: 1, j: 5 });
     });
 
-    it('rejects ineligible or unknown endpoints with specific errors', async () => {
+    it('adds a compass when towards is given and sorts by remaining distance', async () => {
+        const cells = [own('72'), own('73'), own('78'), foreignHub('75', '0.5')];
+
+        const result = await survey(cells, 72, 78);
+
+        expect(result.targetDistance).toBe(6);
+        expect(result.hops.map((h) => h.tokenId)).toEqual(['75', '73']);
+        expect(result.hops[0]?.distanceToTarget).toBe(3);
+        expect(result.hops[1]?.distanceToTarget).toBe(5);
+    });
+
+    it('returns an empty list when nothing is within reach — the agent decides what to do', async () => {
+        const result = await survey([own('72'), own('78')], 72, 78);
+
+        expect(result.hops).toEqual([]);
+        expect(result.targetDistance).toBe(6);
+    });
+
+    it('reaches farther when surveying from a hub', async () => {
+        const cells = [
+            makeCell({
+                tokenId: '72',
+                owner: WALLET_ADDRESS,
+                revealCount: 1,
+                building: { type: BuildingType.Hub, buildFinishAt: null },
+            }),
+            own('76'),
+        ];
+
+        const result = await survey(cells, 72);
+
+        expect(result.fromIsHub).toBe(true);
+        expect(result.hops.map((h) => h.tokenId)).toEqual(['76']);
+        expect(result.hops[0]?.hopDistance).toBe(4);
+    });
+
+    it('rejects ineligible or unknown origins with specific errors', async () => {
         const cells = [
             own('72'),
             makeCell({ tokenId: '73', owner: RIVAL, revealCount: 1 }),
             own('74', { revealCount: 0 }),
         ];
 
-        await expect(plan(cells, 72, 99)).rejects.toThrow(/not in the current map/);
-        await expect(plan(cells, 72, 73)).rejects.toThrow(/not an eligible waypoint/);
-        await expect(plan(cells, 72, 74)).rejects.toThrow(/not revealed/);
-        await expect(plan(cells, 72, 72)).rejects.toThrow(/must be different/);
+        await expect(survey(cells, 99)).rejects.toThrow(/not in the current map/);
+        await expect(survey(cells, 73)).rejects.toThrow(/not an eligible waypoint/);
+        await expect(survey(cells, 74)).rejects.toThrow(/not revealed/);
+        await expect(survey(cells, 72, 72)).rejects.toThrow(/must be different/);
     });
 });

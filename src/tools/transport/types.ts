@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { tokenIdSchema } from '../../geometry/types.js';
-import { DeliveryFilter, RouteOptimize } from '../../services/types.js';
+import { DeliveryFilter } from '../../services/types.js';
 
 export const transportInputSchema = {
     path: z
@@ -11,7 +11,7 @@ export const transportInputSchema = {
             'Waypoint chain of cell tokenIds [source, ...intermediate, target]. Every waypoint must be revealed ' +
                 'and eligible (your own cell, or a Hub); each hop must span at most radius(from)+radius(to) grid ' +
                 'steps (a plain cell reaches moveRadius, a Hub hubRadius — see get_game_config transport). ' +
-                'Use cpu_plan_route to build a valid chain; the Transport contract validates the route.',
+                'Scout legal hops with cpu_next_hops and chain them yourself; the Transport contract validates.',
         ),
     resourceId: z.number().int().describe('Resource type id to move (must have a balance at the source cell).'),
     amount: z
@@ -20,19 +20,12 @@ export const transportInputSchema = {
         .describe('Units to move, as a positive integer string (matches on-map resource balances).'),
 };
 
-export const planRouteInputSchema = {
-    from: tokenIdSchema.describe('Source cell tokenId (your revealed cell, or a Hub).'),
-    to: tokenIdSchema.describe('Target cell tokenId (your revealed cell, or a Hub).'),
-    amount: z
-        .string()
-        .regex(/^[1-9]\d*$/)
+export const nextHopsInputSchema = {
+    from: tokenIdSchema.describe('The cell to hop from (your revealed cell, or a Hub).'),
+    towards: tokenIdSchema
         .nullable()
         .default(null)
-        .describe('Units you plan to ship — enables the $CPU fee estimate; omit to plan the chain only.'),
-    optimize: z
-        .nativeEnum(RouteOptimize)
-        .default(RouteOptimize.Cheapest)
-        .describe('cheapest = fewest $CPU in foreign-hub fees (then shortest); fastest = shortest distance.'),
+        .describe('Optional destination — adds the remaining grid distance to it for each candidate (a compass).'),
 };
 
 export const getTransportStatusInputSchema = {

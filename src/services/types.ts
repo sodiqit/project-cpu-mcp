@@ -13,6 +13,7 @@ import type {
     TransportRoutingView,
 } from '../api/types.js';
 import type { Network } from '../config/types.js';
+import type { CellCoord } from '../geometry/types.js';
 import type { ILogger } from '../logger/types.js';
 import type { CellState, RevealCellReader } from '../map/types.js';
 import type { SessionManager } from '../session/manager.js';
@@ -396,12 +397,7 @@ export interface FinalizeResult {
     blockNumber: string;
 }
 
-// ---- Route planning ----
-
-export enum RouteOptimize {
-    Cheapest = 'cheapest',
-    Fastest = 'fastest',
-}
+// ---- Route survey ----
 
 export interface RouteCellReader {
     allCells(): Array<CellState>;
@@ -414,34 +410,29 @@ export interface RouteServiceOptions {
     logger: ILogger;
 }
 
-export interface PlanRouteInput {
+export interface NextHopsInput {
     from: number;
-    to: number;
-    amount: string | null;
-    optimize: RouteOptimize;
+    towards: number | null;
 }
 
-export interface RouteLegView {
-    from: string;
-    to: string;
-    distance: number;
-}
-
-export interface RouteHubFeeView {
+export interface NextHopView {
     tokenId: string;
+    pos: CellCoord;
+    hopDistance: number;
+    isOwn: boolean;
+    isHub: boolean;
     owner: string;
-    feePerUnit: string;
-    fee: string | null;
+    transitFeePerUnit: string | null;
+    distanceToTarget: number | null;
 }
 
-export interface PlanRouteResult {
-    waypoints: Array<string>;
-    legs: Array<RouteLegView>;
-    totalDistance: number;
-    foreignHubs: Array<RouteHubFeeView>;
-    estimatedFee: string | null;
-    estimatedTravelSec: number;
-    optimize: RouteOptimize;
+export interface NextHopsResult {
+    from: string;
+    fromIsHub: boolean;
+    towards: string | null;
+    targetDistance: number | null;
+    reach: { moveRadius: number; hubRadius: number };
+    hops: Array<NextHopView>;
     note: string;
 }
 

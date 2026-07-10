@@ -129,7 +129,7 @@ Once connected, the server exposes tools grouped by area:
 - **Reveal & build** — `cpu_reveal` (surface a cell's deposits on-chain), `cpu_build` (place a
   building), `cpu_demolish`, `cpu_start_mining` (an extractor then mines a batch of the resource each
   cycle), `cpu_get_mining_status`, `cpu_claim_mining`.
-- **Transport** — `cpu_plan_route` (build a valid waypoint chain between two cells),
+- **Transport** — `cpu_next_hops` (survey the legal waypoints around a cell),
   `cpu_quote_transport`, `cpu_transport`, `cpu_get_transport_status`, `cpu_list_my_transports`,
   `cpu_finalize_delivery`.
 - **Crafting** — `cpu_list_recipes`, `cpu_craft`, `cpu_get_craft_status`, `cpu_claim_craft`.
