@@ -1,4 +1,4 @@
-import { BaseError, type Hash } from 'viem';
+import { BaseError, RawContractError, type Abi, type Hash } from 'viem';
 import { describe, expect, it } from 'vitest';
 
 import { NoopLogger } from '../../logger/noop.logger.js';
@@ -72,9 +72,62 @@ describe('ContractClient', () => {
                 return HASH;
             },
         });
-        const hash = await c.send({ to: HASH, data: '0x', value: null });
+        const hash = await c.send({ to: HASH, data: '0x', value: null }, null);
         expect(hash).toBe(HASH);
         expect(calls).toBe(1);
+    });
+
+    it('decodes a custom-error revert on send via the provided ABI', async () => {
+        const abi = [{ type: 'error', name: 'NotYetArrived', inputs: [] }] as const;
+        const c = client({
+            sendTransaction: async () => {
+                throw new BaseError('estimate failed', {
+                    cause: new RawContractError({ data: '0xd90f2071' }),
+                });
+            },
+        });
+        await expect(c.send({ to: HASH, data: '0x', value: null }, abi as unknown as Abi)).rejects.toThrow(
+            /Execution reverted: NotYetArrived\(\)/,
+        );
+    });
+
+    it('decodes a revert whose data sits on a nested rpc error node', async () => {
+        const abi = [{ type: 'error', name: 'NotYetArrived', inputs: [] }] as const;
+        const rpcShaped = new Error('RPC Request failed.') as Error & { data: string };
+        rpcShaped.data = '0xd90f2071';
+        const c = client({
+            sendTransaction: async () => {
+                throw new BaseError('tx failed', { cause: new BaseError('reverted', { cause: rpcShaped }) });
+            },
+        });
+        await expect(c.send({ to: HASH, data: '0x', value: null }, abi as unknown as Abi)).rejects.toThrow(
+            /Execution reverted: NotYetArrived\(\)/,
+        );
+    });
+
+    it('rethrows the original error when the revert is not decodable', async () => {
+        const abi = [{ type: 'error', name: 'NotYetArrived', inputs: [] }] as const;
+        const c = client({
+            sendTransaction: async () => {
+                throw new BaseError('estimate failed', {
+                    cause: new RawContractError({ data: '0xdeadbeef' }),
+                });
+            },
+        });
+        await expect(c.send({ to: HASH, data: '0x', value: null }, abi as unknown as Abi)).rejects.toThrow(
+            'estimate failed',
+        );
+    });
+
+    it('rethrows unchanged when no error ABI is given', async () => {
+        const c = client({
+            sendTransaction: async () => {
+                throw new BaseError('estimate failed', {
+                    cause: new RawContractError({ data: '0xd90f2071' }),
+                });
+            },
+        });
+        await expect(c.send({ to: HASH, data: '0x', value: null }, null)).rejects.toThrow('estimate failed');
     });
 
     it('confirms a successful receipt', async () => {

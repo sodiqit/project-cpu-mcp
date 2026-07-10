@@ -57,7 +57,7 @@ export class CellClient implements ICellClient {
             tokenId: params.tokenId.toString(),
             valueWei: params.value.toString(),
         });
-        return this.contracts.send({ to: params.cell, data, value: params.value });
+        return this.contracts.send({ to: params.cell, data, value: params.value }, CELL_ABI);
     }
 
     async place(params: PlaceParams): Promise<Hash> {
@@ -71,7 +71,7 @@ export class CellClient implements ICellClient {
             tokenId: params.tokenId.toString(),
             buildingType: params.buildingType,
         });
-        return this.contracts.send({ to: params.cell, data, value: null });
+        return this.contracts.send({ to: params.cell, data, value: null }, CELL_ABI);
     }
 
     async demolish(params: DemolishParams): Promise<Hash> {
@@ -81,7 +81,7 @@ export class CellClient implements ICellClient {
             args: [params.tokenId],
         });
         this.logger.info('submitting demolish', { cell: params.cell, tokenId: params.tokenId.toString() });
-        return this.contracts.send({ to: params.cell, data, value: null });
+        return this.contracts.send({ to: params.cell, data, value: null }, CELL_ABI);
     }
 
     async startMining(params: StartMiningParams): Promise<Hash> {
@@ -95,7 +95,7 @@ export class CellClient implements ICellClient {
             tokenId: params.tokenId.toString(),
             target: params.target,
         });
-        return this.contracts.send({ to: params.cell, data, value: null });
+        return this.contracts.send({ to: params.cell, data, value: null }, CELL_ABI);
     }
 
     async startCraft(params: StartCraftParams): Promise<Hash> {
@@ -110,7 +110,7 @@ export class CellClient implements ICellClient {
             recipeId: params.recipeId.toString(),
             batches: params.batches,
         });
-        return this.contracts.send({ to: params.cell, data, value: null });
+        return this.contracts.send({ to: params.cell, data, value: null }, CELL_ABI);
     }
 
     async claim(params: ClaimParams): Promise<Hash> {
@@ -120,7 +120,7 @@ export class CellClient implements ICellClient {
             args: [params.tokenId],
         });
         this.logger.info('submitting claim', { cell: params.cell, tokenId: params.tokenId.toString() });
-        return this.contracts.send({ to: params.cell, data, value: null });
+        return this.contracts.send({ to: params.cell, data, value: null }, CELL_ABI);
     }
 
     async withdrawCpu(params: WithdrawCpuParams): Promise<Hash> {
@@ -134,6 +134,6 @@ export class CellClient implements ICellClient {
             tokenId: params.tokenId.toString(),
             amount: params.amount.toString(),
         });
-        return this.contracts.send({ to: params.cell, data, value: null });
+        return this.contracts.send({ to: params.cell, data, value: null }, CELL_ABI);
     }
 }

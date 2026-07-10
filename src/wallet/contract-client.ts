@@ -1,5 +1,6 @@
-import type { Hash } from 'viem';
+import type { Abi, Hash } from 'viem';
 
+import { describeRevert } from './revert.utils.js';
 import {
     TxStatus,
     type ConfirmedTx,
@@ -31,8 +32,17 @@ export class ContractClient implements IContractClient {
         });
     }
 
-    async send(tx: TransactionRequest): Promise<Hash> {
-        return this.wallet.get().sendTransaction(tx);
+    async send(tx: TransactionRequest, errorAbi: Abi | null): Promise<Hash> {
+        try {
+            return await this.wallet.get().sendTransaction(tx);
+        } catch (error) {
+            const revert = errorAbi !== null ? describeRevert(error, errorAbi) : null;
+            if (revert === null) {
+                throw error;
+            }
+            this.logger.error('transaction reverted', { to: tx.to, revert });
+            throw new Error(`Execution reverted: ${revert}`, { cause: error });
+        }
     }
 
     async confirm(hash: Hash, revertLabel: string): Promise<ConfirmedTx> {

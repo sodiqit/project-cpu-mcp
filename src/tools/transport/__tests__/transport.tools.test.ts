@@ -117,7 +117,7 @@ describe('quote_transport tool', () => {
         const quote: TransportQuote = { fee: '0', totalDistance: 2, arrivalAt: 1704 };
         const handler = capture(registerQuoteTransportTool, { quote: async () => quote });
         const result = await handler({ path: [], resourceId: 3, amount: '100' } as never);
-        expect(result.content[0]?.text).toMatch(/free \(own cells only\)/);
+        expect(result.content[0]?.text).toMatch(/free \(no transit fee\)/);
     });
 });
 

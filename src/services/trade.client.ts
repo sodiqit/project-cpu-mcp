@@ -27,7 +27,7 @@ export class TradeClient implements ITradeClient {
             priceWei: params.price.toString(),
             maxFeeWei: params.maxFee.toString(),
         });
-        return this.contracts.send({ to: params.trade, data, value: null });
+        return this.contracts.send({ to: params.trade, data, value: null }, TRADE_ABI);
     }
 
     async buy(params: BuyLotParams): Promise<Hash> {
@@ -42,7 +42,7 @@ export class TradeClient implements ITradeClient {
             value: params.value.toString(),
             maxFeeWei: params.maxFee.toString(),
         });
-        return this.contracts.send({ to: params.trade, data, value: null });
+        return this.contracts.send({ to: params.trade, data, value: null }, TRADE_ABI);
     }
 
     async cancel(params: CancelLotParams): Promise<Hash> {
@@ -56,6 +56,6 @@ export class TradeClient implements ITradeClient {
             lotId: params.lotId.toString(),
             maxFeeWei: params.maxFee.toString(),
         });
-        return this.contracts.send({ to: params.trade, data, value: null });
+        return this.contracts.send({ to: params.trade, data, value: null }, TRADE_ABI);
     }
 }
