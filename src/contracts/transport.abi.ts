@@ -3,8 +3,7 @@ export const TRANSPORT_ABI = [
         type: 'function',
         name: 'move',
         inputs: [
-            { name: 'xs', type: 'int256[]', internalType: 'int256[]' },
-            { name: 'ys', type: 'int256[]', internalType: 'int256[]' },
+            { name: 'tokenIds', type: 'uint256[]', internalType: 'uint256[]' },
             { name: 'res', type: 'uint16', internalType: 'uint16' },
             { name: 'amount', type: 'uint64', internalType: 'uint64' },
             { name: 'maxFee', type: 'uint256', internalType: 'uint256' },
@@ -20,8 +19,7 @@ export const TRANSPORT_ABI = [
         name: 'quoteRoute',
         inputs: [
             { name: 'from', type: 'address', internalType: 'address' },
-            { name: 'xs', type: 'int256[]', internalType: 'int256[]' },
-            { name: 'ys', type: 'int256[]', internalType: 'int256[]' },
+            { name: 'tokenIds', type: 'uint256[]', internalType: 'uint256[]' },
             { name: 'res', type: 'uint16', internalType: 'uint16' },
             { name: 'amount', type: 'uint64', internalType: 'uint64' },
         ],
@@ -77,7 +75,6 @@ export const TRANSPORT_ABI = [
     { type: 'error', name: 'ZeroAddress', inputs: [] },
     { type: 'error', name: 'ZeroAmount', inputs: [] },
     { type: 'error', name: 'BelowMinAmount', inputs: [] },
-    { type: 'error', name: 'ArrayLengthMismatch', inputs: [] },
     { type: 'error', name: 'PathTooShort', inputs: [] },
     { type: 'error', name: 'NotRevealed', inputs: [] },
     { type: 'error', name: 'NotEligibleWaypoint', inputs: [] },

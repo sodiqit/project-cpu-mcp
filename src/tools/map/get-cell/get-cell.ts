@@ -25,7 +25,7 @@ export function registerGetCellTool(server: McpServer, context: AppContext): voi
                 cooldownEnd !== null
                     ? ` · demolition cooldown until ${formatUnixSeconds(cooldownEnd)} (no rebuild yet)`
                     : '';
-            const header = `Cell ${cell.tokenId} @(${cell.x},${cell.y}) · ${neighbors.length} neighbours${cooldownNote}`;
+            const header = `Cell ${cell.tokenId} · ${neighbors.length} neighbours${cooldownNote}`;
 
             const labeled = {
                 ...inspection,

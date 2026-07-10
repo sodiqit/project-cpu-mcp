@@ -2,10 +2,7 @@ export const CELL_ABI = [
     {
         type: 'function',
         name: 'requestReveal',
-        inputs: [
-            { name: 'x', type: 'int256', internalType: 'int256' },
-            { name: 'y', type: 'int256', internalType: 'int256' },
-        ],
+        inputs: [{ name: 'tokenId', type: 'uint256', internalType: 'uint256' }],
         outputs: [],
         stateMutability: 'payable',
     },

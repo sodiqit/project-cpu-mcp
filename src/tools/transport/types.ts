@@ -1,25 +1,38 @@
 import { z } from 'zod';
 
-import { DeliveryFilter } from '../../services/types.js';
-
-const coord = z.object({
-    x: z.number().describe('Axial hex x.'),
-    y: z.number().describe('Axial hex y.'),
-});
+import { tokenIdStringSchema } from '../../geometry/types.js';
+import { DeliveryFilter, RouteOptimize } from '../../services/types.js';
 
 export const transportInputSchema = {
     path: z
-        .array(coord)
+        .array(tokenIdStringSchema)
         .min(2)
         .describe(
-            'Waypoint chain [source, ...intermediate, target] in axial hex coords. Each hop must be within reach, ' +
-                'and every waypoint revealed and eligible (your own cell, or a Hub). The Transport contract validates the route.',
+            'Waypoint chain of cell tokenIds [source, ...intermediate, target]. Every waypoint must be revealed ' +
+                'and eligible (your own cell, or a Hub); each hop must span at most radius(from)+radius(to) grid ' +
+                'steps (a plain cell reaches moveRadius, a Hub hubRadius — see get_game_config transport). ' +
+                'Use cpu_plan_route to build a valid chain; the Transport contract validates the route.',
         ),
     resourceId: z.number().int().describe('Resource type id to move (must have a balance at the source cell).'),
     amount: z
         .string()
         .regex(/^[1-9]\d*$/)
         .describe('Units to move, as a positive integer string (matches on-map resource balances).'),
+};
+
+export const planRouteInputSchema = {
+    from: tokenIdStringSchema.describe('Source cell tokenId (your revealed cell, or a Hub).'),
+    to: tokenIdStringSchema.describe('Target cell tokenId (your revealed cell, or a Hub).'),
+    amount: z
+        .string()
+        .regex(/^[1-9]\d*$/)
+        .nullable()
+        .default(null)
+        .describe('Units you plan to ship — enables the $CPU fee estimate; omit to plan the chain only.'),
+    optimize: z
+        .nativeEnum(RouteOptimize)
+        .default(RouteOptimize.Cheapest)
+        .describe('cheapest = fewest $CPU in foreign-hub fees (then shortest); fastest = shortest distance.'),
 };
 
 export const getTransportStatusInputSchema = {

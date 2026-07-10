@@ -14,8 +14,7 @@ type Handler = (args: unknown) => Promise<ToolResult>;
 
 const CHANGED: EnrichedCell = {
     tokenId: '9',
-    x: 0,
-    y: 0,
+    pos: { face: 0, i: 0, j: 9 },
     owner: '0xMe',
     revealCount: 1,
     revealPending: false,

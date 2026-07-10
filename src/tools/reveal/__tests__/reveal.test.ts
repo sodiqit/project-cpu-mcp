@@ -40,8 +40,6 @@ function harness(outcome: RevealResult | Error): Handler {
 
 const fulfilledGenesis: RevealResult = {
     tokenId: '42',
-    x: 1,
-    y: -2,
     genesis: true,
     txHash: '0xreveal',
     status: TxStatus.Success,

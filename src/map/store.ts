@@ -1,17 +1,12 @@
 import { isNewer } from './map.utils.js';
 import type { CellState, MapSnapshotResponse } from './types.js';
 
-function coordKey(x: number, y: number): string {
-    return `${x},${y}`;
-}
-
 /**
  * In-memory map state. The single source of truth for every read; kept current by snapshot loads
  * and realtime updates, all funnelled through `applyCell` so newer-wins holds everywhere.
  */
 export class MapStore {
     private readonly cells = new Map<string, CellState>();
-    private readonly coordIndex = new Map<string, string>();
     // Authoritative resync cursor for `?since`. Advanced ONLY by server responses (applySnapshot),
     // never by a single realtime cell — otherwise the cursor races ahead of what we actually hold and
     // a later `?since` skips changes the socket missed, losing them for good.
@@ -33,7 +28,6 @@ export class MapStore {
         }
 
         this.cells.set(cell.tokenId, cell);
-        this.coordIndex.set(coordKey(cell.x, cell.y), cell.tokenId);
         if (cell.updated > this.latestUpdated) {
             this.latestUpdated = cell.updated;
         }
@@ -57,14 +51,6 @@ export class MapStore {
     }
 
     get(tokenId: string): CellState | null {
-        return this.cells.get(tokenId) ?? null;
-    }
-
-    getByCoord(x: number, y: number): CellState | null {
-        const tokenId = this.coordIndex.get(coordKey(x, y));
-        if (tokenId === undefined) {
-            return null;
-        }
         return this.cells.get(tokenId) ?? null;
     }
 

@@ -34,6 +34,7 @@ import { registerQuoteBuyTool } from './tools/trade/quote-buy/quote-buy.js';
 import { registerFinalizeDeliveryTool } from './tools/transport/finalize/finalize-delivery.js';
 import { registerGetTransportStatusTool } from './tools/transport/get-status/get-transport-status.js';
 import { registerListMyTransportsTool } from './tools/transport/list-mine/list-my-transports.js';
+import { registerPlanRouteTool } from './tools/transport/plan/plan-route.js';
 import { registerQuoteTransportTool } from './tools/transport/quote/quote-transport.js';
 import { registerTransportTool } from './tools/transport/transport.js';
 import { registerWithdrawTool } from './tools/withdraw/withdraw.js';
@@ -45,6 +46,8 @@ const SERVER_INSTRUCTIONS = [
     'in AGW mode it starts a Device Authorization flow.',
     'Read the static rulebook once with `cpu_get_game_config` — resource catalog, the building catalog (each',
     "building's kind, cost, and what it mines or crafts), reveal cost, recipes, and contract addresses.",
+    'The world is a finite sphere of 48,990 land cells identified only by tokenId (1..48990) — there are no',
+    'coordinates; adjacency comes from each cell’s `neighbors` list and routes are planned with `cpu_plan_route`.',
     'The world map is loaded at startup and kept current in the background; read it with `cpu_get_map`',
     '(situational awareness), `cpu_get_cell` (inspect one cell), `cpu_get_changes` (react to other players since a',
     'given version), and `cpu_get_attention` (your owner-scoped to-do list of stalled/near-full/depleted/unbuilt',
@@ -59,7 +62,8 @@ const SERVER_INSTRUCTIONS = [
     '(mining or craft) stalls until you offload it (transport, sell, craft, or withdraw). A null cap means',
     'uncapped. `cpu_get_mining_status`/`cpu_get_craft_status` report the stall; `cpu_get_attention` lists every stalled or',
     'near-full cell at once.',
-    'Move resources between cells with `cpu_transport` (preview cost first with `cpu_quote_transport`) — one on-chain',
+    'Move resources between cells with `cpu_transport` (plan the waypoint chain with `cpu_plan_route`, then preview',
+    'cost with `cpu_quote_transport`) — one on-chain',
     'move that debits the source, pays the $CPU transit fee for any foreign Hub on the route, and escrows a',
     'time-delayed delivery. Track deliveries with `cpu_get_transport_status` / `cpu_list_my_transports`; a delivery is',
     'credited to the target only after it arrives and you call `cpu_finalize_delivery`.',
@@ -105,6 +109,7 @@ export async function createServer(context: AppContext): Promise<void> {
     registerStartMiningTool(server, context);
     registerGetMiningStatusTool(server, context);
     registerClaimMiningTool(server, context);
+    registerPlanRouteTool(server, context);
     registerQuoteTransportTool(server, context);
     registerTransportTool(server, context);
     registerListMyTransportsTool(server, context);

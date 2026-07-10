@@ -51,6 +51,7 @@ export class AppConfigService implements IAppConfig {
                 demolishCost: b.demolishCost ?? { cpu: '0', inputs: [] },
             })),
             reveal: data.reveal ?? { firstFree: true, reRevealCost: '0' },
+            transport: data.transport ?? null,
         };
         this.cached = config;
         this.logger.info('chain config loaded', { chainId: config.chainId });

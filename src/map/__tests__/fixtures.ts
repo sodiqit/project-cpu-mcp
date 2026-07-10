@@ -57,8 +57,6 @@ export function makeCraftProcess(overrides: Partial<CellProcessCraftView> = {}):
 export function makeCell(overrides: Partial<CellState> = {}): CellState {
     return {
         tokenId: '1',
-        x: 0,
-        y: 0,
         owner: '0xowner',
         revealCount: 0,
         revealPending: false,

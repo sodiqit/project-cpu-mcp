@@ -38,10 +38,7 @@ const MOVE_HASH = `0x${'1'.repeat(64)}` as Hash;
 const FINALIZE_HASH = `0x${'2'.repeat(64)}` as Hash;
 
 const INPUT = {
-    path: [
-        { x: 0, y: 0 },
-        { x: 1, y: 0 },
-    ],
+    path: ['72', '73'],
     resourceId: 3,
     amount: '100',
 };
@@ -260,6 +257,16 @@ describe('TransportService.quote', () => {
     it('surfaces a route rejection', async () => {
         const h = makeTransport({ quoteError: new Error('NotEligibleWaypoint') });
         await expect(h.service.quote(INPUT)).rejects.toThrow(/NotEligibleWaypoint/);
+    });
+
+    it('rejects an out-of-range or malformed tokenId before touching the chain', async () => {
+        const h = makeTransport();
+        await expect(h.service.quote({ ...INPUT, path: ['0', '73'] })).rejects.toThrow(/tokenId must be an integer/);
+        await expect(h.service.quote({ ...INPUT, path: ['72', '48991'] })).rejects.toThrow(
+            /tokenId must be an integer/,
+        );
+        await expect(h.service.quote({ ...INPUT, path: ['72', 'abc'] })).rejects.toThrow(/tokenId must be an integer/);
+        expect(h.transportClient.quotes).toHaveLength(0);
     });
 });
 

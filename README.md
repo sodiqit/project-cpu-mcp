@@ -124,12 +124,14 @@ Once connected, the server exposes tools grouped by area:
 
 - **Session** — `cpu_authenticate`, `cpu_get_game_config` (static rulebook: resources, costs, contract
   addresses), `cpu_get_balance` (spendable $CPU + gas).
-- **World** — `cpu_get_map`, `cpu_get_cell`, `cpu_get_changes` (react to other players).
+- **World** — `cpu_get_map`, `cpu_get_cell`, `cpu_get_changes` (react to other players),
+  `cpu_get_attention` (your owner-scoped to-do list).
 - **Reveal & build** — `cpu_reveal` (surface a cell's deposits on-chain), `cpu_build` (place a
-  building), `cpu_start_mining` (an extractor then mines a batch of the resource each cycle),
-  `cpu_get_mining_status`, `cpu_claim_mining`.
-- **Transport** — `cpu_quote_transport`, `cpu_transport`, `cpu_get_transport_status`,
-  `cpu_list_my_transports`, `get_pending_transports`, `resume_transport`.
+  building), `cpu_demolish`, `cpu_start_mining` (an extractor then mines a batch of the resource each
+  cycle), `cpu_get_mining_status`, `cpu_claim_mining`.
+- **Transport** — `cpu_plan_route` (build a valid waypoint chain between two cells),
+  `cpu_quote_transport`, `cpu_transport`, `cpu_get_transport_status`, `cpu_list_my_transports`,
+  `cpu_finalize_delivery`.
 - **Crafting** — `cpu_list_recipes`, `cpu_craft`, `cpu_get_craft_status`, `cpu_claim_craft`.
 - **Trading** — `cpu_get_markets`, `cpu_list_lots`, `cpu_get_lot`, `cpu_quote_buy`, `cpu_buy_lot`, `cpu_create_lot`,
   `cpu_cancel_lot`, `cpu_list_my_lots`.

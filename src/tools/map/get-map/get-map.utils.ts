@@ -16,10 +16,10 @@ export function buildMapQuery(scope: MapScope, args: GetMapArgs, ownerAddress: s
 
     let around: AroundQuery | null = null;
     if (scope === MapScope.Around) {
-        if (args.centerX === null || args.centerY === null) {
-            throw new Error('scope="around" requires centerX and centerY.');
+        if (args.aroundTokenId === null) {
+            throw new Error('scope="around" requires aroundTokenId.');
         }
-        around = { x: args.centerX, y: args.centerY, radius: args.radius ?? DEFAULT_AROUND_RADIUS };
+        around = { tokenId: args.aroundTokenId, radius: args.radius ?? DEFAULT_AROUND_RADIUS };
     }
 
     if (scope === MapScope.Cells && (args.tokenIds === null || args.tokenIds.length === 0)) {

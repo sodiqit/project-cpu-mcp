@@ -50,12 +50,11 @@ export class CellClient implements ICellClient {
         const data = encodeFunctionData({
             abi: CELL_ABI,
             functionName: 'requestReveal',
-            args: [params.x, params.y],
+            args: [params.tokenId],
         });
         this.logger.info('submitting reveal request', {
             cell: params.cell,
-            x: params.x.toString(),
-            y: params.y.toString(),
+            tokenId: params.tokenId.toString(),
             valueWei: params.value.toString(),
         });
         return this.contracts.send({ to: params.cell, data, value: params.value });

@@ -51,7 +51,7 @@ export class RevealService {
 
         const state = this.mapReader.readRevealCell(tokenId);
         if (state === null) {
-            throw new Error(`Cell ${tokenId} is not in the current map; cannot resolve its coordinates to reveal.`);
+            throw new Error(`Cell ${tokenId} is not in the current map; cannot verify ownership before reveal.`);
         }
 
         const address = wallet.getAddress();
@@ -74,7 +74,7 @@ export class RevealService {
             network: config.network,
         });
 
-        const txHash = await this.cellClient.requestReveal({ cell, x: BigInt(state.x), y: BigInt(state.y), value });
+        const txHash = await this.cellClient.requestReveal({ cell, tokenId: BigInt(tokenId), value });
         const confirmed = await this.contracts.confirm(txHash, 'Reveal request');
 
         const fulfilled = await this.pollFulfillment(tokenId, state.revealCount);
@@ -88,8 +88,6 @@ export class RevealService {
 
         return {
             tokenId,
-            x: state.x,
-            y: state.y,
             genesis,
             txHash: confirmed.txHash,
             status: confirmed.status,

@@ -52,6 +52,7 @@ const CONFIG: AppConfig = {
         },
     ],
     reveal: { firstFree: true, reRevealCost: '1000' },
+    transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2 },
 };
 
 function capture(): (args: never) => Promise<ToolResult> {

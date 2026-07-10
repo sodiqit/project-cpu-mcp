@@ -11,6 +11,7 @@ import type { CraftService } from './services/craft.service.js';
 import type { MiningService } from './services/mining.service.js';
 import type { MintService } from './services/mint.service.js';
 import type { RevealService } from './services/reveal.service.js';
+import type { RouteService } from './services/route.service.js';
 import type { SwapService } from './services/swap.service.js';
 import type { TradeService } from './services/trade.service.js';
 import type { TransportService } from './services/transport.service.js';
@@ -35,6 +36,7 @@ export interface AppContext {
     craft: CraftService;
     mining: MiningService;
     transport: TransportService;
+    route: RouteService;
     trade: TradeService;
     swap: SwapService;
     mint: MintService;

@@ -106,6 +106,7 @@ function makeConfig(contracts: Partial<AppContracts> = {}): AppConfig {
         recipes: [],
         buildings: [],
         reveal: { firstFree: true, reRevealCost: '0' },
+        transport: null,
     };
 }
 

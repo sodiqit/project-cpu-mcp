@@ -49,9 +49,9 @@ export function summarizeMarkets(markets: Array<MarketResourceSummary>, resource
         .map((m) => {
             const price = m.minPricePerUnit !== null ? `from ${m.minPricePerUnit} $CPU/u` : 'no open lots';
             const incoming = m.incomingLots > 0 ? `, ${m.incomingLots} incoming (${m.incomingRemaining})` : '';
-            const where = m.distanceFromCenter !== null ? `, ${m.distanceFromCenter} hops away` : '';
+            const where = m.distanceFromAnchor !== null ? `, ${m.distanceFromAnchor} grid steps away` : '';
             return (
-                `Hub ${m.hubTokenId} @(${m.hubX},${m.hubY}) · ${resourceLabel(resources, m.resourceId)}: ` +
+                `Hub ${m.hubTokenId} · ${resourceLabel(resources, m.resourceId)}: ` +
                 `${m.openLots} open (${m.openRemaining} units) ${price}${incoming}${where}`
             );
         })
@@ -70,10 +70,10 @@ export function summarizeLot(lot: LotView, resources: ResourceNames): string {
 }
 
 function summarizeLotLine(lot: LotView, resources: ResourceNames): string {
-    const dist = lot.distanceFromCenter !== null ? `, ${lot.distanceFromCenter} hops away` : '';
+    const dist = lot.distanceFromAnchor !== null ? `, ${lot.distanceFromAnchor} grid steps away` : '';
     return (
         `lot ${lot.id} [${lot.state}] · ${resourceLabel(resources, lot.resourceId)} · ${lot.remaining}/${lot.listed} ` +
-        `left @ ${lot.pricePerUnit} $CPU/u · Hub ${lot.hubTokenId} (${lot.hubX},${lot.hubY})${dist} · ` +
+        `left @ ${lot.pricePerUnit} $CPU/u · Hub ${lot.hubTokenId}${dist} · ` +
         `seller ${lot.sellerAddress}`
     );
 }

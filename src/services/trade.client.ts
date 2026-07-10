@@ -18,7 +18,7 @@ export class TradeClient implements ITradeClient {
         const data = encodeFunctionData({
             abi: TRADE_ABI,
             functionName: 'createLot',
-            args: [params.xs, params.ys, params.res, params.value, params.price, params.maxFee],
+            args: [params.tokenIds, params.res, params.value, params.price, params.maxFee],
         });
         this.logger.info('submitting create lot', {
             trade: params.trade,
@@ -34,7 +34,7 @@ export class TradeClient implements ITradeClient {
         const data = encodeFunctionData({
             abi: TRADE_ABI,
             functionName: 'buy',
-            args: [params.lotId, params.value, params.destXs, params.destYs, params.maxFee],
+            args: [params.lotId, params.value, params.destTokenIds, params.maxFee],
         });
         this.logger.info('submitting buy lot', {
             trade: params.trade,
@@ -49,7 +49,7 @@ export class TradeClient implements ITradeClient {
         const data = encodeFunctionData({
             abi: TRADE_ABI,
             functionName: 'cancel',
-            args: [params.lotId, params.returnXs, params.returnYs, params.maxFee],
+            args: [params.lotId, params.returnTokenIds, params.maxFee],
         });
         this.logger.info('submitting cancel lot', {
             trade: params.trade,

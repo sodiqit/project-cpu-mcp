@@ -24,14 +24,9 @@ import {
     type TradeServiceOptions,
 } from './types.js';
 import type { ApiClient } from '../api/client.js';
-import {
-    HttpStatus,
-    type LotState,
-    type LotView,
-    type MarketResourceSummary,
-    type TransportCoord,
-} from '../api/types.js';
+import { HttpStatus, type LotState, type LotView, type MarketResourceSummary } from '../api/types.js';
 import { TRADE_ABI } from '../contracts/trade.abi.js';
+import { parseTokenId } from '../geometry/token.utils.js';
 import type { ILogger } from '../logger/types.js';
 import { cpuFromWei } from '../utils/format.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
@@ -73,7 +68,7 @@ export class TradeService {
         const trade = this.resolveTrade(config);
         const transport = this.resolveTransport(config);
 
-        const { xs, ys } = toAxialArrays(input.chain);
+        const tokenIds = toTokenIdArray(input.chain);
         const value = BigInt(input.value);
         const price = parseEther(input.pricePerUnit);
 
@@ -87,14 +82,20 @@ export class TradeService {
         const { feeWei, maxFee } = await this.quoteTransit({
             transport,
             from: wallet.getAddress(),
-            xs,
-            ys,
+            tokenIds,
             res: input.resourceId,
             amount: value,
         });
         const approveTxHash = await this.approveTransit(config, transport, maxFee);
 
-        const txHash = await this.tradeClient.createLot({ trade, xs, ys, res: input.resourceId, value, price, maxFee });
+        const txHash = await this.tradeClient.createLot({
+            trade,
+            tokenIds,
+            res: input.resourceId,
+            value,
+            price,
+            maxFee,
+        });
         const confirmed = await this.contracts.confirm(txHash, 'Create lot');
 
         const created = this.firstFrom(
@@ -137,15 +138,14 @@ export class TradeService {
         const value = BigInt(input.value);
         const saleWei = value * parseEther(lot.pricePerUnit);
 
-        const { xs: destXs, ys: destYs } = toAxialArrays(input.chain);
+        const destTokenIds = toTokenIdArray(input.chain);
 
         this.logger.info('buying lot', { lotId: input.lotId, value: input.value, network: config.network });
 
         const { feeWei, maxFee } = await this.quoteTransit({
             transport,
             from: wallet.getAddress(),
-            xs: destXs,
-            ys: destYs,
+            tokenIds: destTokenIds,
             res: lot.resourceId,
             amount: value,
         });
@@ -155,7 +155,7 @@ export class TradeService {
         const approveTransitTxHash =
             maxFee === 0n ? null : await this.allowance.ensureAllowance(cpuToken, transport, maxFee);
 
-        const txHash = await this.tradeClient.buy({ trade, lotId: BigInt(input.lotId), value, destXs, destYs, maxFee });
+        const txHash = await this.tradeClient.buy({ trade, lotId: BigInt(input.lotId), value, destTokenIds, maxFee });
         const confirmed = await this.contracts.confirm(txHash, `Buy lot ${input.lotId}`);
 
         const bought = this.firstFrom(
@@ -197,21 +197,20 @@ export class TradeService {
         const lot = await this.getLot(input.lotId);
         const remaining = BigInt(lot.remaining);
 
-        const { xs: returnXs, ys: returnYs } = toAxialArrays(input.chain);
+        const returnTokenIds = toTokenIdArray(input.chain);
 
         this.logger.info('cancelling lot', { lotId: input.lotId, network: config.network });
 
         const { feeWei, maxFee } = await this.quoteTransit({
             transport,
             from: wallet.getAddress(),
-            xs: returnXs,
-            ys: returnYs,
+            tokenIds: returnTokenIds,
             res: lot.resourceId,
             amount: remaining,
         });
         const approveTxHash = await this.approveTransit(config, transport, maxFee);
 
-        const txHash = await this.tradeClient.cancel({ trade, lotId: BigInt(input.lotId), returnXs, returnYs, maxFee });
+        const txHash = await this.tradeClient.cancel({ trade, lotId: BigInt(input.lotId), returnTokenIds, maxFee });
         const confirmed = await this.contracts.confirm(txHash, `Cancel lot ${input.lotId}`);
 
         const cancelled = this.firstFrom(
@@ -252,12 +251,10 @@ export class TradeService {
 
         if (input.chain !== null) {
             const transport = this.resolveTransport(config);
-            const { xs, ys } = toAxialArrays(input.chain);
             const quote = await this.transportClient.quoteRoute({
                 transport,
                 from: wallet.getAddress(),
-                xs,
-                ys,
+                tokenIds: toTokenIdArray(input.chain),
                 res: lot.resourceId,
                 amount: value,
             });
@@ -289,8 +286,6 @@ export class TradeService {
             hub: query.hub,
             resourceId: query.resourceId,
             aroundTokenId: query.aroundTokenId,
-            centerX: query.centerX,
-            centerY: query.centerY,
             radius: query.radius,
         });
         const response = await this.api.request<Array<MarketResourceSummary>>(`/api/v1/trade/markets${qs}`);
@@ -313,8 +308,6 @@ export class TradeService {
             limit: query.limit,
             offset: query.offset,
             aroundTokenId: query.aroundTokenId,
-            centerX: query.centerX,
-            centerY: query.centerY,
             radius: query.radius,
         });
         const response = await this.api.request<Array<LotView>>(`/api/v1/trade/lots${qs}`);
@@ -403,9 +396,9 @@ export class TradeService {
     }
 }
 
-/** Split a coordinate chain into the parallel `int256[]` x / y arrays the Trade and Transport calls take. */
-function toAxialArrays(chain: Array<TransportCoord>): { xs: Array<bigint>; ys: Array<bigint> } {
-    return { xs: chain.map((c) => BigInt(c.x)), ys: chain.map((c) => BigInt(c.y)) };
+/** Validate a waypoint chain and convert it to the `uint256[]` the Trade and Transport calls take. */
+function toTokenIdArray(chain: Array<string>): Array<bigint> {
+    return chain.map((tokenId) => BigInt(parseTokenId(tokenId)));
 }
 
 /** Serialise a query object to `?a=1&b=2`, dropping null fields and URL-encoding values. */
