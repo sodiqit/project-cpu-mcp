@@ -159,6 +159,16 @@ export interface TransportRoutingView {
     moveRadius: number;
     hubRadius: number;
     moveTimePerCellSec: number;
+    /** Per-unit `$CPU` (decimal) a foreign transit hub charges absent a per-cell override; `'0'` = free. */
+    defaultMoveFeePerUnit: string;
+}
+
+/** Trade fee params from `GET /api/v1/config`; the API expresses the cap in basis points. */
+export interface TradeFeeView {
+    /** Percent of every sale burned (0-100); the rest, minus the hub's sale fee, goes to the seller. */
+    saleBurnPercent: number;
+    /** Structural ceiling on a hub's sale-fee rate, in basis points. */
+    maxSaleFeeBp: number;
 }
 
 /** `GET /api/v1/config?network=` response — chainId + contract addresses for one network. */
@@ -174,6 +184,7 @@ export interface AppConfigResponse {
     /** First-reveal-free + re-reveal cost params. */
     reveal: RevealCostView;
     transport: TransportRoutingView;
+    trade: TradeFeeView;
 }
 
 /** The building types a cell can hold — 6 tier-1 extractors, tier-2..5 crafters, and the Hub. */
@@ -250,7 +261,25 @@ export enum LotSort {
     Nearest = 'nearest',
 }
 
-/** A lot row from `GET /api/v1/trade/lots`, `/trade/lots/:id`, `/trade/lots/mine`. */
+/** A lot row as served by `GET /api/v1/trade/lots`, `/trade/lots/:id`, `/trade/lots/mine` — wire shape. */
+export interface ApiLotView {
+    id: string;
+    hubTokenId: string;
+    sellerAddress: string;
+    resourceId: number;
+    listed: string;
+    remaining: string;
+    /** Price per unit in $CPU wei — TradeService normalizes it to a decimal string on the way out. */
+    pricePerUnit: string;
+    /** Fee snapshot: the hub's sale-fee rate (basis points) frozen into the lot at listing. */
+    saleFeeBp: number;
+    state: LotState;
+    distanceFromAnchor: number | null;
+    createdAt: number;
+    updated: number;
+}
+
+/** A lot row on the MCP surface — decimal price and the frozen sale fee expressed as a percent. */
 export interface LotView {
     id: string;
     hubTokenId: string;
@@ -258,10 +287,10 @@ export interface LotView {
     resourceId: number;
     listed: string;
     remaining: string;
-    /** Price per unit in $CPU. The game API sends wei; TradeService normalizes it to a decimal string (e.g. "2"). */
+    /** Price per unit in $CPU (decimal, e.g. "2"). */
     pricePerUnit: string;
-    /** Hub trade-fee % snapshot at listing — currently always 0 (placeholder; not applied to fees). */
-    tradeFeePct: number;
+    /** Fee snapshot: the share of each sale that settles to the hub owner, as a percent (frozen at listing). */
+    saleFeePercent: number;
     state: LotState;
     /** Grid steps from the zone anchor cell when a zone is supplied, else `null`. */
     distanceFromAnchor: number | null;
@@ -271,15 +300,28 @@ export interface LotView {
     updated: number;
 }
 
-/** One `GET /api/v1/trade/markets` row per `(hub, resource)` — the compact scout view. */
+/** One `GET /api/v1/trade/markets` row per `(hub, resource)` — wire shape. */
+export interface ApiMarketResourceSummary {
+    hubTokenId: string;
+    resourceId: number;
+    openLots: number;
+    openRemaining: string;
+    /** Lowest open-lot price per unit in $CPU wei, or null when no open lots. */
+    minPricePerUnit: string | null;
+    incomingLots: number;
+    incomingRemaining: string;
+    distanceFromAnchor: number | null;
+}
+
+/** One `GET /api/v1/trade/markets` row per `(hub, resource)` on the MCP surface — the compact scout view.
+ *  The live sale-fee rate is not served here; the markets tool enriches it locally from the world map. */
 export interface MarketResourceSummary {
     hubTokenId: string;
     resourceId: number;
     openLots: number;
     openRemaining: string;
-    /** Lowest open-lot price per unit in $CPU (TradeService normalizes the API's wei to decimal), or null when no open lots. */
+    /** Lowest open-lot price per unit in $CPU (decimal), or null when no open lots. */
     minPricePerUnit: string | null;
-    tradeFeePct: number | null;
     incomingLots: number;
     incomingRemaining: string;
     /** Grid steps from the zone anchor cell when a zone is supplied, else `null`. */

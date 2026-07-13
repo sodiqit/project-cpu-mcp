@@ -9,33 +9,37 @@ import type { WalletProvider } from '../../wallet/types.js';
 import { RouteService } from '../route.service.js';
 
 const RIVAL = '0x000000000000000000000000000000000000beef';
+const RES = 3;
 
 function own(tokenId: string, over: Partial<CellState> = {}): CellState {
     return makeCell({ tokenId, owner: WALLET_ADDRESS, revealCount: 1, ...over });
 }
 
+// A rival hub whose per-resource override for RES is `feePerUnit`; other resources fall back to the config default.
 function foreignHub(tokenId: string, feePerUnit: string): CellState {
     return makeCell({
         tokenId,
         owner: RIVAL,
         revealCount: 1,
         building: { type: BuildingType.Hub, buildFinishAt: null },
-        transitFeePerUnit: feePerUnit,
+        transitFeeOverrides: { [RES]: feePerUnit },
     });
 }
 
-function makeService(cells: Array<CellState>): RouteService {
+function makeService(cells: Array<CellState>, defaultMoveFeePerUnit = '0'): RouteService {
     const wallet = { get: () => ({ getAddress: () => WALLET_ADDRESS }) } as unknown as WalletProvider;
+    const base = makeConfig();
+    const config = { ...base, transport: { ...base.transport, defaultMoveFeePerUnit } };
     return new RouteService({
         wallet,
-        appConfig: new FakeAppConfig(makeConfig()),
+        appConfig: new FakeAppConfig(config),
         mapReader: { allCells: () => cells },
         logger: new NoopLogger(),
     });
 }
 
-function survey(cells: Array<CellState>, from: number, towards: number | null = null) {
-    return makeService(cells).nextHops({ from, towards });
+function survey(cells: Array<CellState>, from: number, towards: number | null = null, resourceId = RES) {
+    return makeService(cells).nextHops({ from, towards, resourceId });
 }
 
 describe('RouteService.nextHops', () => {
@@ -57,6 +61,18 @@ describe('RouteService.nextHops', () => {
             transitFeePerUnit: '0.5',
         });
         expect(result.hops[1]?.pos).toEqual({ face: 0, i: 1, j: 5 });
+    });
+
+    it('resolves the transit fee for the requested resource: override for it, config default otherwise', async () => {
+        const cells = [own('72'), foreignHub('75', '0.5')];
+
+        // RES 3 has an explicit override on the hub → the exact override.
+        const forRes3 = await survey(cells, 72, null, 3);
+        expect(forRes3.hops.find((h) => h.tokenId === '75')?.transitFeePerUnit).toBe('0.5');
+
+        // A resource with no override falls back to the config default move fee.
+        const forRes9 = await makeService(cells, '0.2').nextHops({ from: 72, towards: null, resourceId: 9 });
+        expect(forRes9.hops.find((h) => h.tokenId === '75')?.transitFeePerUnit).toBe('0.2');
     });
 
     it('adds a compass when towards is given and sorts by remaining distance', async () => {
@@ -114,7 +130,7 @@ describe('RouteService.network', () => {
     it('returns nodes with facts, legal edges and component labels', async () => {
         const cells = [own('72'), own('73'), foreignHub('75', '0.5'), own('220'), own('221')];
 
-        const result = await makeService(cells).network({ from: null, towards: null });
+        const result = await makeService(cells).network({ from: null, towards: null, resourceId: RES });
 
         expect(result.nodes.map((n) => n.tokenId)).toEqual(['72', '73', '75', '220', '221']);
         expect(result.edges).toEqual([
@@ -134,7 +150,7 @@ describe('RouteService.network', () => {
     it('annotates distance fields when from/towards are given', async () => {
         const cells = [own('72'), own('73'), foreignHub('75', '0.5'), own('78')];
 
-        const result = await makeService(cells).network({ from: 72, towards: 78 });
+        const result = await makeService(cells).network({ from: 72, towards: 78, resourceId: RES });
 
         expect(result.fromToTarget).toBe(6);
         const byToken = new Map(result.nodes.map((n) => [n.tokenId, n]));
@@ -146,7 +162,11 @@ describe('RouteService.network', () => {
     it('a single foreign cell between plain cells is a wall; a hub reaches across', async () => {
         const rival = makeCell({ tokenId: '73', owner: RIVAL, revealCount: 1 });
 
-        const walled = await makeService([own('72'), rival, own('74')]).network({ from: null, towards: null });
+        const walled = await makeService([own('72'), rival, own('74')]).network({
+            from: null,
+            towards: null,
+            resourceId: RES,
+        });
         expect(walled.nodes.map((n) => n.tokenId)).toEqual(['72', '74']);
         expect(walled.edges).toEqual([]);
         expect(walled.components).toBe(2);
@@ -157,7 +177,11 @@ describe('RouteService.network', () => {
             revealCount: 1,
             building: { type: BuildingType.Hub, buildFinishAt: null },
         });
-        const bridged = await makeService([hub72, rival, own('74')]).network({ from: null, towards: null });
+        const bridged = await makeService([hub72, rival, own('74')]).network({
+            from: null,
+            towards: null,
+            resourceId: RES,
+        });
         expect(bridged.edges).toEqual([{ a: '72', b: '74', distance: 2 }]);
         expect(bridged.components).toBe(1);
     });
@@ -165,7 +189,7 @@ describe('RouteService.network', () => {
     it('shows a disconnected target as a separate component', async () => {
         const cells = [own('72'), own('73'), own('220')];
 
-        const result = await makeService(cells).network({ from: 72, towards: 220 });
+        const result = await makeService(cells).network({ from: 72, towards: 220, resourceId: RES });
 
         const byToken = new Map(result.nodes.map((n) => [n.tokenId, n]));
         expect(byToken.get('72')?.component).not.toBe(byToken.get('220')?.component);

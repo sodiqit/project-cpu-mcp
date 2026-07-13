@@ -4,11 +4,14 @@ import { describe, expect, it } from 'vitest';
 import { type LotView, type MarketResourceSummary, LotState } from '../../../api/types.js';
 import { Network } from '../../../config/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
+import { makeCell } from '../../../map/__tests__/fixtures.js';
+import type { CellState } from '../../../map/types.js';
 import type {
     BalanceResult,
     BuyLotResult,
     CancelLotResult,
     CreateLotResult,
+    SetSaleFeeResult,
     TradeQuote,
 } from '../../../services/types.js';
 import type { AppContext } from '../../../types.js';
@@ -22,6 +25,7 @@ import { registerListLotsTool } from '../list-lots/list-lots.js';
 import { registerListMyLotsTool } from '../list-mine/list-my-lots.js';
 import { registerGetMarketsTool } from '../markets/get-markets.js';
 import { registerQuoteBuyTool } from '../quote-buy/quote-buy.js';
+import { registerSetSaleFeeTool } from '../set-sale-fee/set-sale-fee.js';
 
 interface ToolResult {
     content: Array<{ type: string; text: string }>;
@@ -53,6 +57,7 @@ const createResult: CreateLotResult = {
     resourceId: 3,
     value: '100',
     pricePerUnit: '0.5',
+    saleFeePercent: 2.5,
     deliveryId: '123',
     arrivalAt: 1704,
     fee: '0',
@@ -80,6 +85,8 @@ const buyResult: BuyLotResult = {
     resourceId: 3,
     value: '10',
     sale: '5',
+    hubFee: '0.125',
+    burn: '0.05',
     remaining: '90',
     fee: '0',
     deliveryId: '123',
@@ -87,6 +94,15 @@ const buyResult: BuyLotResult = {
     txHash: '0xbuy',
     approveSaleTxHash: '0xapprove',
     approveTransitTxHash: null,
+    status: TxStatus.Success,
+    blockNumber: '100',
+};
+
+const setFeeResult: SetSaleFeeResult = {
+    hubTokenId: '20',
+    resourceId: 3,
+    feePercent: 2.5,
+    txHash: '0xsetfee',
     status: TxStatus.Success,
     blockNumber: '100',
 };
@@ -99,7 +115,7 @@ const lot: LotView = {
     listed: '100',
     remaining: '80',
     pricePerUnit: '0.5',
-    tradeFeePct: 0,
+    saleFeePercent: 1.5,
     state: LotState.Open,
     distanceFromAnchor: 3,
     createdAt: 1700,
@@ -112,20 +128,32 @@ const market: MarketResourceSummary = {
     openLots: 2,
     openRemaining: '150',
     minPricePerUnit: '0.4',
-    tradeFeePct: 0,
     incomingLots: 1,
     incomingRemaining: '50',
     distanceFromAnchor: 3,
 };
 
+function hubCell(saleFeeOverrides: Record<number, number> | null): CellState {
+    return makeCell({ tokenId: '5', saleFeeOverrides });
+}
+
 describe('create_lot / cancel_lot tools', () => {
-    it('summarizes a create with the lot, delivery and finalize hint', async () => {
+    it('summarizes a create with the lot, frozen fee, delivery and finalize hint', async () => {
         const handler = capture(registerCreateLotTool, { trade: { createLot: async () => createResult } });
-        const result = await handler({ chain: [], resourceId: 3, value: '100', pricePerUnit: '0.5' } as never);
+        const result = await handler({
+            chain: [],
+            resourceId: 3,
+            value: '100',
+            pricePerUnit: '0.5',
+            maxSaleFeePercent: null,
+        } as never);
         expect(result.content[0]?.text).toMatch(/Listed lot 7/);
         expect(result.content[0]?.text).toMatch(/Silica \(#3\)/);
+        expect(result.content[0]?.text).toMatch(/sale fee 2.5% frozen/);
         expect(result.content[0]?.text).toMatch(/finalize_delivery on 123/);
         expect(result.content[0]?.text).toMatch(/create tx 0xcreate/);
+        const json = JSON.parse(result.content[1]?.text ?? '{}') as CreateLotResult;
+        expect(json.saleFeePercent).toBe(2.5);
     });
 
     it('summarizes a cancel with the returned units and finalize hint', async () => {
@@ -137,12 +165,38 @@ describe('create_lot / cancel_lot tools', () => {
     });
 });
 
+describe('set_sale_fee tool', () => {
+    it('reports a confirmed rate change with the tx', async () => {
+        const handler = capture(registerSetSaleFeeTool, { trade: { setSaleFee: async () => setFeeResult } });
+        const result = await handler({ hubTokenId: 20, resourceId: 3, feePercent: 2.5 } as never);
+        expect(result.content[0]?.text).toMatch(/Set the sale fee for Silica \(#3\) on Hub 20 to 2.5%/);
+        expect(result.content[0]?.text).toMatch(/tx 0xsetfee/);
+        const json = JSON.parse(result.content[1]?.text ?? '{}') as SetSaleFeeResult;
+        expect(json.feePercent).toBe(2.5);
+    });
+
+    it('propagates validation errors from the service', async () => {
+        const handler = capture(registerSetSaleFeeTool, {
+            trade: {
+                setSaleFee: async () => {
+                    throw new Error('Rate 0.005% is finer than 0.01% (one basis point); use a rate on a whole bp.');
+                },
+            },
+        });
+        await expect(handler({ hubTokenId: 20, resourceId: 3, feePercent: 0.005 } as never)).rejects.toThrow(
+            /basis point/i,
+        );
+    });
+});
+
 describe('buy_lot tool', () => {
-    it('reports a buy with the sale approve and buy tx', async () => {
+    it('reports a buy with the hub fee, burn, sale approve and buy tx', async () => {
         const handler = capture(registerBuyLotTool, { trade: { buyLot: async () => buyResult } });
         const result = await handler({ lotId: '7', chain: [], value: '10' } as never);
         expect(result.content[0]?.text).toMatch(/Bought 10 Silica/);
         expect(result.content[0]?.text).toMatch(/for 5 \$CPU/);
+        expect(result.content[0]?.text).toMatch(/0.125 went to the hub owner/);
+        expect(result.content[0]?.text).toMatch(/0.05 was burned/);
         expect(result.content[0]?.text).toMatch(/sale approve 0xapprove/);
         expect(result.content[0]?.text).toMatch(/buy tx 0xbuy/);
     });
@@ -203,21 +257,58 @@ describe('quote_buy tool', () => {
 });
 
 describe('discovery read tools', () => {
-    it('list_lots renders a lot line', async () => {
+    it('list_lots renders a lot line with its frozen sale fee', async () => {
         const handler = capture(registerListLotsTool, { trade: { listLots: async () => [lot] } });
         const result = await handler({} as never);
         expect(result.content[0]?.text).toMatch(/1 lot/);
         expect(result.content[0]?.text).toMatch(/lot lot-1 \[open\]/);
         expect(result.content[0]?.text).toMatch(/Silica \(#3\)/);
         expect(result.content[0]?.text).toMatch(/80\/100/);
+        expect(result.content[0]?.text).toMatch(/sale fee 1.5%/);
     });
 
-    it('get_markets renders a scout row', async () => {
-        const handler = capture(registerGetMarketsTool, { trade: { getMarkets: async () => [market] } });
+    it('get_markets enriches the live sale fee from the world map', async () => {
+        const handler = capture(registerGetMarketsTool, {
+            trade: { getMarkets: async () => [market] },
+            mapReader: { readRevealCell: (id: string) => (id === '5' ? hubCell({ 3: 2.5 }) : null) },
+        });
         const result = await handler({} as never);
         expect(result.content[0]?.text).toMatch(/Hub 5 · /);
         expect(result.content[0]?.text).toMatch(/2 open/);
         expect(result.content[0]?.text).toMatch(/from 0.4 \$CPU/);
+        expect(result.content[0]?.text).toMatch(/sale fee 2.5%/);
+        const json = JSON.parse(result.content[1]?.text ?? '[]') as Array<{ liveSaleFeePercent: number | null }>;
+        expect(json[0]?.liveSaleFeePercent).toBe(2.5);
+    });
+
+    it('get_markets reports a known hub with no rate for the resource as 0%', async () => {
+        const handler = capture(registerGetMarketsTool, {
+            trade: { getMarkets: async () => [market] },
+            mapReader: { readRevealCell: () => hubCell({}) },
+        });
+        const result = await handler({} as never);
+        const json = JSON.parse(result.content[1]?.text ?? '[]') as Array<{ liveSaleFeePercent: number | null }>;
+        expect(json[0]?.liveSaleFeePercent).toBe(0);
+    });
+
+    it('get_markets degrades liveSaleFeePercent to null when the map has no read on the hub', async () => {
+        const handler = capture(registerGetMarketsTool, {
+            trade: { getMarkets: async () => [market] },
+            mapReader: { readRevealCell: () => null },
+        });
+        const result = await handler({} as never);
+        const json = JSON.parse(result.content[1]?.text ?? '[]') as Array<{ liveSaleFeePercent: number | null }>;
+        expect(json[0]?.liveSaleFeePercent).toBeNull();
+    });
+
+    it('get_markets reports null (not a fabricated 0) for a hub not serving sale fees', async () => {
+        const handler = capture(registerGetMarketsTool, {
+            trade: { getMarkets: async () => [market] },
+            mapReader: { readRevealCell: () => hubCell(null) },
+        });
+        const result = await handler({} as never);
+        const json = JSON.parse(result.content[1]?.text ?? '[]') as Array<{ liveSaleFeePercent: number | null }>;
+        expect(json[0]?.liveSaleFeePercent).toBeNull();
     });
 
     it('get_lot renders a single lot', async () => {

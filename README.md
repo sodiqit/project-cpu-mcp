@@ -130,12 +130,13 @@ Once connected, the server exposes tools grouped by area:
   building), `cpu_demolish`, `cpu_start_mining` (an extractor then mines a batch of the resource each
   cycle), `cpu_get_mining_status`, `cpu_claim_mining`.
 - **Transport** — `cpu_route_network` (the waypoint road map: nodes, legal hops, gaps),
-  `cpu_next_hops` (survey the legal waypoints around a cell),
-  `cpu_quote_transport`, `cpu_transport`, `cpu_get_transport_status`, `cpu_list_my_transports`,
-  `cpu_finalize_delivery`.
+  `cpu_next_hops` (survey the legal waypoints around a cell) — both take the cargo `resourceId` and show
+  the exact per-hub transit fee for it — `cpu_quote_transport`, `cpu_transport`,
+  `cpu_get_transport_status`, `cpu_list_my_transports`, `cpu_finalize_delivery`.
 - **Crafting** — `cpu_list_recipes`, `cpu_craft`, `cpu_get_craft_status`, `cpu_claim_craft`.
 - **Trading** — `cpu_get_markets`, `cpu_list_lots`, `cpu_get_lot`, `cpu_quote_buy`, `cpu_buy_lot`, `cpu_create_lot`,
-  `cpu_cancel_lot`, `cpu_list_my_lots`.
+  `cpu_cancel_lot`, `cpu_list_my_lots`, and `cpu_set_sale_fee` (a hub owner sets the per-resource sale-fee
+  rate on their own hub). See [CONTEXT.md](./CONTEXT.md) for the fee vocabulary.
 - **Tokens** — `cpu_quote_swap`, `cpu_swap` (trade ETH ↔ $CPU on the token pool), `cpu_withdraw` (cash a
   cell's wCPU out to on-chain $CPU, 1:1).
 

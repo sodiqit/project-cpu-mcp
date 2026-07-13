@@ -16,6 +16,28 @@ export function nodeRadius(node: RouteNode, moveRadius: number, hubRadius: numbe
     return node.isHub ? hubRadius : moveRadius;
 }
 
+/** The exact per-unit transit fee a foreign hub charges for one resource: its per-resource override if it set
+ *  one, otherwise the config default. A `{}` override record (transit point, no per-resource rate) falls through
+ *  to the default, same as a `null` one. */
+export function effectiveTransitFee(
+    overrides: Record<number, string> | null,
+    resourceId: number,
+    defaultMoveFeePerUnit: string,
+): string {
+    return overrides?.[resourceId] ?? defaultMoveFeePerUnit;
+}
+
+/** Per-waypoint transit fee for a route survey: the effective fee only for a foreign hub (own cells route for
+ *  free, and non-hubs are never waypoints), else `null`. */
+export function waypointTransitFee(
+    node: RouteNode,
+    overrides: Record<number, string> | null,
+    resourceId: number,
+    defaultMoveFeePerUnit: string,
+): string | null {
+    return !node.isOwn && node.isHub ? effectiveTransitFee(overrides, resourceId, defaultMoveFeePerUnit) : null;
+}
+
 export function pairReach(a: RouteNode, b: RouteNode, moveRadius: number, hubRadius: number): number {
     return nodeRadius(a, moveRadius, hubRadius) + nodeRadius(b, moveRadius, hubRadius) - 1;
 }

@@ -58,6 +58,16 @@ export interface AppConfig {
     /** First-reveal-free + re-reveal cost params. */
     reveal: RevealCostView;
     transport: TransportRoutingView;
+    /** Trade fee params, normalized to the MCP's percent surface. */
+    trade: TradeConfigView;
+}
+
+/** Trade fee params on the MCP surface — the API's basis-point cap is converted to a percent. */
+export interface TradeConfigView {
+    /** Percent of every sale burned (0-100); the rest, minus the hub's sale fee, goes to the seller. */
+    saleBurnPercent: number;
+    /** Structural ceiling on a hub's sale-fee rate, as a percent (e.g. 50). */
+    maxSaleFeePercent: number;
 }
 
 /** Provider of the chain config — implemented by AppConfigService; injected into RevealService. */
@@ -413,6 +423,8 @@ export interface RouteServiceOptions {
 export interface NextHopsInput {
     from: number;
     towards: number | null;
+    /** Cargo resource id — the per-hub transit fee is resolved for exactly this resource. */
+    resourceId: number;
 }
 
 export interface NextHopView {
@@ -422,6 +434,8 @@ export interface NextHopView {
     isOwn: boolean;
     isHub: boolean;
     owner: string;
+    /** Effective per-unit transit fee ($CPU decimal) for the requested resource — `override ?? default`;
+     *  `null` for your own cells (own-cell routing is free). */
     transitFeePerUnit: string | null;
     distanceToTarget: number | null;
 }
@@ -439,6 +453,8 @@ export interface NextHopsResult {
 export interface RouteNetworkInput {
     from: number | null;
     towards: number | null;
+    /** Cargo resource id — every foreign-hub waypoint's transit fee is resolved for exactly this resource. */
+    resourceId: number;
 }
 
 export interface NetworkNodeView {
@@ -447,6 +463,8 @@ export interface NetworkNodeView {
     isOwn: boolean;
     isHub: boolean;
     owner: string;
+    /** Effective per-unit transit fee ($CPU decimal) for the requested resource — `override ?? default`;
+     *  `null` for your own cells (own-cell routing is free). */
     transitFeePerUnit: string | null;
     distFromSource: number | null;
     distToTarget: number | null;
@@ -549,6 +567,17 @@ export interface CreateLotInput {
     resourceId: number;
     value: string;
     pricePerUnit: string;
+    /** Seller tolerance: the max sale-fee percent to accept. `null` → read the hub's live rate and pass that,
+     *  so a last-moment rate raise reverts the listing instead of freezing a worse rate into the lot. */
+    maxSaleFeePercent: number | null;
+}
+
+export interface SetSaleFeeInput {
+    /** Hub cell token id whose live sale-fee rate is being set (must be owned by the caller). */
+    hubTokenId: string;
+    resourceId: number;
+    /** New sale-fee rate as a percent (0–50, 0.01 granularity). */
+    feePercent: number;
 }
 
 export interface BuyLotInput {
@@ -607,7 +636,23 @@ export interface CreateLotParams {
     value: bigint;
     /** Asking price per unit, in $CPU wei. */
     price: bigint;
+    /** Seller tolerance in basis points — the listing reverts if the hub's live rate exceeds it. */
+    maxSaleFeeBp: number;
     maxFee: bigint;
+}
+
+export interface SetSaleFeeParams {
+    trade: Address;
+    hub: bigint;
+    res: number;
+    /** New rate in basis points. */
+    feeBp: number;
+}
+
+export interface GetSaleFeeParams {
+    trade: Address;
+    hub: bigint;
+    res: number;
 }
 
 export interface BuyLotParams {
@@ -625,11 +670,26 @@ export interface CancelLotParams {
     maxFee: bigint;
 }
 
-/** Sends the three Trade writes — implemented by TradeClient. Lot reads come from the game API. */
+/** Sends the Trade writes and reads the one on-chain view the client needs (`getSaleFee`) — implemented by
+ *  TradeClient. Lot state comes from the game API. */
 export interface ITradeClient {
     createLot(params: CreateLotParams): Promise<Hash>;
     buy(params: BuyLotParams): Promise<Hash>;
     cancel(params: CancelLotParams): Promise<Hash>;
+    setSaleFee(params: SetSaleFeeParams): Promise<Hash>;
+    /** The hub owner's live sale-fee rate (basis points) for `(hub, res)`; 0 when unset. */
+    getSaleFee(params: GetSaleFeeParams): Promise<number>;
+}
+
+/** A confirmed `set_sale_fee`: the hub's live rate for one resource, decoded from the emitted change event. */
+export interface SetSaleFeeResult {
+    hubTokenId: string;
+    resourceId: number;
+    /** The confirmed rate as a percent, decoded from the `SaleFeeChanged` event. */
+    feePercent: number;
+    txHash: Hash;
+    status: TxStatus;
+    blockNumber: string;
 }
 
 /**
@@ -642,6 +702,8 @@ export interface CreateLotResult {
     resourceId: number;
     value: string;
     pricePerUnit: string;
+    /** Fee snapshot frozen into the lot, as a percent — the share of every future sale that goes to the hub. */
+    saleFeePercent: number;
     deliveryId: string;
     arrivalAt: number;
     /** Transit fee quoted for the routing, in $CPU (decimal). */
@@ -658,8 +720,12 @@ export interface BuyLotResult {
     lotId: string;
     resourceId: number;
     value: string;
-    /** value × pricePerUnit, in $CPU (decimal). */
+    /** value × pricePerUnit, in $CPU (decimal) — the buyer pays exactly this; the fee/burn come out of it. */
     sale: string;
+    /** Portion of the sale that went to the hub owner, in $CPU (decimal). */
+    hubFee: string;
+    /** Portion of the sale removed from supply (sale burn), in $CPU (decimal). */
+    burn: string;
     /** Units left on the lot after this buy (0 = sold out). */
     remaining: string;
     /** Transit fee paid, in $CPU (decimal). */

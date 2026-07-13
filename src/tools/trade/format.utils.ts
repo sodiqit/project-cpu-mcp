@@ -1,5 +1,12 @@
-import type { LotView, MarketResourceSummary } from '../../api/types.js';
-import type { BuyLotResult, CancelLotResult, CreateLotResult, TradeQuote } from '../../services/types.js';
+import type { EnrichedMarketSummary } from './types.js';
+import type { LotView } from '../../api/types.js';
+import type {
+    BuyLotResult,
+    CancelLotResult,
+    CreateLotResult,
+    SetSaleFeeResult,
+    TradeQuote,
+} from '../../services/types.js';
 import { formatUnixSeconds, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
 
 /** Human header for a confirmed `create_lot`. */
@@ -7,10 +14,21 @@ export function summarizeCreateLot(result: CreateLotResult, resources: ResourceN
     const approve = result.approveTxHash !== null ? `approve tx ${result.approveTxHash}, ` : '';
     return (
         `Listed lot ${result.lotId}: ${result.value} ${resourceLabel(resources, result.resourceId)} @ ` +
-        `${result.pricePerUnit} $CPU/u at Hub ${result.hubTokenId}. Escrow shipping to the Hub ` +
-        `(delivery ${result.deliveryId}, ETA ${formatUnixSeconds(result.arrivalAt)}); the lot opens once it ` +
-        `arrives — run finalize_delivery on ${result.deliveryId} after the ETA (or wait). Transit fee ` +
-        `${result.fee} $CPU. ${approve}create tx ${result.txHash} in block ${result.blockNumber}.`
+        `${result.pricePerUnit} $CPU/u at Hub ${result.hubTokenId} (sale fee ${result.saleFeePercent}% frozen into ` +
+        `the lot). Escrow shipping to the Hub (delivery ${result.deliveryId}, ETA ` +
+        `${formatUnixSeconds(result.arrivalAt)}); the lot opens once it arrives — run finalize_delivery on ` +
+        `${result.deliveryId} after the ETA (or wait). Transit fee ${result.fee} $CPU. ${approve}create tx ` +
+        `${result.txHash} in block ${result.blockNumber}.`
+    );
+}
+
+/** Human header for a confirmed `set_sale_fee`. */
+export function summarizeSetSaleFee(result: SetSaleFeeResult, resources: ResourceNames): string {
+    const free = result.feePercent === 0 ? ' (listed free)' : '';
+    return (
+        `Set the sale fee for ${resourceLabel(resources, result.resourceId)} on Hub ${result.hubTokenId} to ` +
+        `${result.feePercent}%${free}. It settles on every future sale of this resource at the hub; open lots keep ` +
+        `their own frozen rate. tx ${result.txHash} in block ${result.blockNumber}.`
     );
 }
 
@@ -23,10 +41,10 @@ export function summarizeBuyLot(result: BuyLotResult, resources: ResourceNames):
     const approve = approvals.length > 0 ? `${approvals.join(', ')}, ` : '';
     return (
         `Bought ${result.value} ${resourceLabel(resources, result.resourceId)} from lot ${result.lotId} for ` +
-        `${result.sale} $CPU (+ ${result.fee} transit). ${result.remaining} units ` +
-        `remain on the lot. Goods shipping to your cell (delivery ${result.deliveryId}, ETA ` +
-        `${formatUnixSeconds(result.arrivalAt)}) — run finalize_delivery on ${result.deliveryId} after the ETA. ` +
-        `${approve}buy tx ${result.txHash} in block ${result.blockNumber}.`
+        `${result.sale} $CPU (+ ${result.fee} transit) — of the sale, ${result.hubFee} went to the hub owner and ` +
+        `${result.burn} was burned. ${result.remaining} units remain on the lot. Goods shipping to your cell ` +
+        `(delivery ${result.deliveryId}, ETA ${formatUnixSeconds(result.arrivalAt)}) — run finalize_delivery on ` +
+        `${result.deliveryId} after the ETA. ${approve}buy tx ${result.txHash} in block ${result.blockNumber}.`
     );
 }
 
@@ -41,18 +59,19 @@ export function summarizeCancelLot(result: CancelLotResult, resources: ResourceN
     );
 }
 
-export function summarizeMarkets(markets: Array<MarketResourceSummary>, resources: ResourceNames): string {
+export function summarizeMarkets(markets: Array<EnrichedMarketSummary>, resources: ResourceNames): string {
     if (markets.length === 0) {
         return 'No markets match.';
     }
     return markets
         .map((m) => {
             const price = m.minPricePerUnit !== null ? `from ${m.minPricePerUnit} $CPU/u` : 'no open lots';
+            const fee = m.liveSaleFeePercent !== null ? `, sale fee ${m.liveSaleFeePercent}%` : '';
             const incoming = m.incomingLots > 0 ? `, ${m.incomingLots} incoming (${m.incomingRemaining})` : '';
             const where = m.distanceFromAnchor !== null ? `, ${m.distanceFromAnchor} grid steps away` : '';
             return (
                 `Hub ${m.hubTokenId} · ${resourceLabel(resources, m.resourceId)}: ` +
-                `${m.openLots} open (${m.openRemaining} units) ${price}${incoming}${where}`
+                `${m.openLots} open (${m.openRemaining} units) ${price}${fee}${incoming}${where}`
             );
         })
         .join('\n');
@@ -73,7 +92,7 @@ function summarizeLotLine(lot: LotView, resources: ResourceNames): string {
     const dist = lot.distanceFromAnchor !== null ? `, ${lot.distanceFromAnchor} grid steps away` : '';
     return (
         `lot ${lot.id} [${lot.state}] · ${resourceLabel(resources, lot.resourceId)} · ${lot.remaining}/${lot.listed} ` +
-        `left @ ${lot.pricePerUnit} $CPU/u · Hub ${lot.hubTokenId}${dist} · ` +
+        `left @ ${lot.pricePerUnit} $CPU/u (sale fee ${lot.saleFeePercent}%) · Hub ${lot.hubTokenId}${dist} · ` +
         `seller ${lot.sellerAddress}`
     );
 }

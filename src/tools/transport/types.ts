@@ -21,6 +21,10 @@ export const transportInputSchema = {
 };
 
 export const routeNetworkInputSchema = {
+    resourceId: z
+        .number()
+        .int()
+        .describe('The cargo resource id — every foreign-hub waypoint shows its exact per-unit transit fee for it.'),
     from: tokenIdSchema
         .nullable()
         .default(null)
@@ -33,6 +37,10 @@ export const routeNetworkInputSchema = {
 
 export const nextHopsInputSchema = {
     from: tokenIdSchema.describe('The cell to hop from (your revealed cell, or a Hub).'),
+    resourceId: z
+        .number()
+        .int()
+        .describe('The cargo resource id — each candidate hub shows its exact per-unit transit fee for it.'),
     towards: tokenIdSchema
         .nullable()
         .default(null)

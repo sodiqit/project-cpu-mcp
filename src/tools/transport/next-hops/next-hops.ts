@@ -28,7 +28,11 @@ export function registerNextHopsTool(server: McpServer, context: AppContext): vo
         'cpu_next_hops',
         { description: NEXT_HOPS_DESCRIPTION, inputSchema: nextHopsInputSchema },
         async (args) => {
-            const result = await context.route.nextHops({ from: args.from, towards: args.towards });
+            const result = await context.route.nextHops({
+                from: args.from,
+                towards: args.towards,
+                resourceId: args.resourceId,
+            });
 
             return {
                 content: [

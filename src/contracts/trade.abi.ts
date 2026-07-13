@@ -1,6 +1,7 @@
-// The lot marketplace. Trimmed to the writes the client sends plus the events it decodes from the
-// receipt; lot state is read from the game API, so no view functions are included. Must match the
-// deployed Trade contract.
+// The lot marketplace. Trimmed to the writes the client sends, the one view it reads (the hub's live sale-fee
+// rate), and the events it decodes from the receipt. Must match the deployed Trade contract — the createLot
+// signature, the LotCreated / LotBought event shapes, and the custom errors are load-bearing for encoding and
+// decoding, so any drift breaks trade writes.
 export const TRADE_ABI = [
     {
         type: 'function',
@@ -10,6 +11,7 @@ export const TRADE_ABI = [
             { name: 'res', type: 'uint16', internalType: 'uint16' },
             { name: 'value', type: 'uint128', internalType: 'uint128' },
             { name: 'price', type: 'uint128', internalType: 'uint128' },
+            { name: 'maxSaleFeeBp', type: 'uint16', internalType: 'uint16' },
             { name: 'maxFee', type: 'uint256', internalType: 'uint256' },
         ],
         outputs: [{ name: 'lotId', type: 'uint256', internalType: 'uint256' }],
@@ -39,6 +41,27 @@ export const TRADE_ABI = [
         stateMutability: 'nonpayable',
     },
     {
+        type: 'function',
+        name: 'setSaleFee',
+        inputs: [
+            { name: 'hub', type: 'uint256', internalType: 'uint256' },
+            { name: 'res', type: 'uint16', internalType: 'uint16' },
+            { name: 'feeBp', type: 'uint16', internalType: 'uint16' },
+        ],
+        outputs: [],
+        stateMutability: 'nonpayable',
+    },
+    {
+        type: 'function',
+        name: 'getSaleFee',
+        inputs: [
+            { name: 'hub', type: 'uint256', internalType: 'uint256' },
+            { name: 'res', type: 'uint16', internalType: 'uint16' },
+        ],
+        outputs: [{ name: '', type: 'uint16', internalType: 'uint16' }],
+        stateMutability: 'view',
+    },
+    {
         type: 'event',
         name: 'LotCreated',
         inputs: [
@@ -48,6 +71,7 @@ export const TRADE_ABI = [
             { name: 'resource', type: 'uint16', indexed: false, internalType: 'uint16' },
             { name: 'value', type: 'uint128', indexed: false, internalType: 'uint128' },
             { name: 'pricePerUnit', type: 'uint128', indexed: false, internalType: 'uint128' },
+            { name: 'saleFeeBp', type: 'uint16', indexed: false, internalType: 'uint16' },
         ],
         anonymous: false,
     },
@@ -69,6 +93,8 @@ export const TRADE_ABI = [
             { name: 'value', type: 'uint128', indexed: false, internalType: 'uint128' },
             { name: 'remaining', type: 'uint128', indexed: false, internalType: 'uint128' },
             { name: 'sale', type: 'uint256', indexed: false, internalType: 'uint256' },
+            { name: 'hubFee', type: 'uint256', indexed: false, internalType: 'uint256' },
+            { name: 'burn', type: 'uint256', indexed: false, internalType: 'uint256' },
         ],
         anonymous: false,
     },
@@ -79,6 +105,16 @@ export const TRADE_ABI = [
             { name: 'lotId', type: 'uint256', indexed: true, internalType: 'uint256' },
             { name: 'seller', type: 'address', indexed: true, internalType: 'address' },
             { name: 'returned', type: 'uint128', indexed: false, internalType: 'uint128' },
+        ],
+        anonymous: false,
+    },
+    {
+        type: 'event',
+        name: 'SaleFeeChanged',
+        inputs: [
+            { name: 'hubTokenId', type: 'uint256', indexed: true, internalType: 'uint256' },
+            { name: 'resource', type: 'uint16', indexed: true, internalType: 'uint16' },
+            { name: 'feeBp', type: 'uint16', indexed: false, internalType: 'uint16' },
         ],
         anonymous: false,
     },
@@ -99,4 +135,7 @@ export const TRADE_ABI = [
     { type: 'error', name: 'NotDestOwner', inputs: [] },
     { type: 'error', name: 'NotTransport', inputs: [] },
     { type: 'error', name: 'SaleBurnTooHigh', inputs: [] },
+    { type: 'error', name: 'SaleFeeTooHigh', inputs: [] },
+    { type: 'error', name: 'SaleFeeExceedsMax', inputs: [] },
+    { type: 'error', name: 'NotHubOwner', inputs: [] },
 ] as const;

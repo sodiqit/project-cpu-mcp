@@ -31,6 +31,7 @@ import { registerListLotsTool } from './tools/trade/list-lots/list-lots.js';
 import { registerListMyLotsTool } from './tools/trade/list-mine/list-my-lots.js';
 import { registerGetMarketsTool } from './tools/trade/markets/get-markets.js';
 import { registerQuoteBuyTool } from './tools/trade/quote-buy/quote-buy.js';
+import { registerSetSaleFeeTool } from './tools/trade/set-sale-fee/set-sale-fee.js';
 import { registerFinalizeDeliveryTool } from './tools/transport/finalize/finalize-delivery.js';
 import { registerGetTransportStatusTool } from './tools/transport/get-status/get-transport-status.js';
 import { registerListMyTransportsTool } from './tools/transport/list-mine/list-my-transports.js';
@@ -89,6 +90,10 @@ const SERVER_INSTRUCTIONS = [
     'and act with `cpu_create_lot` (list goods), `cpu_buy_lot` (preview cost first with `cpu_quote_buy`), and `cpu_cancel_lot`.',
     'Each settles on-chain in a single tx and routes its goods through Transport, so they land only after you',
     '`cpu_finalize_delivery` on the returned deliveryId once it arrives; track your lots with `cpu_list_my_lots`.',
+    'A hub owner takes a per-resource sale fee (a share of each sale, carved out of the seller proceeds — the buyer',
+    'is unaffected); set your own hub rates with `cpu_set_sale_fee` and read others’ live rates in `cpu_get_markets`',
+    'and `cpu_get_cell`. When listing, the hub’s rate is frozen into your lot; cap it with `cpu_create_lot`’s',
+    '`maxSaleFeePercent` or omit it to accept the live rate.',
     'Check spendable $CPU and gas with `cpu_get_balance` before any paid action.',
     'A `cpu_withdraw` mints $CPU against an off-chain signature; if it is interrupted, re-run it with the same args',
     'to finish the pending one rather than starting a second.',
@@ -130,6 +135,7 @@ export async function createServer(context: AppContext): Promise<void> {
     registerCreateLotTool(server, context);
     registerBuyLotTool(server, context);
     registerCancelLotTool(server, context);
+    registerSetSaleFeeTool(server, context);
     registerQuoteSwapTool(server, context);
     registerSwapTool(server, context);
     registerQuoteMintTool(server, context);

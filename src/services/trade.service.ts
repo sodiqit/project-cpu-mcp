@@ -2,7 +2,7 @@ import { isAddress, parseEther, parseEventLogs, type Address, type Hash } from '
 
 import { decodeDeliveryScheduled } from './delivery.helpers.js';
 import { describeApiError } from './reveal.helpers.js';
-import { withDecimalMinPrice, withDecimalPrice } from './trade.helpers.js';
+import { enrichSaleFeeToleranceError, withDecimalMinPrice, withDecimalPrice } from './trade.helpers.js';
 import { TRANSPORT_MAX_FEE_BUFFER_PERCENT } from './transport.constants.js';
 import {
     type AppConfig,
@@ -20,14 +20,23 @@ import {
     type MarketsQuery,
     type QuoteBuyInput,
     type QuoteRouteParams,
+    type SetSaleFeeInput,
+    type SetSaleFeeResult,
     type TradeQuote,
     type TradeServiceOptions,
 } from './types.js';
 import type { ApiClient } from '../api/client.js';
-import { HttpStatus, type LotState, type LotView, type MarketResourceSummary } from '../api/types.js';
+import {
+    type ApiLotView,
+    type ApiMarketResourceSummary,
+    HttpStatus,
+    type LotState,
+    type LotView,
+    type MarketResourceSummary,
+} from '../api/types.js';
 import { TRADE_ABI } from '../contracts/trade.abi.js';
 import type { ILogger } from '../logger/types.js';
-import { cpuFromWei } from '../utils/format.utils.js';
+import { bpToPercent, cpuFromWei, percentToBp } from '../utils/format.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
 
 /**
@@ -68,13 +77,23 @@ export class TradeService {
         const transport = this.resolveTransport(config);
 
         const tokenIds = input.chain.map((tokenId) => BigInt(tokenId));
+        const hub = tokenIds[tokenIds.length - 1] as bigint;
         const value = BigInt(input.value);
         const price = parseEther(input.pricePerUnit);
+
+        // Seller tolerance in bp: an explicit cap converts straight through; when omitted, freeze the hub's
+        // current live rate as the ceiling, so a rate raised between this read and the listing reverts on-chain
+        // rather than silently locking a worse rate into the lot.
+        const maxSaleFeeBp =
+            input.maxSaleFeePercent !== null
+                ? percentToBp(input.maxSaleFeePercent)
+                : await this.tradeClient.getSaleFee({ trade, hub, res: input.resourceId });
 
         this.logger.info('creating lot', {
             resourceId: input.resourceId,
             value: input.value,
             pricePerUnit: input.pricePerUnit,
+            maxSaleFeeBp,
             network: config.network,
         });
 
@@ -87,14 +106,20 @@ export class TradeService {
         });
         const approveTxHash = await this.approveTransit(config, transport, maxFee);
 
-        const txHash = await this.tradeClient.createLot({
-            trade,
-            tokenIds,
-            res: input.resourceId,
-            value,
-            price,
-            maxFee,
-        });
+        let txHash: Hash;
+        try {
+            txHash = await this.tradeClient.createLot({
+                trade,
+                tokenIds,
+                res: input.resourceId,
+                value,
+                price,
+                maxSaleFeeBp,
+                maxFee,
+            });
+        } catch (error) {
+            throw enrichSaleFeeToleranceError(error);
+        }
         const confirmed = await this.contracts.confirm(txHash, 'Create lot');
 
         const created = this.firstFrom(
@@ -117,11 +142,51 @@ export class TradeService {
             resourceId: input.resourceId,
             value: input.value,
             pricePerUnit: input.pricePerUnit,
+            saleFeePercent: bpToPercent(created.args.saleFeeBp),
             deliveryId: scheduled.deliveryId.toString(),
             arrivalAt: Number(scheduled.arrivalAt),
             fee: cpuFromWei(feeWei.toString()),
             txHash: confirmed.txHash,
             approveTxHash,
+            status: confirmed.status,
+            blockNumber: confirmed.blockNumber,
+        };
+    }
+
+    async setSaleFee(input: SetSaleFeeInput): Promise<SetSaleFeeResult> {
+        const { config } = await this.ready();
+        const trade = this.resolveTrade(config);
+
+        // Percent → bp at the boundary; a sub-basis-point rate is rejected here before any gas is spent. Range
+        // and ownership are also enforced on-chain (SaleFeeTooHigh / NotHubOwner), which decode readably.
+        const feeBp = percentToBp(input.feePercent);
+
+        this.logger.info('setting sale fee', {
+            hubTokenId: input.hubTokenId,
+            resourceId: input.resourceId,
+            feeBp,
+            network: config.network,
+        });
+
+        const txHash = await this.tradeClient.setSaleFee({
+            trade,
+            hub: BigInt(input.hubTokenId),
+            res: input.resourceId,
+            feeBp,
+        });
+        const confirmed = await this.contracts.confirm(txHash, 'Set sale fee');
+
+        const changed = this.firstFrom(
+            parseEventLogs({ abi: TRADE_ABI, eventName: 'SaleFeeChanged', logs: confirmed.logs }),
+            trade,
+            'SaleFeeChanged',
+        );
+
+        return {
+            hubTokenId: changed.args.hubTokenId.toString(),
+            resourceId: Number(changed.args.resource),
+            feePercent: bpToPercent(changed.args.feeBp),
+            txHash: confirmed.txHash,
             status: confirmed.status,
             blockNumber: confirmed.blockNumber,
         };
@@ -176,6 +241,8 @@ export class TradeService {
             resourceId: lot.resourceId,
             value: input.value,
             sale: cpuFromWei(bought.args.sale.toString()),
+            hubFee: cpuFromWei(bought.args.hubFee.toString()),
+            burn: cpuFromWei(bought.args.burn.toString()),
             remaining: bought.args.remaining.toString(),
             fee: cpuFromWei(feeWei.toString()),
             deliveryId: scheduled.deliveryId.toString(),
@@ -287,7 +354,7 @@ export class TradeService {
             aroundTokenId: query.aroundTokenId,
             radius: query.radius,
         });
-        const response = await this.api.request<Array<MarketResourceSummary>>(`/api/v1/trade/markets${qs}`);
+        const response = await this.api.request<Array<ApiMarketResourceSummary>>(`/api/v1/trade/markets${qs}`);
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to load markets (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }
@@ -309,7 +376,7 @@ export class TradeService {
             aroundTokenId: query.aroundTokenId,
             radius: query.radius,
         });
-        const response = await this.api.request<Array<LotView>>(`/api/v1/trade/lots${qs}`);
+        const response = await this.api.request<Array<ApiLotView>>(`/api/v1/trade/lots${qs}`);
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to list lots (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }
@@ -318,7 +385,7 @@ export class TradeService {
 
     /** Public single-lot read. */
     async getLot(lotId: string): Promise<LotView> {
-        const response = await this.api.request<LotView>(`/api/v1/trade/lots/${lotId}`);
+        const response = await this.api.request<ApiLotView>(`/api/v1/trade/lots/${lotId}`);
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to get lot ${lotId} (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }
@@ -328,7 +395,7 @@ export class TradeService {
     /** The caller's lots across all lifecycle states (optionally filtered). */
     async listMyLots(state: LotState | null): Promise<Array<LotView>> {
         const qs = state === null ? '' : `?state=${state}`;
-        const response = await this.api.authenticatedRequest<Array<LotView>>(`/api/v1/trade/lots/mine${qs}`);
+        const response = await this.api.authenticatedRequest<Array<ApiLotView>>(`/api/v1/trade/lots/mine${qs}`);
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to list your lots (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }

@@ -52,7 +52,8 @@ function makeResponse(overrides: Partial<AppConfigResponse> = {}): AppConfigResp
             },
         ],
         reveal: { firstFree: true, reRevealCost: '1000' },
-        transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2 },
+        transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2, defaultMoveFeePerUnit: '0.1' },
+        trade: { saleBurnPercent: 1, maxSaleFeeBp: 5000 },
         ...overrides,
     };
 }
@@ -79,7 +80,26 @@ describe('AppConfigService', () => {
         expect(first.contracts.cell).toBe(CELL);
         expect(first.contracts.cpuHook).toBe(CPU_HOOK);
         expect(first.resources[5]).toBe('Iron');
+        expect(first.transport.defaultMoveFeePerUnit).toBe('0.1');
+        // The API's basis-point cap is exposed as a percent on the MCP surface.
+        expect(first.trade).toEqual({ saleBurnPercent: 1, maxSaleFeePercent: 50 });
         expect(second).toBe(first);
+    });
+
+    it('defaults the trade block and default move fee when an older API omits them', async () => {
+        const without = await makeService(
+            new FakeApi({
+                status: 200,
+                data: {
+                    network: 'ethereum',
+                    chainId: 1,
+                    contracts: { land: '', cpuToken: '', cpuHook: '', cell: '' },
+                    resources: {},
+                },
+            }),
+        ).load();
+        expect(without.trade).toEqual({ saleBurnPercent: 0, maxSaleFeePercent: 0 });
+        expect(without.transport.defaultMoveFeePerUnit).toBe('0');
     });
 
     it('passes recipes through and defaults them to an empty array when absent', async () => {
