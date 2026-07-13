@@ -9,6 +9,7 @@ coverage
 
 # local-only working notes
 docs/
+scratch/
 
 # Claude Code local-only
 .claude/settings.local.json
