@@ -184,10 +184,11 @@ export class MiningService {
                 `The ${name} on cell ${input.tokenId} is not an extractor and cannot mine — crafters run cpu_craft.`,
             );
         }
-        if (state.building.buildFinishAt !== null && state.building.buildFinishAt > this.mapReader.getServerTime()) {
+        const buildFinishAt = state.building.buildFinishAt;
+        if (buildFinishAt !== null && state.ready === false) {
             throw new Error(
                 `The ${view.name} on cell ${input.tokenId} is still under construction (ready ` +
-                    `${formatUnixSeconds(state.building.buildFinishAt)}); start mining once it finishes.`,
+                    `${formatUnixSeconds(buildFinishAt)}); start mining once it finishes.`,
             );
         }
         if (state.process !== null) {

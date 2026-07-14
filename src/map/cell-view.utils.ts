@@ -9,6 +9,7 @@ import {
     type RawCellProcessView,
     type RawCellResource,
     type RawCellResourceStorage,
+    type UnderivedCell,
 } from './types.js';
 
 const NO_HUB_MULTIPLIER = 1;
@@ -69,7 +70,7 @@ function deriveProcess(
     return { ...process, stalled };
 }
 
-export function toCell(raw: RawCell, serverTime: number, config: CellProjectionConfig): Cell {
+export function toCell(raw: UnderivedCell, serverTime: number, config: CellProjectionConfig): Cell {
     const ready = cellReady(raw, serverTime);
     const activeHub = ready === true && raw.building !== null && config.hubBuildingTypes.has(raw.building.type);
     const resources = raw.resources.map((resource) =>

@@ -232,3 +232,11 @@ describe('toCell raw facts', () => {
         expect(cell).not.toHaveProperty('activeHub');
     });
 });
+
+describe('toCell double derivation', () => {
+    it('refuses an already-derived cell, so squaring the storage multiplier cannot compile', () => {
+        const derived = toCell(rawCell({ building: hub(), resources: [resource()] }), FINISH_AT, config());
+        // @ts-expect-error a derived cell is not a projectable raw cell
+        expect(() => toCell(derived, FINISH_AT, config())).toBeDefined();
+    });
+});

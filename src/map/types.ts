@@ -114,6 +114,9 @@ export interface Cell extends Omit<RawCell, 'resources' | 'process'> {
     activeHub: boolean;
 }
 
+// eslint-disable-next-line no-restricted-syntax
+export type UnderivedCell = RawCell & { ready?: never; activeHub?: never };
+
 export interface CellProjectionConfig {
     hubStorageMultiplier: number;
     hubBuildingTypes: Set<string>;
