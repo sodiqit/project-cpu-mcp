@@ -1,5 +1,5 @@
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, type Address, type Hex, type Log } from 'viem';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BuildingType } from '../../api/types.js';
 import { CELL_ABI } from '../../contracts/cell.abi.js';
@@ -7,7 +7,7 @@ import { makeCell, makeResource, makeStorage } from '../../map/__tests__/fixture
 import { CellProcessKind, type RawCell } from '../../map/types.js';
 import { MiningService } from '../mining.service.js';
 import type { AppConfig } from '../types.js';
-import { CELL, makeCellHarness, makeConfig, WALLET_ADDRESS } from './service-fakes.js';
+import { CELL, DEFAULT_SERVER_TIME, makeCellHarness, makeConfig, WALLET_ADDRESS } from './service-fakes.js';
 
 function makeService(opts: Parameters<typeof makeCellHarness>[1] = {}) {
     return makeCellHarness((deps) => new MiningService(deps), opts);
@@ -241,6 +241,10 @@ function mineCell(overrides: Partial<RawCell> = {}): RawCell {
 }
 
 describe('MiningService.startMining', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
     it('starts extraction of a valid target on a ready extractor and decodes the cycle', async () => {
         const { service, contracts } = makeService({ cell: mineCell(), logs: [[startedLog(5, 180, 77n)]] });
 
@@ -282,13 +286,34 @@ describe('MiningService.startMining', () => {
     });
 
     it('rejects while the extractor is still under construction', async () => {
-        const future = Math.floor(Date.now() / 1000) + 3600;
+        const future = DEFAULT_SERVER_TIME + 3600;
         const cell = mineCell({ building: { type: BuildingType.Mine, buildFinishAt: future } });
         const { service, contracts } = makeService({ cell });
         await expect(service.startMining({ tokenId: '42', targetResourceId: 5 })).rejects.toThrow(
             /still under construction/i,
         );
         expect(contracts.sent).toHaveLength(0);
+    });
+
+    it('rejects against the map clock even when the local wall clock reads far past finish', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(4_000_000_000 * 1000));
+        const cell = mineCell({ building: { type: BuildingType.Mine, buildFinishAt: 1000 } });
+        const { service, contracts } = makeService({ cell, serverTime: 500 });
+        await expect(service.startMining({ tokenId: '42', targetResourceId: 5 })).rejects.toThrow(
+            /still under construction/i,
+        );
+        expect(contracts.sent).toHaveLength(0);
+    });
+
+    it('accepts against the map clock even when the local wall clock reads before finish', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(0));
+        const cell = mineCell({ building: { type: BuildingType.Mine, buildFinishAt: 1000 } });
+        const { service, contracts } = makeService({ cell, serverTime: 1000, logs: [[startedLog(5, 180, 77n)]] });
+        const result = await service.startMining({ tokenId: '42', targetResourceId: 5 });
+        expect(result.targetResourceId).toBe(5);
+        expect(contracts.sent).toHaveLength(1);
     });
 
     it('rejects when the building is a crafter, not an extractor', async () => {

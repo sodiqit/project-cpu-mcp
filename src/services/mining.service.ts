@@ -184,7 +184,7 @@ export class MiningService {
                 `The ${name} on cell ${input.tokenId} is not an extractor and cannot mine — crafters run cpu_craft.`,
             );
         }
-        if (state.building.buildFinishAt !== null && state.building.buildFinishAt > Math.floor(Date.now() / 1000)) {
+        if (state.building.buildFinishAt !== null && state.building.buildFinishAt > this.mapReader.getServerTime()) {
             throw new Error(
                 `The ${view.name} on cell ${input.tokenId} is still under construction (ready ` +
                     `${formatUnixSeconds(state.building.buildFinishAt)}); start mining once it finishes.`,

@@ -13,8 +13,7 @@ interface SaleFeeReader {
 
 async function enrichLiveSaleFee(mapReader: SaleFeeReader, row: MarketResourceSummary): Promise<EnrichedMarketSummary> {
     const cell = await mapReader.readRevealCell(row.hubTokenId);
-    const liveSaleFeePercent =
-        cell === null || cell.saleFeeOverrides === null ? null : (cell.saleFeeOverrides[row.resourceId] ?? 0);
+    const liveSaleFeePercent = cell !== null && cell.activeHub ? (cell.saleFeeOverrides?.[row.resourceId] ?? 0) : null;
     return { ...row, liveSaleFeePercent };
 }
 
