@@ -11,25 +11,21 @@ export enum CellProcessKind {
     Craft = 'craft',
 }
 
-// Warehouse occupancy for one resource. `used` = liquid + reserved (incoming transport + open lots),
-// all plain integer unit counts like `balance`/`deposit` (NOT wei). `cap === null` means uncapped
-// (e.g. WCPU) — never full. `stalled` is server-authoritative; do not recompute `used >= cap`.
-export const cellResourceStorageSchema = z.object({
+export const rawCellResourceStorageSchema = z.object({
     used: z.string(),
     cap: z.string().nullable(),
     reserved: z.object({
         incomingTransport: z.string(),
         lots: z.string(),
     }),
-    stalled: z.boolean(),
 });
 
-export const cellResourceSchema = z.object({
+export const rawCellResourceSchema = z.object({
     resourceId: z.number(),
     deposit: z.string(),
     balance: z.string(),
     strength: z.number().nullable().default(null),
-    storage: cellResourceStorageSchema.nullable().default(null),
+    storage: rawCellResourceStorageSchema.nullable().default(null),
 });
 
 export const cellBuildingViewSchema = z.object({
@@ -37,39 +33,35 @@ export const cellBuildingViewSchema = z.object({
     buildFinishAt: z.number().nullable(),
 });
 
-export const cellProcessMiningViewSchema = z.object({
+export const rawCellProcessMiningViewSchema = z.object({
     kind: z.literal(CellProcessKind.Mining),
     resource: z.number(),
     // An extractor mines in whole cycles: each `durationSec` cycle yields a fixed `batch` of units.
     durationSec: z.number(),
     batch: z.number(),
     startAt: z.number(),
-    // Mirrors the mined resource's warehouse: production halts while its box is full.
-    stalled: z.boolean().default(false),
 });
 
-export const cellProcessCraftViewSchema = z.object({
+export const rawCellProcessCraftViewSchema = z.object({
     kind: z.literal(CellProcessKind.Craft),
     recipeId: z.string(),
     batches: z.number(),
     claimedBatches: z.number(),
     durationSec: z.number(),
     startAt: z.number(),
-    // True when ANY output box is full — a batch is atomic, so one full output stalls the furnace.
-    stalled: z.boolean().default(false),
 });
 
-export const cellProcessViewSchema = z.discriminatedUnion('kind', [
-    cellProcessMiningViewSchema,
-    cellProcessCraftViewSchema,
+export const rawCellProcessViewSchema = z.discriminatedUnion('kind', [
+    rawCellProcessMiningViewSchema,
+    rawCellProcessCraftViewSchema,
 ]);
 
-export const cellSchema = z.object({
+export const rawCellSchema = z.object({
     tokenId: z.string(),
     owner: z.string(),
     revealCount: z.number(),
     revealPending: z.boolean().default(false),
-    resources: z.array(cellResourceSchema),
+    resources: z.array(rawCellResourceSchema),
     building: cellBuildingViewSchema.nullable().default(null),
     // Set after a demolish and cleared on rebuild. `demolishFinishAt > serverTime` ⇒ the plot is still in its
     // rebuild cooldown; `building` is null meanwhile, so this is the only signal the cell was just demolished.
@@ -80,8 +72,32 @@ export const cellSchema = z.object({
         .nullable()
         .default(null)
         .transform(saleFeeOverridesToPercent),
-    process: cellProcessViewSchema.nullable().default(null),
+    process: rawCellProcessViewSchema.nullable().default(null),
     updated: z.number(),
+});
+
+export const cellResourceStorageSchema = rawCellResourceStorageSchema.extend({ stalled: z.boolean() });
+
+export const cellResourceSchema = rawCellResourceSchema.extend({
+    storage: cellResourceStorageSchema.nullable().default(null),
+});
+
+export const cellProcessMiningViewSchema = rawCellProcessMiningViewSchema.extend({
+    stalled: z.boolean().default(false),
+});
+
+export const cellProcessCraftViewSchema = rawCellProcessCraftViewSchema.extend({
+    stalled: z.boolean().default(false),
+});
+
+export const cellProcessViewSchema = z.discriminatedUnion('kind', [
+    cellProcessMiningViewSchema,
+    cellProcessCraftViewSchema,
+]);
+
+export const cellSchema = rawCellSchema.extend({
+    resources: z.array(cellResourceSchema),
+    process: cellProcessViewSchema.nullable().default(null),
 });
 
 export const mapSnapshotResponseSchema = z.object({
@@ -89,6 +105,13 @@ export const mapSnapshotResponseSchema = z.object({
     version: z.number(),
     cells: z.array(cellSchema),
 });
+
+export type RawCellResource = z.infer<typeof rawCellResourceSchema>;
+export type RawCellResourceStorage = z.infer<typeof rawCellResourceStorageSchema>;
+export type RawCellProcessMiningView = z.infer<typeof rawCellProcessMiningViewSchema>;
+export type RawCellProcessCraftView = z.infer<typeof rawCellProcessCraftViewSchema>;
+export type RawCellProcessView = z.infer<typeof rawCellProcessViewSchema>;
+export type RawCell = z.infer<typeof rawCellSchema>;
 
 export type CellResource = z.infer<typeof cellResourceSchema>;
 export type CellResourceStorage = z.infer<typeof cellResourceStorageSchema>;
@@ -98,6 +121,33 @@ export type CellProcessCraftView = z.infer<typeof cellProcessCraftViewSchema>;
 export type CellProcessView = z.infer<typeof cellProcessViewSchema>;
 export type Cell = z.infer<typeof cellSchema>;
 export type MapSnapshotResponse = z.infer<typeof mapSnapshotResponseSchema>;
+
+export interface DerivedCellResourceStorage extends RawCellResourceStorage {
+    stalled: boolean;
+}
+
+export interface DerivedCellResource extends Omit<RawCellResource, 'storage'> {
+    storage: DerivedCellResourceStorage | null;
+}
+
+export type DerivedCellProcessMiningView = RawCellProcessMiningView & { stalled: boolean };
+
+export type DerivedCellProcessCraftView = RawCellProcessCraftView & { stalled: boolean };
+
+export type DerivedCellProcessView = DerivedCellProcessMiningView | DerivedCellProcessCraftView;
+
+export interface DerivedCell extends Omit<RawCell, 'resources' | 'process'> {
+    resources: Array<DerivedCellResource>;
+    process: DerivedCellProcessView | null;
+    ready: boolean | null;
+    activeHub: boolean;
+}
+
+export interface CellProjectionConfig {
+    hubStorageMultiplier: number;
+    hubBuildingTypes: Set<string>;
+    craftOutputsByRecipe: Record<string, Array<number>>;
+}
 
 export interface ParsedSnapshot {
     snapshot: MapSnapshotResponse;
