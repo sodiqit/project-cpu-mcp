@@ -1,8 +1,12 @@
 import { z } from 'zod';
 
-import { LotAvailability, LotSort, LotState } from '../../api/types.js';
+import { LotAvailability, LotSort, LotState, type MarketResourceSummary } from '../../api/types.js';
 import { MAX_ROUTE_RADIUS } from '../../geometry/constants.js';
 import { tokenIdSchema } from '../../geometry/types.js';
+
+export interface EnrichedMarketSummary extends MarketResourceSummary {
+    liveSaleFeePercent: number | null;
+}
 
 const positiveIntString = z
     .string()
@@ -23,6 +27,27 @@ export const createLotInputSchema = {
         .string()
         .regex(/^\d+(\.\d+)?$/)
         .describe('Asking price per unit in $CPU (positive decimal string, e.g. "0.5"). Must be > 0.'),
+    maxSaleFeePercent: z
+        .number()
+        .min(0)
+        .max(50)
+        .nullable()
+        .default(null)
+        .describe(
+            'Optional seller tolerance: the highest sale-fee percent (0–50) you accept the hub charging. Omit to ' +
+                "accept the hub's live rate at listing time — the listing then reverts if the owner raised the rate " +
+                'in the meantime, instead of freezing a worse rate into your lot.',
+        ),
+};
+
+export const setSaleFeeInputSchema = {
+    hubTokenId: tokenIdSchema.describe('The Hub cell token id whose sale-fee rate you are setting (you must own it).'),
+    resourceId: z.number().int().describe('Resource type id the rate applies to (one resource per call).'),
+    feePercent: z
+        .number()
+        .min(0)
+        .max(50)
+        .describe('New sale-fee rate as a percent, 0–50 (0.01 granularity, i.e. whole basis points). 0 = listed free.'),
 };
 
 export const buyLotInputSchema = {

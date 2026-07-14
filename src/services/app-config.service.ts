@@ -3,6 +3,7 @@ import type { ApiClient } from '../api/client.js';
 import { type AppConfigResponse, HttpStatus } from '../api/types.js';
 import type { Network } from '../config/types.js';
 import type { ILogger } from '../logger/types.js';
+import { bpToPercent } from '../utils/format.utils.js';
 
 export class AppConfigService implements IAppConfig {
     private readonly api: ApiClient;
@@ -51,7 +52,11 @@ export class AppConfigService implements IAppConfig {
                 demolishCost: b.demolishCost ?? { cpu: '0', inputs: [] },
             })),
             reveal: data.reveal ?? { firstFree: true, reRevealCost: '0' },
-            transport: data.transport,
+            transport: { ...data.transport, defaultMoveFeePerUnit: data.transport?.defaultMoveFeePerUnit ?? '0' },
+            trade: {
+                saleBurnPercent: data.trade?.saleBurnPercent ?? 0,
+                maxSaleFeePercent: bpToPercent(data.trade?.maxSaleFeeBp ?? 0),
+            },
         };
         this.cached = config;
         this.logger.info('chain config loaded', { chainId: config.chainId });

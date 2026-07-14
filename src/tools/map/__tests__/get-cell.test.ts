@@ -48,7 +48,8 @@ const inspection: CellInspection = {
         resources: [{ resourceId: 3, deposit: '100', balance: '0', strength: 3, storage: null }],
         building: { type: BuildingType.Mine, buildFinishAt: null },
         demolishFinishAt: null,
-        transitFeePerUnit: null,
+        transitFeeOverrides: { 3: '0.5' },
+        saleFeeOverrides: { 3: 2.5 },
         process: {
             kind: CellProcessKind.Mining,
             resource: 3,
@@ -74,6 +75,8 @@ describe('get_cell tool', () => {
                 resources: Array<{ resourceId: number; resourceName: string }>;
                 building: { type: string } | null;
                 process: { kind: string; resourceName: string } | null;
+                transitFeeOverrides: Record<number, string> | null;
+                saleFeeOverrides: Record<number, number> | null;
             };
             distanceFromMine: number;
         };
@@ -82,6 +85,8 @@ describe('get_cell tool', () => {
         expect(parsed.cell.resources[0]?.resourceName).toBe('Silica');
         expect(parsed.cell.building?.type).toBe('mine');
         expect(parsed.cell.process?.resourceName).toBe('Silica');
+        expect(parsed.cell.transitFeeOverrides).toEqual({ 3: '0.5' });
+        expect(parsed.cell.saleFeeOverrides).toEqual({ 3: 2.5 });
     });
 
     it('throws when the cell is not in the map', async () => {

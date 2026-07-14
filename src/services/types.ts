@@ -58,6 +58,13 @@ export interface AppConfig {
     /** First-reveal-free + re-reveal cost params. */
     reveal: RevealCostView;
     transport: TransportRoutingView;
+    /** Trade fee params, normalized to the MCP's percent surface. */
+    trade: TradeConfigView;
+}
+
+export interface TradeConfigView {
+    saleBurnPercent: number;
+    maxSaleFeePercent: number;
 }
 
 /** Provider of the chain config — implemented by AppConfigService; injected into RevealService. */
@@ -413,6 +420,7 @@ export interface RouteServiceOptions {
 export interface NextHopsInput {
     from: number;
     towards: number | null;
+    resourceId: number;
 }
 
 export interface NextHopView {
@@ -439,6 +447,7 @@ export interface NextHopsResult {
 export interface RouteNetworkInput {
     from: number | null;
     towards: number | null;
+    resourceId: number;
 }
 
 export interface NetworkNodeView {
@@ -549,6 +558,13 @@ export interface CreateLotInput {
     resourceId: number;
     value: string;
     pricePerUnit: string;
+    maxSaleFeePercent: number | null;
+}
+
+export interface SetSaleFeeInput {
+    hubTokenId: string;
+    resourceId: number;
+    feePercent: number;
 }
 
 export interface BuyLotInput {
@@ -607,7 +623,21 @@ export interface CreateLotParams {
     value: bigint;
     /** Asking price per unit, in $CPU wei. */
     price: bigint;
+    maxSaleFeeBp: number;
     maxFee: bigint;
+}
+
+export interface SetSaleFeeParams {
+    trade: Address;
+    hub: bigint;
+    res: number;
+    feeBp: number;
+}
+
+export interface GetSaleFeeParams {
+    trade: Address;
+    hub: bigint;
+    res: number;
 }
 
 export interface BuyLotParams {
@@ -625,11 +655,22 @@ export interface CancelLotParams {
     maxFee: bigint;
 }
 
-/** Sends the three Trade writes — implemented by TradeClient. Lot reads come from the game API. */
+/** Sends the Trade writes — implemented by TradeClient. Lot state comes from the game API. */
 export interface ITradeClient {
     createLot(params: CreateLotParams): Promise<Hash>;
     buy(params: BuyLotParams): Promise<Hash>;
     cancel(params: CancelLotParams): Promise<Hash>;
+    setSaleFee(params: SetSaleFeeParams): Promise<Hash>;
+    getSaleFee(params: GetSaleFeeParams): Promise<number>;
+}
+
+export interface SetSaleFeeResult {
+    hubTokenId: string;
+    resourceId: number;
+    feePercent: number;
+    txHash: Hash;
+    status: TxStatus;
+    blockNumber: string;
 }
 
 /**
@@ -642,6 +683,7 @@ export interface CreateLotResult {
     resourceId: number;
     value: string;
     pricePerUnit: string;
+    saleFeePercent: number;
     deliveryId: string;
     arrivalAt: number;
     /** Transit fee quoted for the routing, in $CPU (decimal). */
@@ -660,6 +702,8 @@ export interface BuyLotResult {
     value: string;
     /** value × pricePerUnit, in $CPU (decimal). */
     sale: string;
+    hubFee: string;
+    burn: string;
     /** Units left on the lot after this buy (0 = sold out). */
     remaining: string;
     /** Transit fee paid, in $CPU (decimal). */

@@ -159,6 +159,12 @@ export interface TransportRoutingView {
     moveRadius: number;
     hubRadius: number;
     moveTimePerCellSec: number;
+    defaultMoveFeePerUnit: string;
+}
+
+export interface TradeFeeView {
+    saleBurnPercent: number;
+    maxSaleFeeBp: number;
 }
 
 /** `GET /api/v1/config?network=` response — chainId + contract addresses for one network. */
@@ -174,6 +180,7 @@ export interface AppConfigResponse {
     /** First-reveal-free + re-reveal cost params. */
     reveal: RevealCostView;
     transport: TransportRoutingView;
+    trade: TradeFeeView;
 }
 
 /** The building types a cell can hold — 6 tier-1 extractors, tier-2..5 crafters, and the Hub. */
@@ -250,7 +257,21 @@ export enum LotSort {
     Nearest = 'nearest',
 }
 
-/** A lot row from `GET /api/v1/trade/lots`, `/trade/lots/:id`, `/trade/lots/mine`. */
+export interface ApiLotView {
+    id: string;
+    hubTokenId: string;
+    sellerAddress: string;
+    resourceId: number;
+    listed: string;
+    remaining: string;
+    pricePerUnit: string;
+    saleFeeBp: number;
+    state: LotState;
+    distanceFromAnchor: number | null;
+    createdAt: number;
+    updated: number;
+}
+
 export interface LotView {
     id: string;
     hubTokenId: string;
@@ -258,30 +279,32 @@ export interface LotView {
     resourceId: number;
     listed: string;
     remaining: string;
-    /** Price per unit in $CPU. The game API sends wei; TradeService normalizes it to a decimal string (e.g. "2"). */
     pricePerUnit: string;
-    /** Hub trade-fee % snapshot at listing — currently always 0 (placeholder; not applied to fees). */
-    tradeFeePct: number;
+    saleFeePercent: number;
     state: LotState;
-    /** Grid steps from the zone anchor cell when a zone is supplied, else `null`. */
     distanceFromAnchor: number | null;
-    /** Listing time, unix seconds. */
     createdAt: number;
-    /** Last projection update, unix seconds. */
     updated: number;
 }
 
-/** One `GET /api/v1/trade/markets` row per `(hub, resource)` — the compact scout view. */
+export interface ApiMarketResourceSummary {
+    hubTokenId: string;
+    resourceId: number;
+    openLots: number;
+    openRemaining: string;
+    minPricePerUnit: string | null;
+    incomingLots: number;
+    incomingRemaining: string;
+    distanceFromAnchor: number | null;
+}
+
 export interface MarketResourceSummary {
     hubTokenId: string;
     resourceId: number;
     openLots: number;
     openRemaining: string;
-    /** Lowest open-lot price per unit in $CPU (TradeService normalizes the API's wei to decimal), or null when no open lots. */
     minPricePerUnit: string | null;
-    tradeFeePct: number | null;
     incomingLots: number;
     incomingRemaining: string;
-    /** Grid steps from the zone anchor cell when a zone is supplied, else `null`. */
     distanceFromAnchor: number | null;
 }

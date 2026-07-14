@@ -1,6 +1,14 @@
 import { encodeFunctionData, type Hash } from 'viem';
 
-import type { BuyLotParams, CancelLotParams, CreateLotParams, ITradeClient, TradeClientOptions } from './types.js';
+import type {
+    BuyLotParams,
+    CancelLotParams,
+    CreateLotParams,
+    GetSaleFeeParams,
+    ITradeClient,
+    SetSaleFeeParams,
+    TradeClientOptions,
+} from './types.js';
 import { TRADE_ABI } from '../contracts/trade.abi.js';
 import type { ILogger } from '../logger/types.js';
 import type { IContractClient } from '../wallet/types.js';
@@ -18,13 +26,14 @@ export class TradeClient implements ITradeClient {
         const data = encodeFunctionData({
             abi: TRADE_ABI,
             functionName: 'createLot',
-            args: [params.tokenIds, params.res, params.value, params.price, params.maxFee],
+            args: [params.tokenIds, params.res, params.value, params.price, params.maxSaleFeeBp, params.maxFee],
         });
         this.logger.info('submitting create lot', {
             trade: params.trade,
             res: params.res,
             value: params.value.toString(),
             priceWei: params.price.toString(),
+            maxSaleFeeBp: params.maxSaleFeeBp,
             maxFeeWei: params.maxFee.toString(),
         });
         return this.contracts.send({ to: params.trade, data, value: null }, TRADE_ABI);
@@ -57,5 +66,30 @@ export class TradeClient implements ITradeClient {
             maxFeeWei: params.maxFee.toString(),
         });
         return this.contracts.send({ to: params.trade, data, value: null }, TRADE_ABI);
+    }
+
+    async setSaleFee(params: SetSaleFeeParams): Promise<Hash> {
+        const data = encodeFunctionData({
+            abi: TRADE_ABI,
+            functionName: 'setSaleFee',
+            args: [params.hub, params.res, params.feeBp],
+        });
+        this.logger.info('submitting set sale fee', {
+            trade: params.trade,
+            hub: params.hub.toString(),
+            res: params.res,
+            feeBp: params.feeBp,
+        });
+        return this.contracts.send({ to: params.trade, data, value: null }, TRADE_ABI);
+    }
+
+    async getSaleFee(params: GetSaleFeeParams): Promise<number> {
+        const feeBp = await this.contracts.read<number>({
+            address: params.trade,
+            abi: TRADE_ABI,
+            functionName: 'getSaleFee',
+            args: [params.hub, params.res],
+        });
+        return Number(feeBp);
     }
 }

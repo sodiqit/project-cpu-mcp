@@ -16,6 +16,23 @@ export function nodeRadius(node: RouteNode, moveRadius: number, hubRadius: numbe
     return node.isHub ? hubRadius : moveRadius;
 }
 
+export function effectiveTransitFee(
+    overrides: Record<number, string> | null,
+    resourceId: number,
+    defaultMoveFeePerUnit: string,
+): string {
+    return overrides?.[resourceId] ?? defaultMoveFeePerUnit;
+}
+
+export function waypointTransitFee(
+    node: RouteNode,
+    overrides: Record<number, string> | null,
+    resourceId: number,
+    defaultMoveFeePerUnit: string,
+): string | null {
+    return !node.isOwn && node.isHub ? effectiveTransitFee(overrides, resourceId, defaultMoveFeePerUnit) : null;
+}
+
 export function pairReach(a: RouteNode, b: RouteNode, moveRadius: number, hubRadius: number): number {
     return nodeRadius(a, moveRadius, hubRadius) + nodeRadius(b, moveRadius, hubRadius) - 1;
 }

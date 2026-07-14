@@ -15,6 +15,7 @@ export function registerCreateLotTool(server: McpServer, context: AppContext): v
                 resourceId: args.resourceId,
                 value: args.value,
                 pricePerUnit: args.pricePerUnit,
+                maxSaleFeePercent: args.maxSaleFeePercent,
             });
             const { resources } = await context.appConfig.load();
 

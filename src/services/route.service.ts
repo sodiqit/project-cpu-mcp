@@ -1,5 +1,12 @@
 import { DISTANCE_SCAN_CAP, NEXT_HOPS_NOTE, ROUTE_NETWORK_NOTE } from './route.constants.js';
-import { componentLabels, distancesFrom, networkEdges, reachableWaypoints, type RouteNode } from './route.utils.js';
+import {
+    componentLabels,
+    distancesFrom,
+    networkEdges,
+    reachableWaypoints,
+    waypointTransitFee,
+    type RouteNode,
+} from './route.utils.js';
 import type {
     IAppConfig,
     NetworkNodeView,
@@ -77,7 +84,12 @@ export class RouteService {
                 isOwn: node.isOwn,
                 isHub: node.isHub,
                 owner: cell.owner,
-                transitFeePerUnit: !node.isOwn && node.isHub ? (cell.transitFeePerUnit ?? '0') : null,
+                transitFeePerUnit: waypointTransitFee(
+                    node,
+                    cell.transitFeeOverrides,
+                    input.resourceId,
+                    routing.defaultMoveFeePerUnit,
+                ),
                 distanceToTarget: towards === null ? null : (toTarget.get(Number(node.tokenId)) ?? null),
             };
         });
@@ -144,7 +156,12 @@ export class RouteService {
                     isOwn: node.isOwn,
                     isHub: node.isHub,
                     owner: cell.owner,
-                    transitFeePerUnit: !node.isOwn && node.isHub ? (cell.transitFeePerUnit ?? '0') : null,
+                    transitFeePerUnit: waypointTransitFee(
+                        node,
+                        cell.transitFeeOverrides,
+                        input.resourceId,
+                        routing.defaultMoveFeePerUnit,
+                    ),
                     distFromSource: fromSource === null ? null : (fromSource.get(Number(node.tokenId)) ?? null),
                     distToTarget: toTarget === null ? null : (toTarget.get(Number(node.tokenId)) ?? null),
                     component: components.get(node.tokenId) as number,

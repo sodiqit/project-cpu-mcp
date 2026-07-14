@@ -2,7 +2,7 @@ import { encodeAbiParameters, encodeEventTopics, formatEther, parseEther, type H
 import { describe, expect, it } from 'vitest';
 
 import type { ApiClient } from '../../api/client.js';
-import { LotState, type LotView } from '../../api/types.js';
+import { type ApiLotView, LotState } from '../../api/types.js';
 import { TRADE_ABI } from '../../contracts/trade.abi.js';
 import { TRANSPORT_ABI } from '../../contracts/transport.abi.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
@@ -19,11 +19,13 @@ import type {
     CancelLotParams,
     CreateLotParams,
     FinalizeParams,
+    GetSaleFeeParams,
     ITradeClient,
     ITransportClient,
     MoveParams,
     QuoteRouteParams,
     RouteQuote,
+    SetSaleFeeParams,
 } from '../types.js';
 import {
     APPROVE_HASH,
@@ -41,15 +43,17 @@ import {
 const CREATE_HASH = `0x${'1'.repeat(64)}` as Hash;
 const BUY_HASH = `0x${'2'.repeat(64)}` as Hash;
 const CANCEL_HASH = `0x${'3'.repeat(64)}` as Hash;
+const SET_FEE_HASH = `0x${'4'.repeat(64)}` as Hash;
 
 const CREATE_INPUT = {
     chain: [72, 73],
     resourceId: 3,
     value: '100',
     pricePerUnit: '0.5',
+    maxSaleFeePercent: null,
 };
 
-function lotView(over: Partial<LotView> = {}): LotView {
+function lotView(over: Partial<ApiLotView> = {}): ApiLotView {
     return {
         id: '7',
         hubTokenId: '20',
@@ -58,7 +62,7 @@ function lotView(over: Partial<LotView> = {}): LotView {
         listed: '100',
         remaining: '100',
         pricePerUnit: parseEther('0.5').toString(),
-        tradeFeePct: 0,
+        saleFeeBp: 250,
         state: LotState.Open,
         distanceFromAnchor: null,
         createdAt: 1700,
@@ -81,7 +85,7 @@ function tradeLog(topics: unknown, data: unknown): Log {
     } as unknown as Log;
 }
 
-function createdLog(args: { lotId: bigint; hub: bigint }): Log {
+function createdLog(args: { lotId: bigint; hub: bigint; saleFeeBp: number }): Log {
     const topics = encodeEventTopics({
         abi: TRADE_ABI,
         eventName: 'LotCreated',
@@ -92,13 +96,21 @@ function createdLog(args: { lotId: bigint; hub: bigint }): Log {
             { name: 'resource', type: 'uint16' },
             { name: 'value', type: 'uint128' },
             { name: 'pricePerUnit', type: 'uint128' },
+            { name: 'saleFeeBp', type: 'uint16' },
         ],
-        [3, 100n, parseEther('0.5')],
+        [3, 100n, parseEther('0.5'), args.saleFeeBp],
     );
     return tradeLog(topics, data);
 }
 
-function boughtLog(args: { lotId: bigint; value: bigint; remaining: bigint; sale: bigint }): Log {
+function boughtLog(args: {
+    lotId: bigint;
+    value: bigint;
+    remaining: bigint;
+    sale: bigint;
+    hubFee: bigint;
+    burn: bigint;
+}): Log {
     const topics = encodeEventTopics({
         abi: TRADE_ABI,
         eventName: 'LotBought',
@@ -109,8 +121,10 @@ function boughtLog(args: { lotId: bigint; value: bigint; remaining: bigint; sale
             { name: 'value', type: 'uint128' },
             { name: 'remaining', type: 'uint128' },
             { name: 'sale', type: 'uint256' },
+            { name: 'hubFee', type: 'uint256' },
+            { name: 'burn', type: 'uint256' },
         ],
-        [args.value, args.remaining, args.sale],
+        [args.value, args.remaining, args.sale, args.hubFee, args.burn],
     );
     return tradeLog(topics, data);
 }
@@ -122,6 +136,16 @@ function cancelledLog(args: { lotId: bigint; returned: bigint }): Log {
         args: { lotId: args.lotId, seller: WALLET_ADDRESS },
     });
     const data = encodeAbiParameters([{ name: 'returned', type: 'uint128' }], [args.returned]);
+    return tradeLog(topics, data);
+}
+
+function saleFeeChangedLog(args: { hub: bigint; resource: number; feeBp: number }): Log {
+    const topics = encodeEventTopics({
+        abi: TRADE_ABI,
+        eventName: 'SaleFeeChanged',
+        args: { hubTokenId: args.hub, resource: args.resource },
+    });
+    const data = encodeAbiParameters([{ name: 'feeBp', type: 'uint16' }], [args.feeBp]);
     return tradeLog(topics, data);
 }
 
@@ -178,8 +202,17 @@ class FakeTradeClient implements ITradeClient {
     public readonly creates: Array<CreateLotParams> = [];
     public readonly buys: Array<BuyLotParams> = [];
     public readonly cancels: Array<CancelLotParams> = [];
+    public readonly saleFees: Array<SetSaleFeeParams> = [];
+    public readonly saleFeeReads: Array<GetSaleFeeParams> = [];
+    constructor(
+        private readonly liveSaleFeeBp: number = 0,
+        private readonly createError: Error | null = null,
+    ) {}
     async createLot(p: CreateLotParams): Promise<Hash> {
         this.creates.push(p);
+        if (this.createError !== null) {
+            throw this.createError;
+        }
         return CREATE_HASH;
     }
     async buy(p: BuyLotParams): Promise<Hash> {
@@ -189,6 +222,14 @@ class FakeTradeClient implements ITradeClient {
     async cancel(p: CancelLotParams): Promise<Hash> {
         this.cancels.push(p);
         return CANCEL_HASH;
+    }
+    async setSaleFee(p: SetSaleFeeParams): Promise<Hash> {
+        this.saleFees.push(p);
+        return SET_FEE_HASH;
+    }
+    async getSaleFee(p: GetSaleFeeParams): Promise<number> {
+        this.saleFeeReads.push(p);
+        return this.liveSaleFeeBp;
     }
 }
 
@@ -222,6 +263,8 @@ type Options = Partial<{
     walletChainId: number;
     config: ReturnType<typeof makeConfig>;
     response: { status: number; data: unknown };
+    liveSaleFeeBp: number;
+    createError: Error | null;
 }>;
 
 function makeTrade(opts: Options = {}): {
@@ -237,7 +280,7 @@ function makeTrade(opts: Options = {}): {
     const wallet = new FakeWallet(opts.walletChainId ?? 1);
     const allowance = new FakeAllowance(opts.approve ?? null);
     const contracts = new FakeContractClient(opts.confirmLogs ?? [], opts.reverts ?? false);
-    const tradeClient = new FakeTradeClient();
+    const tradeClient = new FakeTradeClient(opts.liveSaleFeeBp ?? 0, opts.createError ?? null);
     const transportClient = new FakeTransportClient(
         opts.quote ?? { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
         opts.quoteError ?? null,
@@ -256,14 +299,16 @@ function makeTrade(opts: Options = {}): {
 }
 
 describe('TradeService.createLot', () => {
-    it('lists an own-cell route with no $CPU fee and decodes the lot + delivery', async () => {
+    it('lists an own-cell route, freezes the live rate as tolerance, and decodes the frozen fee', async () => {
         const h = makeTrade({
             quote: { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
-            confirmLogs: [createdLog({ lotId: 7n, hub: 20n }), scheduledLog(123n, 1704n)],
+            liveSaleFeeBp: 250,
+            confirmLogs: [createdLog({ lotId: 7n, hub: 20n, saleFeeBp: 250 }), scheduledLog(123n, 1704n)],
         });
 
         const result = await h.service.createLot(CREATE_INPUT);
 
+        expect(h.tradeClient.saleFeeReads[0]).toMatchObject({ trade: TRADE, hub: 73n, res: 3 });
         expect(h.allowance.calls).toHaveLength(0);
         expect(h.tradeClient.creates).toHaveLength(1);
         expect(h.tradeClient.creates[0]).toMatchObject({
@@ -271,26 +316,52 @@ describe('TradeService.createLot', () => {
             res: 3,
             value: 100n,
             price: parseEther('0.5'),
+            maxSaleFeeBp: 250,
             maxFee: 0n,
         });
         expect(result.lotId).toBe('7');
         expect(result.hubTokenId).toBe('20');
-        expect(result.value).toBe('100');
-        expect(result.pricePerUnit).toBe('0.5');
+        expect(result.saleFeePercent).toBe(2.5);
         expect(result.deliveryId).toBe('123');
-        expect(result.arrivalAt).toBe(1704);
         expect(result.fee).toBe('0');
-        expect(result.approveTxHash).toBeNull();
         expect(result.txHash).toBe(CREATE_HASH);
-        expect(result.blockNumber).toBe('100');
-        expect(result.status).toBe(TxStatus.Success);
+    });
+
+    it('passes an explicit tolerance through and does not read the live rate', async () => {
+        const h = makeTrade({
+            liveSaleFeeBp: 999,
+            confirmLogs: [createdLog({ lotId: 7n, hub: 20n, saleFeeBp: 100 }), scheduledLog(123n, 1704n)],
+        });
+
+        const result = await h.service.createLot({ ...CREATE_INPUT, maxSaleFeePercent: 5 });
+
+        expect(h.tradeClient.saleFeeReads).toHaveLength(0);
+        expect(h.tradeClient.creates[0]?.maxSaleFeeBp).toBe(500);
+        expect(result.saleFeePercent).toBe(1);
+    });
+
+    it('rejects a sub-basis-point tolerance before sending', async () => {
+        const h = makeTrade();
+        await expect(h.service.createLot({ ...CREATE_INPUT, maxSaleFeePercent: 0.005 })).rejects.toThrow(
+            /basis point/i,
+        );
+        expect(h.tradeClient.creates).toHaveLength(0);
+    });
+
+    it('rewrites a SaleFeeExceedsMax revert into a re-read-the-rate hint', async () => {
+        const h = makeTrade({
+            createError: new Error('Execution reverted: SaleFeeExceedsMax()'),
+        });
+        await expect(h.service.createLot({ ...CREATE_INPUT, maxSaleFeePercent: 1 })).rejects.toThrow(
+            /re-read the hub's current rate/i,
+        );
     });
 
     it('approves the buffered transit fee to Transport for a foreign-hub route', async () => {
         const h = makeTrade({
             quote: { totalFee: 1_000n, totalDistance: 4n, arrivalAt: 1704n },
             approve: APPROVE_HASH,
-            confirmLogs: [createdLog({ lotId: 7n, hub: 20n }), scheduledLog(123n, 1704n)],
+            confirmLogs: [createdLog({ lotId: 7n, hub: 20n, saleFeeBp: 0 }), scheduledLog(123n, 1704n)],
         });
 
         const result = await h.service.createLot(CREATE_INPUT);
@@ -322,8 +393,41 @@ describe('TradeService.createLot', () => {
     });
 });
 
+describe('TradeService.setSaleFee', () => {
+    it('converts percent to bp, sends the write, and decodes the confirmed rate', async () => {
+        const h = makeTrade({
+            confirmLogs: [saleFeeChangedLog({ hub: 20n, resource: 3, feeBp: 250 })],
+        });
+
+        const result = await h.service.setSaleFee({ hubTokenId: '20', resourceId: 3, feePercent: 2.5 });
+
+        expect(h.allowance.calls).toHaveLength(0);
+        expect(h.tradeClient.saleFees[0]).toMatchObject({ trade: TRADE, hub: 20n, res: 3, feeBp: 250 });
+        expect(result.hubTokenId).toBe('20');
+        expect(result.resourceId).toBe(3);
+        expect(result.feePercent).toBe(2.5);
+        expect(result.txHash).toBe(SET_FEE_HASH);
+        expect(result.status).toBe(TxStatus.Success);
+    });
+
+    it('accepts a free (0%) rate', async () => {
+        const h = makeTrade({ confirmLogs: [saleFeeChangedLog({ hub: 20n, resource: 3, feeBp: 0 })] });
+        const result = await h.service.setSaleFee({ hubTokenId: '20', resourceId: 3, feePercent: 0 });
+        expect(h.tradeClient.saleFees[0]?.feeBp).toBe(0);
+        expect(result.feePercent).toBe(0);
+    });
+
+    it('rejects a sub-basis-point rate before sending', async () => {
+        const h = makeTrade();
+        await expect(h.service.setSaleFee({ hubTokenId: '20', resourceId: 3, feePercent: 0.005 })).rejects.toThrow(
+            /basis point/i,
+        );
+        expect(h.tradeClient.saleFees).toHaveLength(0);
+    });
+});
+
 describe('TradeService.buyLot', () => {
-    it('reads the lot, approves both the sale and the transit fee, and decodes the buy', async () => {
+    it('reads the lot, approves both the sale and the transit fee, and decodes hubFee/burn', async () => {
         const h = makeTrade({
             response: {
                 status: 200,
@@ -332,7 +436,14 @@ describe('TradeService.buyLot', () => {
             quote: { totalFee: 1_000n, totalDistance: 4n, arrivalAt: 1704n },
             approve: APPROVE_HASH,
             confirmLogs: [
-                boughtLog({ lotId: 7n, value: 10n, remaining: 90n, sale: parseEther('5') }),
+                boughtLog({
+                    lotId: 7n,
+                    value: 10n,
+                    remaining: 90n,
+                    sale: parseEther('5'),
+                    hubFee: parseEther('0.125'),
+                    burn: parseEther('0.05'),
+                }),
                 scheduledLog(123n, 1704n),
             ],
         });
@@ -351,6 +462,8 @@ describe('TradeService.buyLot', () => {
         ]);
         expect(h.tradeClient.buys[0]).toMatchObject({ trade: TRADE, lotId: 7n, value: 10n, maxFee: 1_100n });
         expect(result.sale).toBe('5');
+        expect(result.hubFee).toBe('0.125');
+        expect(result.burn).toBe('0.05');
         expect(result.remaining).toBe('90');
         expect(result.fee).toBe(formatEther(1_000n));
         expect(result.deliveryId).toBe('123');
@@ -368,7 +481,7 @@ describe('TradeService.buyLot', () => {
             quote: { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
             approve: APPROVE_HASH,
             confirmLogs: [
-                boughtLog({ lotId: 7n, value: 10n, remaining: 90n, sale: parseEther('5') }),
+                boughtLog({ lotId: 7n, value: 10n, remaining: 90n, sale: parseEther('5'), hubFee: 0n, burn: 0n }),
                 scheduledLog(123n, 1704n),
             ],
         });
@@ -470,14 +583,25 @@ describe('TradeService.quoteBuy', () => {
 });
 
 describe('TradeService reads', () => {
-    it('listMyLots hits the authenticated mine endpoint', async () => {
-        const h = makeTrade({ response: { status: 200, data: [lotView({ id: '1' })] } });
+    it('listMyLots hits the authenticated mine endpoint and converts the frozen fee to percent', async () => {
+        const h = makeTrade({ response: { status: 200, data: [lotView({ id: '1', saleFeeBp: 250 })] } });
 
         const result = await h.service.listMyLots(null);
 
         expect(h.api.calls[0]?.path).toBe('/api/v1/trade/lots/mine');
         expect(h.api.calls[0]?.authenticated).toBe(true);
         expect(result[0]?.id).toBe('1');
+        expect(result[0]?.saleFeePercent).toBe(2.5);
+    });
+
+    it("drops the API's legacy tradeFeePct placeholder from lot output", async () => {
+        const raw = { ...lotView({ id: '1' }), tradeFeePct: 0 } as ApiLotView;
+        const h = makeTrade({ response: { status: 200, data: [raw] } });
+
+        const result = await h.service.listMyLots(null);
+
+        expect(result[0]).not.toHaveProperty('tradeFeePct');
+        expect(result[0]).toHaveProperty('saleFeePercent');
     });
 
     it('listLots hits the public lots endpoint', async () => {
@@ -500,5 +624,6 @@ describe('TradeService reads', () => {
         expect(h.api.calls[0]?.path.startsWith('/api/v1/trade/lots')).toBe(true);
         expect(h.api.calls[0]?.authenticated).toBe(false);
         expect(result).toHaveLength(1);
+        expect(result[0]?.pricePerUnit).toBe('0.5');
     });
 });

@@ -13,7 +13,8 @@ export const TRANSPORT_DESCRIPTION = [
 
 export const ROUTE_NETWORK_DESCRIPTION = [
     'The road map of the world (read-only): every legal waypoint — your revealed cells and all Hubs — as graph',
-    'nodes (owner, hub flag, per-unit transit fee, pos, connected-component id) plus every hop the contract',
+    'nodes (owner, hub flag, the exact per-unit transit fee for your `resourceId` cargo, pos, connected-component',
+    'id) plus every hop the contract',
     'would accept as edges (within radius(a)+radius(b)−1 grid steps; default balance: own↔own 1 = adjacent',
     'only, own↔hub 3, hub↔hub 5). Foreign cells are never nodes: even a single foreign cell between two plain',
     'cells is a WALL — only a Hub reaches across. Different component ids show exactly that — no chain crosses',
@@ -30,8 +31,8 @@ export const NEXT_HOPS_DESCRIPTION = [
     'and all Hubs — within one hop under the reach rule: hop ≤ radius(from)+radius(to)−1 grid steps (default',
     'balance: own↔own 1 = adjacent only, own↔hub 3, hub↔hub 5). Foreign cells are never waypoints, so even a',
     'single foreign cell between two plain cells is a WALL — only a Hub reaches across; empty `hops` means',
-    'goods can only be hauled up to here. Facts per candidate: hop distance, owner, hub flag, per-unit transit',
-    'fee, and — with `towards` —',
+    'goods can only be hauled up to here. Facts per candidate: hop distance, owner, hub flag, the exact per-unit',
+    'transit fee for your `resourceId` cargo, and — with `towards` —',
     'the remaining grid distance (a compass, not a route). Planning is YOUR job: pick each hop yourself (cheap',
     'vs short vs whose hub you trust), chain them into `path`, and verify with cpu_quote_transport. To break a',
     'wall: build a border Hub (it still needs an eligible landing cell within reach on the far side), buy land',

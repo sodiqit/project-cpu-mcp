@@ -4,6 +4,7 @@ import type { MapStore } from './store.js';
 import { BuildingType } from '../api/types.js';
 import type { CellCoord } from '../geometry/types.js';
 import type { ILogger } from '../logger/types.js';
+import { saleFeeOverridesToPercent } from '../utils/format.utils.js';
 
 export enum CellProcessKind {
     Mining = 'mining',
@@ -73,7 +74,12 @@ export const cellStateSchema = z.object({
     // Set after a demolish and cleared on rebuild. `demolishFinishAt > serverTime` ⇒ the plot is still in its
     // rebuild cooldown; `building` is null meanwhile, so this is the only signal the cell was just demolished.
     demolishFinishAt: z.number().nullable().default(null),
-    transitFeePerUnit: z.string().nullable().default(null),
+    transitFeeOverrides: z.record(z.coerce.number(), z.string()).nullable().default(null),
+    saleFeeOverrides: z
+        .record(z.coerce.number(), z.number().int())
+        .nullable()
+        .default(null)
+        .transform(saleFeeOverridesToPercent),
     process: cellProcessViewSchema.nullable().default(null),
     updated: z.number(),
 });

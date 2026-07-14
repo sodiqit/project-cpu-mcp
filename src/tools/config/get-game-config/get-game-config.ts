@@ -21,9 +21,13 @@ export function registerGetGameConfigTool(server: McpServer, context: AppContext
             const reveal = config.reveal.firstFree
                 ? `first reveal free, re-reveal ${config.reveal.reRevealCost} $CPU`
                 : `reveal ${config.reveal.reRevealCost} $CPU`;
+            const trade =
+                `${config.trade.saleBurnPercent}% sale burn, sale-fee cap ${config.trade.maxSaleFeePercent}%, ` +
+                `default transit fee ${config.transport.defaultMoveFeePerUnit} $CPU/u`;
             const header =
                 `Network ${config.network} (chainId ${config.chainId}). ${config.recipes.length} recipe(s) ` +
-                `(see list_recipes). Buildings: ${buildings}. Reveal: ${reveal}. Resources: ${resourceList}. ` +
+                `(see list_recipes). Buildings: ${buildings}. Reveal: ${reveal}. Trade: ${trade}. ` +
+                `Resources: ${resourceList}. ` +
                 `Contracts — land ${config.contracts.land}, $CPU ${config.contracts.cpuToken}, ` +
                 `cpuHook ${config.contracts.cpuHook}, cell ${config.contracts.cell}, ` +
                 `transport ${config.contracts.transport}.`;

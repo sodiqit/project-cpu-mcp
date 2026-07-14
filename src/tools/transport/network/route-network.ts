@@ -32,7 +32,11 @@ export function registerRouteNetworkTool(server: McpServer, context: AppContext)
         'cpu_route_network',
         { description: ROUTE_NETWORK_DESCRIPTION, inputSchema: routeNetworkInputSchema },
         async (args) => {
-            const result = await context.route.network({ from: args.from, towards: args.towards });
+            const result = await context.route.network({
+                from: args.from,
+                towards: args.towards,
+                resourceId: args.resourceId,
+            });
 
             return {
                 content: [
