@@ -2,13 +2,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { GET_MARKETS_DESCRIPTION } from './constants.js';
 import type { MarketResourceSummary } from '../../../api/types.js';
-import type { CellState } from '../../../map/types.js';
+import type { Cell } from '../../../map/types.js';
 import type { AppContext } from '../../../types.js';
 import { summarizeMarkets } from '../format.utils.js';
 import { marketsInputSchema, type EnrichedMarketSummary } from '../types.js';
 
 interface SaleFeeReader {
-    readRevealCell(tokenId: string): CellState | null;
+    readRevealCell(tokenId: string): Cell | null;
 }
 
 function enrichLiveSaleFee(mapReader: SaleFeeReader, row: MarketResourceSummary): EnrichedMarketSummary {

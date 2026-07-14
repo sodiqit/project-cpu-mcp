@@ -1,4 +1,4 @@
-import type { CellState, ISocketClient, SocketLifecycleHandlers } from '../map/types.js';
+import type { Cell, ISocketClient, SocketLifecycleHandlers } from '../map/types.js';
 
 /**
  * Drives socket lifecycle events from tests. `connect` only registers handlers (mirroring a real
@@ -37,7 +37,7 @@ export class FakeMapSocket implements ISocketClient {
         this.handlers?.onDisconnect(reason);
     }
 
-    emitCell(cell: CellState): void {
+    emitCell(cell: Cell): void {
         this.handlers?.onCellUpdate(cell);
     }
 

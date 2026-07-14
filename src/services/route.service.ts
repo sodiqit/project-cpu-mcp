@@ -21,7 +21,7 @@ import type {
 import { BuildingType } from '../api/types.js';
 import { tokenIdToPos } from '../geometry/token.utils.js';
 import type { ILogger } from '../logger/types.js';
-import type { CellState } from '../map/types.js';
+import type { Cell } from '../map/types.js';
 import type { WalletProvider } from '../wallet/types.js';
 
 export class RouteService {
@@ -49,7 +49,7 @@ export class RouteService {
         const address = this.wallet.get().getAddress().toLowerCase();
 
         const nodes = new Map<string, RouteNode>();
-        const cellsByToken = new Map<string, CellState>();
+        const cellsByToken = new Map<string, Cell>();
         for (const cell of this.mapReader.allCells()) {
             cellsByToken.set(cell.tokenId, cell);
             const isOwn = cell.owner.toLowerCase() === address;
@@ -76,7 +76,7 @@ export class RouteService {
         }
 
         const hops: Array<NextHopView> = reachable.map(({ node, hopDistance }) => {
-            const cell = cellsByToken.get(node.tokenId) as CellState;
+            const cell = cellsByToken.get(node.tokenId) as Cell;
             return {
                 tokenId: node.tokenId,
                 pos: tokenIdToPos(node.tokenId),
@@ -121,7 +121,7 @@ export class RouteService {
         const address = this.wallet.get().getAddress().toLowerCase();
 
         const nodes = new Map<string, RouteNode>();
-        const cellsByToken = new Map<string, CellState>();
+        const cellsByToken = new Map<string, Cell>();
         for (const cell of this.mapReader.allCells()) {
             cellsByToken.set(cell.tokenId, cell);
             const isOwn = cell.owner.toLowerCase() === address;
@@ -149,7 +149,7 @@ export class RouteService {
         const views: Array<NetworkNodeView> = [...nodes.values()]
             .sort((a, b) => Number(a.tokenId) - Number(b.tokenId))
             .map((node) => {
-                const cell = cellsByToken.get(node.tokenId) as CellState;
+                const cell = cellsByToken.get(node.tokenId) as Cell;
                 return {
                     tokenId: node.tokenId,
                     pos: tokenIdToPos(node.tokenId),
@@ -186,7 +186,7 @@ export class RouteService {
         return result;
     }
 
-    private assertEligible(tokenId: string, nodes: Map<string, RouteNode>, cells: Map<string, CellState>): void {
+    private assertEligible(tokenId: string, nodes: Map<string, RouteNode>, cells: Map<string, Cell>): void {
         if (nodes.has(tokenId)) {
             return;
         }

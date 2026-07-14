@@ -15,7 +15,7 @@ import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
 import { computeMaturation } from '../map/process.utils.js';
 import { capByRoom } from '../map/storage.utils.js';
-import { CellProcessKind, type CellState, type RevealCellReader } from '../map/types.js';
+import { CellProcessKind, type Cell, type RevealCellReader } from '../map/types.js';
 import { formatUnixSeconds, resourceLabel } from '../utils/format.utils.js';
 import type { IContractClient, WalletProvider } from '../wallet/types.js';
 
@@ -164,7 +164,7 @@ export class MiningService {
 
     private resolveMiningTarget(
         config: AppConfig,
-        state: CellState | null,
+        state: Cell | null,
         input: StartMiningInput,
         address: string,
     ): number {

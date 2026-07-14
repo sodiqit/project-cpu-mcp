@@ -1,5 +1,5 @@
 import type { CraftStackView } from '../api/types.js';
-import type { CellState } from '../map/types.js';
+import type { Cell } from '../map/types.js';
 import { resourceName, type ResourceNames } from '../utils/format.utils.js';
 
 // build, demolish, and craft all debit refined inputs from a cell's liquid warehouse balance on-chain; surface
@@ -8,7 +8,7 @@ import { resourceName, type ResourceNames } from '../utils/format.utils.js';
 // the fully-resolved totals (e.g. a recipe's per-batch inputs already multiplied by the batch count).
 export function assertWarehouseHas(
     resources: ResourceNames,
-    state: CellState | null,
+    state: Cell | null,
     required: Array<CraftStackView>,
     tokenId: string,
     action: string,

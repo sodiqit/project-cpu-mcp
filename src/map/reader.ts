@@ -4,7 +4,7 @@ import type { MapStore } from './store.js';
 import {
     type AttentionReport,
     type CellInspection,
-    type CellState,
+    type Cell,
     type EnrichedCell,
     type MapChanges,
     type MapQuery,
@@ -65,7 +65,7 @@ export class MapReader {
         }
 
         const enriched = this.enrich(cell, ownerAddress);
-        const neighbors: Array<CellState> = [];
+        const neighbors: Array<Cell> = [];
         for (const ref of enriched.neighbors) {
             if (ref.tokenId === null) {
                 continue;
@@ -79,7 +79,7 @@ export class MapReader {
         return { cell: enriched, neighbors, distanceFromMine: this.nearestOwnedDistance(cell, ownerAddress) };
     }
 
-    readRevealCell(tokenId: string): CellState | null {
+    readRevealCell(tokenId: string): Cell | null {
         return this.store.get(tokenId);
     }
 
@@ -113,11 +113,11 @@ export class MapReader {
         };
     }
 
-    allCells(): Array<CellState> {
+    allCells(): Array<Cell> {
         return [...this.store.values()];
     }
 
-    private enrich(cell: CellState, ownerAddress: string | null): EnrichedCell {
+    private enrich(cell: Cell, ownerAddress: string | null): EnrichedCell {
         return {
             ...cell,
             pos: tokenIdToPos(cell.tokenId),
@@ -125,14 +125,14 @@ export class MapReader {
         };
     }
 
-    private nearestOwnedDistance(cell: CellState, ownerAddress: string | null): number | null {
+    private nearestOwnedDistance(cell: Cell, ownerAddress: string | null): number | null {
         if (ownerAddress === null) {
             return null;
         }
         const owned = new Set<string>();
-        for (const cellState of this.store.getByOwner(ownerAddress)) {
-            if (cellState.tokenId !== cell.tokenId) {
-                owned.add(cellState.tokenId);
+        for (const ownedCell of this.store.getByOwner(ownerAddress)) {
+            if (ownedCell.tokenId !== cell.tokenId) {
+                owned.add(ownedCell.tokenId);
             }
         }
         if (owned.size === 0) {

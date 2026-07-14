@@ -6,11 +6,11 @@ import {
     classifyNeighbors,
     filterCells,
     isNewer,
-    parseCellState,
+    parseCell,
     parseSnapshot,
     summarizeMap,
 } from '../map.utils.js';
-import { type CellState, CellProcessKind, MapReadiness, MapScope, type MapQuery, NeighborRelation } from '../types.js';
+import { type Cell, CellProcessKind, MapReadiness, MapScope, type MapQuery, NeighborRelation } from '../types.js';
 
 function query(overrides: Partial<MapQuery>): MapQuery {
     return { scope: MapScope.All, tokenIds: null, around: null, ownerAddress: null, ...overrides };
@@ -51,24 +51,24 @@ describe('isNewer', () => {
     });
 });
 
-describe('parseCellState', () => {
+describe('parseCell', () => {
     it('returns the cell for a valid payload', () => {
-        expect(parseCellState(makeCell())).not.toBeNull();
+        expect(parseCell(makeCell())).not.toBeNull();
     });
 
     it('returns null for invalid payloads', () => {
-        expect(parseCellState({})).toBeNull();
-        expect(parseCellState(makeCell({ updated: 'soon' as unknown as number }))).toBeNull();
+        expect(parseCell({})).toBeNull();
+        expect(parseCell(makeCell({ updated: 'soon' as unknown as number }))).toBeNull();
     });
 });
 
 describe('classifyNeighbors', () => {
     it('labels each grid neighbour owned / other / empty (case-insensitive owner)', () => {
-        const grid = new Map<string, CellState>([
+        const grid = new Map<string, Cell>([
             ['71', makeCell({ tokenId: '71', owner: '0xME' })],
             ['73', makeCell({ tokenId: '73', owner: '0xrival' })],
         ]);
-        const getByTokenId = (tokenId: string): CellState | null => grid.get(tokenId) ?? null;
+        const getByTokenId = (tokenId: string): Cell | null => grid.get(tokenId) ?? null;
 
         const refs = classifyNeighbors(makeCell({ tokenId: '72' }), getByTokenId, '0xme');
 

@@ -5,7 +5,7 @@ import { type LotView, type MarketResourceSummary, LotState } from '../../../api
 import { Network } from '../../../config/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
 import { makeCell } from '../../../map/__tests__/fixtures.js';
-import type { CellState } from '../../../map/types.js';
+import type { Cell } from '../../../map/types.js';
 import type {
     BalanceResult,
     BuyLotResult,
@@ -133,7 +133,7 @@ const market: MarketResourceSummary = {
     distanceFromAnchor: 3,
 };
 
-function hubCell(saleFeeOverrides: Record<number, number> | null): CellState {
+function hubCell(saleFeeOverrides: Record<number, number> | null): Cell {
     return makeCell({ tokenId: '5', saleFeeOverrides });
 }
 

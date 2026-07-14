@@ -1,7 +1,7 @@
 import { io, type Socket } from 'socket.io-client';
 
 import { CELL_UPDATE_EVENT, MAP_SOCKET_NAMESPACE, MAP_SOCKET_PATH } from './constants.js';
-import { parseCellState } from './map.utils.js';
+import { parseCell } from './map.utils.js';
 import type { CreateMapSocketInput, ISocketClient, SocketLifecycleHandlers } from './types.js';
 import type { ILogger } from '../logger/types.js';
 
@@ -31,7 +31,7 @@ export class MapSocketClient implements ISocketClient {
         socket.on('disconnect', (reason: string) => handlers.onDisconnect(reason));
         socket.on('connect_error', (error: Error) => handlers.onError(error));
         socket.on(CELL_UPDATE_EVENT, (raw: unknown) => {
-            const cell = parseCellState(raw);
+            const cell = parseCell(raw);
             if (cell === null) {
                 this.logger.warn('dropped invalid cell update payload');
                 return;

@@ -1,12 +1,12 @@
 import { isNewer } from './map.utils.js';
-import type { CellState, MapSnapshotResponse } from './types.js';
+import type { Cell, MapSnapshotResponse } from './types.js';
 
 /**
  * In-memory map state. The single source of truth for every read; kept current by snapshot loads
  * and realtime updates, all funnelled through `applyCell` so newer-wins holds everywhere.
  */
 export class MapStore {
-    private readonly cells = new Map<string, CellState>();
+    private readonly cells = new Map<string, Cell>();
     // Authoritative resync cursor for `?since`. Advanced ONLY by server responses (applySnapshot),
     // never by a single realtime cell — otherwise the cursor races ahead of what we actually hold and
     // a later `?since` skips changes the socket missed, losing them for good.
@@ -21,7 +21,7 @@ export class MapStore {
     // `nowSec` is injectable so tests get a deterministic clock; production uses wall-clock seconds.
     constructor(private readonly nowSec: () => number = () => Math.floor(Date.now() / 1000)) {}
 
-    applyCell(cell: CellState): boolean {
+    applyCell(cell: Cell): boolean {
         const held = this.cells.get(cell.tokenId) ?? null;
         if (!isNewer(cell, held)) {
             return false;
@@ -50,13 +50,13 @@ export class MapStore {
         }
     }
 
-    get(tokenId: string): CellState | null {
+    get(tokenId: string): Cell | null {
         return this.cells.get(tokenId) ?? null;
     }
 
-    getByOwner(owner: string): Array<CellState> {
+    getByOwner(owner: string): Array<Cell> {
         const lower = owner.toLowerCase();
-        const result: Array<CellState> = [];
+        const result: Array<Cell> = [];
         for (const cell of this.cells.values()) {
             if (cell.owner.toLowerCase() === lower) {
                 result.push(cell);
@@ -65,8 +65,8 @@ export class MapStore {
         return result;
     }
 
-    changedSince(version: number): Array<CellState> {
-        const result: Array<CellState> = [];
+    changedSince(version: number): Array<Cell> {
+        const result: Array<Cell> = [];
         for (const cell of this.cells.values()) {
             if (cell.updated > version) {
                 result.push(cell);
@@ -75,7 +75,7 @@ export class MapStore {
         return result;
     }
 
-    values(): IterableIterator<CellState> {
+    values(): IterableIterator<Cell> {
         return this.cells.values();
     }
 

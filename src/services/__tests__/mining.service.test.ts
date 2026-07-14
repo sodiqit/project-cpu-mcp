@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { BuildingType } from '../../api/types.js';
 import { CELL_ABI } from '../../contracts/cell.abi.js';
 import { makeCell, makeResource, makeStorage } from '../../map/__tests__/fixtures.js';
-import { CellProcessKind, type CellState } from '../../map/types.js';
+import { CellProcessKind, type Cell } from '../../map/types.js';
 import { MiningService } from '../mining.service.js';
 import type { AppConfig } from '../types.js';
 import { CELL, makeCellHarness, makeConfig, WALLET_ADDRESS } from './service-fakes.js';
@@ -235,7 +235,7 @@ describe('MiningService.claim', () => {
 });
 
 // A ready Mine (mines Iron=5 / Copper=6 in makeConfig) on an owned cell with an Iron deposit.
-function mineCell(overrides: Partial<CellState> = {}): CellState {
+function mineCell(overrides: Partial<Cell> = {}): Cell {
     return makeCell({
         tokenId: '42',
         owner: WALLET_ADDRESS,

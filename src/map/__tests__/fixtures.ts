@@ -3,7 +3,7 @@ import {
     type CellProcessMiningView,
     type CellResource,
     type CellResourceStorage,
-    type CellState,
+    type Cell,
     CellProcessKind,
     type MapSnapshotResponse,
 } from '../types.js';
@@ -54,7 +54,7 @@ export function makeCraftProcess(overrides: Partial<CellProcessCraftView> = {}):
     };
 }
 
-export function makeCell(overrides: Partial<CellState> = {}): CellState {
+export function makeCell(overrides: Partial<Cell> = {}): Cell {
     return {
         tokenId: '1',
         owner: '0xowner',

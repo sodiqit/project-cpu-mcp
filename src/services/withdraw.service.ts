@@ -9,7 +9,7 @@ import type {
     WithdrawServiceOptions,
 } from './types.js';
 import type { ILogger } from '../logger/types.js';
-import type { CellState, RevealCellReader } from '../map/types.js';
+import type { Cell, RevealCellReader } from '../map/types.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
 
 export class WithdrawService {
@@ -79,7 +79,7 @@ export class WithdrawService {
         return cell;
     }
 
-    private assertOwner(tokenId: string, state: CellState | null, address: string): void {
+    private assertOwner(tokenId: string, state: Cell | null, address: string): void {
         if (state !== null && state.owner.toLowerCase() !== address.toLowerCase()) {
             throw new Error(`You do not own cell ${tokenId} (owner ${state.owner}); only the owner can withdraw.`);
         }

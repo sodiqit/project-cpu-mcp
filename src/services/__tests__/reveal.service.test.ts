@@ -2,7 +2,7 @@ import { type Abi, formatEther, parseEther, type Hash } from 'viem';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NoopLogger } from '../../logger/noop.logger.js';
-import type { CellState } from '../../map/types.js';
+import type { Cell } from '../../map/types.js';
 import {
     type ConfirmedTx,
     type IContractClient,
@@ -25,8 +25,8 @@ import {
 
 const REQUEST_HASH = `0x${'e'.repeat(64)}` as Hash;
 
-function revealState(over: Partial<CellState> = {}): CellState {
-    return { tokenId: '42', owner: WALLET_ADDRESS, revealCount: 0, ...over } as unknown as CellState;
+function revealState(over: Partial<Cell> = {}): Cell {
+    return { tokenId: '42', owner: WALLET_ADDRESS, revealCount: 0, ...over } as unknown as Cell;
 }
 
 class FakeAppConfig implements IAppConfig {
@@ -95,10 +95,10 @@ class FakeContractClient implements IContractClient {
 class FakeRevealCellReader {
     public refreshes = 0;
     constructor(
-        private state: CellState | null,
+        private state: Cell | null,
         private readonly bumpTo: number | null = null,
     ) {}
-    readRevealCell(): CellState | null {
+    readRevealCell(): Cell | null {
         return this.state;
     }
     getServerTime(): number {
@@ -114,7 +114,7 @@ class FakeRevealCellReader {
 
 type HarnessOptions = Partial<{
     config: AppConfig;
-    state: CellState | null;
+    state: Cell | null;
     bumpTo: number | null;
     fee: bigint;
     quoteError: Error | null;

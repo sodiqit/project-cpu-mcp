@@ -64,7 +64,7 @@ export const cellProcessViewSchema = z.discriminatedUnion('kind', [
     cellProcessCraftViewSchema,
 ]);
 
-export const cellStateSchema = z.object({
+export const cellSchema = z.object({
     tokenId: z.string(),
     owner: z.string(),
     revealCount: z.number(),
@@ -87,7 +87,7 @@ export const cellStateSchema = z.object({
 export const mapSnapshotResponseSchema = z.object({
     serverTime: z.number(),
     version: z.number(),
-    cells: z.array(cellStateSchema),
+    cells: z.array(cellSchema),
 });
 
 export type CellResource = z.infer<typeof cellResourceSchema>;
@@ -96,7 +96,7 @@ export type CellBuildingView = z.infer<typeof cellBuildingViewSchema>;
 export type CellProcessMiningView = z.infer<typeof cellProcessMiningViewSchema>;
 export type CellProcessCraftView = z.infer<typeof cellProcessCraftViewSchema>;
 export type CellProcessView = z.infer<typeof cellProcessViewSchema>;
-export type CellState = z.infer<typeof cellStateSchema>;
+export type Cell = z.infer<typeof cellSchema>;
 export type MapSnapshotResponse = z.infer<typeof mapSnapshotResponseSchema>;
 
 export interface ParsedSnapshot {
@@ -131,7 +131,7 @@ export interface SocketLifecycleHandlers {
     onConnect: () => void;
     onDisconnect: (reason: string) => void;
     onError: (error: Error) => void;
-    onCellUpdate: (cell: CellState) => void;
+    onCellUpdate: (cell: Cell) => void;
 }
 
 // Abstraction over the realtime socket so tests can drive lifecycle events with a fake.
@@ -166,7 +166,7 @@ export interface MapStatus {
 }
 
 export interface RevealCellReader {
-    readRevealCell(tokenId: string): CellState | null;
+    readRevealCell(tokenId: string): Cell | null;
     // The map snapshot's server clock — the reference "now" for maturation, same domain as a process `startAt`.
     getServerTime(): number;
     refresh(): Promise<void>;
@@ -203,7 +203,7 @@ export interface NeighborRef {
     relation: NeighborRelation;
 }
 
-export interface EnrichedCell extends CellState {
+export interface EnrichedCell extends Cell {
     pos: CellCoord;
     neighbors: Array<NeighborRef>;
 }
@@ -247,7 +247,7 @@ export interface MapQueryResult {
 
 export interface CellInspection {
     cell: EnrichedCell;
-    neighbors: Array<CellState>;
+    neighbors: Array<Cell>;
     distanceFromMine: number | null;
 }
 

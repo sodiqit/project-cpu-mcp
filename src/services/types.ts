@@ -15,7 +15,7 @@ import type {
 import type { Network } from '../config/types.js';
 import type { CellCoord } from '../geometry/types.js';
 import type { ILogger } from '../logger/types.js';
-import type { CellState, RevealCellReader } from '../map/types.js';
+import type { Cell, RevealCellReader } from '../map/types.js';
 import type { SessionManager } from '../session/manager.js';
 import type { IContractClient, TxStatus, WalletManager, WalletProvider } from '../wallet/types.js';
 
@@ -407,7 +407,7 @@ export interface FinalizeResult {
 // ---- Route survey ----
 
 export interface RouteCellReader {
-    allCells(): Array<CellState>;
+    allCells(): Array<Cell>;
 }
 
 export interface RouteServiceOptions {

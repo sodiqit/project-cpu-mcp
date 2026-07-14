@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { MapReader } from '../reader.js';
 import { MapStore } from '../store.js';
-import { type CellState, MapReadiness, MapScope, type MapStatus } from '../types.js';
+import { type Cell, MapReadiness, MapScope, type MapStatus } from '../types.js';
 import { makeCell, makeSnapshot } from './fixtures.js';
 
 function status(readiness: MapReadiness = MapReadiness.Ready, connected = true): MapStatus {
     return { getReadiness: () => readiness, isSocketConnected: () => connected, resyncNow: () => Promise.resolve() };
 }
 
-function makeReader(cells: Array<CellState>, st: MapStatus = status()): { reader: MapReader; store: MapStore } {
+function makeReader(cells: Array<Cell>, st: MapStatus = status()): { reader: MapReader; store: MapStore } {
     const store = new MapStore();
     store.applySnapshot(makeSnapshot({ version: 50, serverTime: 1000, cells }));
     return { reader: new MapReader({ store, status: st }), store };

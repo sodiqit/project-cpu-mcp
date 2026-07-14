@@ -5,7 +5,7 @@ import { BuildingKind, BuildingType, CraftRecipeId } from '../../api/types.js';
 import { Network } from '../../config/types.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import type { ILogger } from '../../logger/types.js';
-import type { CellState, RevealCellReader } from '../../map/types.js';
+import type { Cell, RevealCellReader } from '../../map/types.js';
 import {
     type ConfirmedTx,
     type IContractClient,
@@ -283,10 +283,10 @@ export const DEFAULT_SERVER_TIME = 1_000_000_000;
 export class FakeMapReader implements RevealCellReader {
     public refreshed = 0;
     constructor(
-        private readonly cell: CellState | null = null,
+        private readonly cell: Cell | null = null,
         private readonly serverTime: number = DEFAULT_SERVER_TIME,
     ) {}
-    readRevealCell(): CellState | null {
+    readRevealCell(): Cell | null {
         return this.cell;
     }
     getServerTime(): number {
@@ -313,7 +313,7 @@ export type CellHarnessOptions = Partial<{
     walletChainId: number;
     config: AppConfig;
     approve: Hash | null | Error;
-    cell: CellState | null;
+    cell: Cell | null;
     serverTime: number;
 }>;
 
