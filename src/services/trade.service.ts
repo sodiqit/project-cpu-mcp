@@ -81,9 +81,6 @@ export class TradeService {
         const value = BigInt(input.value);
         const price = parseEther(input.pricePerUnit);
 
-        // Seller tolerance in bp: an explicit cap converts straight through; when omitted, freeze the hub's
-        // current live rate as the ceiling, so a rate raised between this read and the listing reverts on-chain
-        // rather than silently locking a worse rate into the lot.
         const maxSaleFeeBp =
             input.maxSaleFeePercent !== null
                 ? percentToBp(input.maxSaleFeePercent)
@@ -157,8 +154,6 @@ export class TradeService {
         const { config } = await this.ready();
         const trade = this.resolveTrade(config);
 
-        // Percent → bp at the boundary; a sub-basis-point rate is rejected here before any gas is spent. Range
-        // and ownership are also enforced on-chain (SaleFeeTooHigh / NotHubOwner), which decode readably.
         const feeBp = percentToBp(input.feePercent);
 
         this.logger.info('setting sale fee', {

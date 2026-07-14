@@ -1,7 +1,4 @@
-// The lot marketplace. Trimmed to the writes the client sends, the one view it reads (the hub's live sale-fee
-// rate), and the events it decodes from the receipt. Must match the deployed Trade contract — the createLot
-// signature, the LotCreated / LotBought event shapes, and the custom errors are load-bearing for encoding and
-// decoding, so any drift breaks trade writes.
+// Must match the deployed Trade contract.
 export const TRADE_ABI = [
     {
         type: 'function',

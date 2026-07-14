@@ -81,7 +81,6 @@ describe('AppConfigService', () => {
         expect(first.contracts.cpuHook).toBe(CPU_HOOK);
         expect(first.resources[5]).toBe('Iron');
         expect(first.transport.defaultMoveFeePerUnit).toBe('0.1');
-        // The API's basis-point cap is exposed as a percent on the MCP surface.
         expect(first.trade).toEqual({ saleBurnPercent: 1, maxSaleFeePercent: 50 });
         expect(second).toBe(first);
     });

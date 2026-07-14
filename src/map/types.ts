@@ -74,13 +74,7 @@ export const cellStateSchema = z.object({
     // Set after a demolish and cleared on rebuild. `demolishFinishAt > serverTime` ⇒ the plot is still in its
     // rebuild cooldown; `building` is null meanwhile, so this is the only signal the cell was just demolished.
     demolishFinishAt: z.number().nullable().default(null),
-    // Per-resource per-unit $CPU a foreign mover pays to route through this cell (resourceId → decimal string).
-    // `null` = not a transit point; `{}` = a transit point charging the config default for everything; a specific
-    // entry overrides the default for that resource. Effective fee = `override ?? defaultMoveFeePerUnit`.
     transitFeeOverrides: z.record(z.coerce.number(), z.string()).nullable().default(null),
-    // Per-resource sale-fee rate the hub owner charges, as a percent (converted from the API's basis points).
-    // `null` = the API is not serving sale fees for this cell (not a Ready hub); a value of 0 is a real "listed
-    // free" rate, not a cleared sentinel.
     saleFeeOverrides: z
         .record(z.coerce.number(), z.number().int())
         .nullable()

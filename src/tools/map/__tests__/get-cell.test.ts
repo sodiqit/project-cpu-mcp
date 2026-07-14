@@ -85,7 +85,6 @@ describe('get_cell tool', () => {
         expect(parsed.cell.resources[0]?.resourceName).toBe('Silica');
         expect(parsed.cell.building?.type).toBe('mine');
         expect(parsed.cell.process?.resourceName).toBe('Silica');
-        // Both per-resource fee cards survive the read (a scout can pick the cheapest hub for their cargo).
         expect(parsed.cell.transitFeeOverrides).toEqual({ 3: '0.5' });
         expect(parsed.cell.saleFeeOverrides).toEqual({ 3: 2.5 });
     });

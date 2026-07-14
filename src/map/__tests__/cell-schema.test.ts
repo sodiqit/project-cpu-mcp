@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { parseCellState } from '../map.utils.js';
 
-// Minimal wire cell — every fee field omitted (an older server) so defaults are exercised.
 function rawCell(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     return { tokenId: '1', owner: '0xowner', revealCount: 1, resources: [], updated: 1, ...overrides };
 }

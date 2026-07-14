@@ -11,10 +11,6 @@ interface SaleFeeReader {
     readRevealCell(tokenId: string): CellState | null;
 }
 
-// The live rate comes from the world map, not the markets endpoint. `null` when the rate is unknown — the map
-// hasn't got the hub (store not ready / unknown hub) or the hub isn't serving sale fees (`saleFeeOverrides`
-// null, e.g. not a Ready hub) — rather than a fabricated 0. A hub that IS serving but has no rate for this
-// resource is a real 0 (listed free).
 function enrichLiveSaleFee(mapReader: SaleFeeReader, row: MarketResourceSummary): EnrichedMarketSummary {
     const cell = mapReader.readRevealCell(row.hubTokenId);
     const liveSaleFeePercent =

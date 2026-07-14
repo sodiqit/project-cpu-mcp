@@ -159,15 +159,11 @@ export interface TransportRoutingView {
     moveRadius: number;
     hubRadius: number;
     moveTimePerCellSec: number;
-    /** Per-unit `$CPU` (decimal) a foreign transit hub charges absent a per-cell override; `'0'` = free. */
     defaultMoveFeePerUnit: string;
 }
 
-/** Trade fee params from `GET /api/v1/config`; the API expresses the cap in basis points. */
 export interface TradeFeeView {
-    /** Percent of every sale burned (0-100); the rest, minus the hub's sale fee, goes to the seller. */
     saleBurnPercent: number;
-    /** Structural ceiling on a hub's sale-fee rate, in basis points. */
     maxSaleFeeBp: number;
 }
 
@@ -261,7 +257,6 @@ export enum LotSort {
     Nearest = 'nearest',
 }
 
-/** A lot row as served by `GET /api/v1/trade/lots`, `/trade/lots/:id`, `/trade/lots/mine` — wire shape. */
 export interface ApiLotView {
     id: string;
     hubTokenId: string;
@@ -269,9 +264,7 @@ export interface ApiLotView {
     resourceId: number;
     listed: string;
     remaining: string;
-    /** Price per unit in $CPU wei — TradeService normalizes it to a decimal string on the way out. */
     pricePerUnit: string;
-    /** Fee snapshot: the hub's sale-fee rate (basis points) frozen into the lot at listing. */
     saleFeeBp: number;
     state: LotState;
     distanceFromAnchor: number | null;
@@ -279,7 +272,6 @@ export interface ApiLotView {
     updated: number;
 }
 
-/** A lot row on the MCP surface — decimal price and the frozen sale fee expressed as a percent. */
 export interface LotView {
     id: string;
     hubTokenId: string;
@@ -287,43 +279,32 @@ export interface LotView {
     resourceId: number;
     listed: string;
     remaining: string;
-    /** Price per unit in $CPU (decimal, e.g. "2"). */
     pricePerUnit: string;
-    /** Fee snapshot: the share of each sale that settles to the hub owner, as a percent (frozen at listing). */
     saleFeePercent: number;
     state: LotState;
-    /** Grid steps from the zone anchor cell when a zone is supplied, else `null`. */
     distanceFromAnchor: number | null;
-    /** Listing time, unix seconds. */
     createdAt: number;
-    /** Last projection update, unix seconds. */
     updated: number;
 }
 
-/** One `GET /api/v1/trade/markets` row per `(hub, resource)` — wire shape. */
 export interface ApiMarketResourceSummary {
     hubTokenId: string;
     resourceId: number;
     openLots: number;
     openRemaining: string;
-    /** Lowest open-lot price per unit in $CPU wei, or null when no open lots. */
     minPricePerUnit: string | null;
     incomingLots: number;
     incomingRemaining: string;
     distanceFromAnchor: number | null;
 }
 
-/** One `GET /api/v1/trade/markets` row per `(hub, resource)` on the MCP surface — the compact scout view.
- *  The live sale-fee rate is not served here; the markets tool enriches it locally from the world map. */
 export interface MarketResourceSummary {
     hubTokenId: string;
     resourceId: number;
     openLots: number;
     openRemaining: string;
-    /** Lowest open-lot price per unit in $CPU (decimal), or null when no open lots. */
     minPricePerUnit: string | null;
     incomingLots: number;
     incomingRemaining: string;
-    /** Grid steps from the zone anchor cell when a zone is supplied, else `null`. */
     distanceFromAnchor: number | null;
 }

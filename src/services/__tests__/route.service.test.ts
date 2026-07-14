@@ -15,7 +15,6 @@ function own(tokenId: string, over: Partial<CellState> = {}): CellState {
     return makeCell({ tokenId, owner: WALLET_ADDRESS, revealCount: 1, ...over });
 }
 
-// A rival hub whose per-resource override for RES is `feePerUnit`; other resources fall back to the config default.
 function foreignHub(tokenId: string, feePerUnit: string): CellState {
     return makeCell({
         tokenId,
@@ -66,11 +65,9 @@ describe('RouteService.nextHops', () => {
     it('resolves the transit fee for the requested resource: override for it, config default otherwise', async () => {
         const cells = [own('72'), foreignHub('75', '0.5')];
 
-        // RES 3 has an explicit override on the hub → the exact override.
         const forRes3 = await survey(cells, 72, null, 3);
         expect(forRes3.hops.find((h) => h.tokenId === '75')?.transitFeePerUnit).toBe('0.5');
 
-        // A resource with no override falls back to the config default move fee.
         const forRes9 = await makeService(cells, '0.2').nextHops({ from: 72, towards: null, resourceId: 9 });
         expect(forRes9.hops.find((h) => h.tokenId === '75')?.transitFeePerUnit).toBe('0.2');
     });

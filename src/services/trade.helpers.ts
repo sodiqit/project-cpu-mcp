@@ -1,10 +1,6 @@
 import type { ApiLotView, ApiMarketResourceSummary, LotView, MarketResourceSummary } from '../api/types.js';
 import { bpToPercent, cpuFromWei } from '../utils/format.utils.js';
 
-// Both mappers build the MCP shape field-by-field rather than spreading the raw row: the API still serves the
-// legacy `tradeFeePct` placeholder, and a spread would leak it into the output the spec drops.
-
-/** API lot row → MCP lot row: wei price to decimal, and the frozen sale-fee snapshot from bp to percent. */
 export function withDecimalPrice(lot: ApiLotView): LotView {
     return {
         id: lot.id,
@@ -22,8 +18,6 @@ export function withDecimalPrice(lot: ApiLotView): LotView {
     };
 }
 
-/** API markets row → MCP markets row: the lowest price from wei to decimal (the live sale fee is enriched
- *  separately, at the tool layer, from the world map). */
 export function withDecimalMinPrice(row: ApiMarketResourceSummary): MarketResourceSummary {
     return {
         hubTokenId: row.hubTokenId,
@@ -37,8 +31,6 @@ export function withDecimalMinPrice(row: ApiMarketResourceSummary): MarketResour
     };
 }
 
-/** Turns a raw `SaleFeeExceedsMax` revert into an actionable message: the hub raised its rate past the seller's
- *  tolerance between the decision and the listing landing, so the recovery is to re-read the live rate. */
 export function enrichSaleFeeToleranceError(error: unknown): unknown {
     if (error instanceof Error && error.message.includes('SaleFeeExceedsMax')) {
         return new Error(

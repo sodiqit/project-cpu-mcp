@@ -308,7 +308,6 @@ describe('TradeService.createLot', () => {
 
         const result = await h.service.createLot(CREATE_INPUT);
 
-        // Tolerance omitted → read the hub (last chain element, 73) live rate and pass it through.
         expect(h.tradeClient.saleFeeReads[0]).toMatchObject({ trade: TRADE, hub: 73n, res: 3 });
         expect(h.allowance.calls).toHaveLength(0);
         expect(h.tradeClient.creates).toHaveLength(1);
@@ -596,7 +595,6 @@ describe('TradeService reads', () => {
     });
 
     it("drops the API's legacy tradeFeePct placeholder from lot output", async () => {
-        // The API still serves tradeFeePct alongside saleFeeBp; the MCP surface must not carry it through.
         const raw = { ...lotView({ id: '1' }), tradeFeePct: 0 } as ApiLotView;
         const h = makeTrade({ response: { status: 200, data: [raw] } });
 

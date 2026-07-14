@@ -4,8 +4,6 @@ import { LotAvailability, LotSort, LotState, type MarketResourceSummary } from '
 import { MAX_ROUTE_RADIUS } from '../../geometry/constants.js';
 import { tokenIdSchema } from '../../geometry/types.js';
 
-/** A markets row with the hub's live sale-fee rate for the resource, enriched locally from the world map.
- *  `liveSaleFeePercent` is `null` when the map is not ready or the hub is unknown (advisory — may trail chain). */
 export interface EnrichedMarketSummary extends MarketResourceSummary {
     liveSaleFeePercent: number | null;
 }

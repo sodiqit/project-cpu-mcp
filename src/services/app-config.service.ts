@@ -52,8 +52,6 @@ export class AppConfigService implements IAppConfig {
                 demolishCost: b.demolishCost ?? { cpu: '0', inputs: [] },
             })),
             reveal: data.reveal ?? { firstFree: true, reRevealCost: '0' },
-            // Default `defaultMoveFeePerUnit` and the whole `trade` block so a client on an older API (before these
-            // fields were served) degrades to "free" rather than surfacing `undefined`; the chain stays the arbiter.
             transport: { ...data.transport, defaultMoveFeePerUnit: data.transport?.defaultMoveFeePerUnit ?? '0' },
             trade: {
                 saleBurnPercent: data.trade?.saleBurnPercent ?? 0,
