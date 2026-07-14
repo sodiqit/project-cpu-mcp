@@ -5,7 +5,7 @@ import {
     type AttentionReport,
     AttentionSeverity,
     type CellResource,
-    type CellState,
+    type Cell,
     CellProcessKind,
 } from './types.js';
 
@@ -26,7 +26,7 @@ const REASON_SEVERITY: Record<AttentionReason, AttentionSeverity> = {
 const SEVERITY_RANK: Record<AttentionSeverity, number> = { [Critical]: 0, [Warning]: 1, [Info]: 2 };
 
 export interface BuildAttentionInput {
-    ownedCells: Array<CellState> | null;
+    ownedCells: Array<Cell> | null;
     version: number;
     serverTime: number;
     nearFullPct: number;
@@ -77,7 +77,7 @@ function storageFields(resource: CellResource): Partial<AttentionItem> {
 
 // Resources this cell is actively producing right now: the mining target, or the active craft's outputs.
 // Only these can stall or approach the cap, so near-full is scoped to them (a static full box does not).
-function producedResourceIds(cell: CellState, craftOutputsByRecipe: Record<string, Array<number>>): Set<number> {
+function producedResourceIds(cell: Cell, craftOutputsByRecipe: Record<string, Array<number>>): Set<number> {
     const process = cell.process;
     if (process?.kind === CellProcessKind.Mining) {
         return new Set([process.resource]);
@@ -88,15 +88,12 @@ function producedResourceIds(cell: CellState, craftOutputsByRecipe: Record<strin
     return new Set();
 }
 
-function isOperationalExtractor(cell: CellState, serverTime: number, extractorTypes: Set<string>): boolean {
+function isOperationalExtractor(cell: Cell, extractorTypes: Set<string>): boolean {
     const building = cell.building;
-    if (building === null || !extractorTypes.has(building.type)) {
-        return false;
-    }
-    return building.buildFinishAt === null || building.buildFinishAt <= serverTime;
+    return building !== null && extractorTypes.has(building.type) && cell.ready === true;
 }
 
-function cellItems(cell: CellState, input: BuildAttentionInput): Array<AttentionItem> {
+function cellItems(cell: Cell, input: BuildAttentionInput): Array<AttentionItem> {
     const items: Array<AttentionItem> = [];
     const produced = producedResourceIds(cell, input.craftOutputsByRecipe);
     const isCraft = cell.process?.kind === CellProcessKind.Craft;
@@ -120,7 +117,7 @@ function cellItems(cell: CellState, input: BuildAttentionInput): Array<Attention
         }
     }
 
-    if (isOperationalExtractor(cell, input.serverTime, input.extractorBuildingTypes) && isDepleted(cell)) {
+    if (isOperationalExtractor(cell, input.extractorBuildingTypes) && isDepleted(cell)) {
         const target = cell.process?.kind === CellProcessKind.Mining ? cell.process.resource : null;
         items.push(attentionItem(cell, AttentionReason.DepositDepleted, { resourceId: target, depositRemaining: '0' }));
     }

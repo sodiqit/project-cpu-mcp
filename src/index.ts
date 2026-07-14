@@ -100,7 +100,7 @@ async function main(): Promise<void> {
         pollIntervalMs: DEFAULT_POLL_INTERVAL_MS,
         reconnectGraceMs: DEFAULT_RECONNECT_GRACE_MS,
     });
-    const mapReader = new MapReader({ store, status: mapSync });
+    const mapReader = new MapReader({ store, status: mapSync, appConfig });
     const route = new RouteService({ wallet, appConfig, mapReader, logger: logger.child('route') });
 
     const withdraw = new WithdrawService({

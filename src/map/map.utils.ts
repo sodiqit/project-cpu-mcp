@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
 import {
-    type CellState,
-    cellStateSchema,
+    type Cell,
     CellProcessKind,
     type MapCellStatusCounts,
     type MapQuery,
@@ -12,6 +11,8 @@ import {
     type MapSummary,
     type NeighborRef,
     NeighborRelation,
+    type RawCell,
+    rawCellSchema,
     type ResourceIndex,
 } from './types.js';
 import { neighborTokenIds, ringDistances } from '../geometry/token.utils.js';
@@ -25,21 +26,21 @@ const snapshotEnvelopeSchema = z.object({
 });
 
 // The single apply-if-newer predicate — shared by every write path so dedup stays consistent.
-export function isNewer(incoming: CellState, held: CellState | null): boolean {
+export function isNewer(incoming: RawCell, held: RawCell | null): boolean {
     return held === null || incoming.updated > held.updated;
 }
 
-export function parseCellState(raw: unknown): CellState | null {
-    const result = cellStateSchema.safeParse(raw);
+export function parseCell(raw: unknown): RawCell | null {
+    const result = rawCellSchema.safeParse(raw);
     return result.success ? result.data : null;
 }
 
 export function parseSnapshot(raw: unknown): ParsedSnapshot {
     const envelope = snapshotEnvelopeSchema.parse(raw);
-    const cells: Array<CellState> = [];
+    const cells: Array<RawCell> = [];
     let dropped = 0;
     for (const rawCell of envelope.cells) {
-        const cell = parseCellState(rawCell);
+        const cell = parseCell(rawCell);
         if (cell === null) {
             dropped += 1;
         } else {
@@ -54,8 +55,8 @@ function sameAddress(a: string, b: string): boolean {
 }
 
 export function classifyNeighbors(
-    cell: CellState,
-    getByTokenId: (tokenId: string) => CellState | null,
+    cell: RawCell,
+    getByTokenId: (tokenId: string) => RawCell | null,
     ownerAddress: string | null,
 ): Array<NeighborRef> {
     return neighborTokenIds(cell.tokenId).map((tokenId) => {
@@ -76,7 +77,7 @@ export function classifyNeighbors(
 
 // Groups resources by id while keeping each location, so the agent can answer "where is resource X"
 // without scanning every cell.
-export function buildResourceIndex(cells: Array<CellState>): ResourceIndex {
+export function buildResourceIndex(cells: Array<RawCell>): ResourceIndex {
     const index: ResourceIndex = {};
 
     for (const cell of cells) {
@@ -99,7 +100,7 @@ export function buildResourceIndex(cells: Array<CellState>): ResourceIndex {
     return index;
 }
 
-function matchesQuery(cell: CellState, query: MapQuery, aroundSet: ReadonlySet<string> | null): boolean {
+function matchesQuery(cell: RawCell, query: MapQuery, aroundSet: ReadonlySet<string> | null): boolean {
     switch (query.scope) {
         case MapScope.All:
             return true;
@@ -114,12 +115,12 @@ function matchesQuery(cell: CellState, query: MapQuery, aroundSet: ReadonlySet<s
     }
 }
 
-export function filterCells(cells: Iterable<CellState>, query: MapQuery): Array<CellState> {
+export function filterCells(cells: Iterable<RawCell>, query: MapQuery): Array<RawCell> {
     const aroundSet =
         query.scope === MapScope.Around && query.around !== null
             ? new Set(ringDistances(query.around.tokenId, query.around.radius).keys())
             : null;
-    const result: Array<CellState> = [];
+    const result: Array<RawCell> = [];
     for (const cell of cells) {
         if (matchesQuery(cell, query, aroundSet)) {
             result.push(cell);
@@ -129,17 +130,17 @@ export function filterCells(cells: Iterable<CellState>, query: MapQuery): Array<
 }
 
 // A cell counts as depleted only after a reveal — an unrevealed cell has no deposits yet.
-export function isDepleted(cell: CellState): boolean {
+export function isDepleted(cell: RawCell): boolean {
     return cell.revealCount > 0 && cell.resources.length > 0 && cell.resources.every((r) => r.deposit === '0');
 }
 
 // A just-demolished cell is empty (building === null) but locked from rebuilding until demolishFinishAt. Returns
 // that end timestamp while the cooldown is active, else null — callers get the value without a second null-check.
-export function demolishCooldownEnd(cell: CellState, serverTime: number): number | null {
+export function demolishCooldownEnd(cell: RawCell, serverTime: number): number | null {
     return cell.demolishFinishAt !== null && cell.demolishFinishAt > serverTime ? cell.demolishFinishAt : null;
 }
 
-function countStatuses(cells: Array<CellState>): MapCellStatusCounts {
+function countStatuses(cells: Array<RawCell>): MapCellStatusCounts {
     let idle = 0;
     let mining = 0;
     let crafting = 0;
@@ -167,7 +168,7 @@ export interface SummarizeInput {
     version: number;
     serverTime: number;
     totalCells: number;
-    ownedCells: Array<CellState> | null;
+    ownedCells: Array<Cell> | null;
 }
 
 export function summarizeMap(input: SummarizeInput): MapSummary {

@@ -17,7 +17,7 @@ import { BuildingKind } from '../api/types.js';
 import type { BuildingType, BuildingView } from '../api/types.js';
 import type { ILogger } from '../logger/types.js';
 import { demolishCooldownEnd } from '../map/map.utils.js';
-import type { CellState, RevealCellReader } from '../map/types.js';
+import type { Cell, RevealCellReader } from '../map/types.js';
 import { formatUnixSeconds } from '../utils/format.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
 
@@ -52,7 +52,7 @@ export class BuildService {
         // Paid action — pull a fresh snapshot so the pre-checks below gate on current on-chain state, not a
         // possibly-stale local cache (mirrors mining's start path).
         await this.mapReader.refresh();
-        const state = this.mapReader.readRevealCell(input.tokenId);
+        const state = await this.mapReader.readRevealCell(input.tokenId);
         this.assertBuildable(input, state, wallet.getAddress());
 
         const alreadyBuilt = state?.building?.type === input.buildingType;
@@ -80,7 +80,7 @@ export class BuildService {
         const tokenId = BigInt(input.tokenId);
 
         await this.mapReader.refresh();
-        const state = this.mapReader.readRevealCell(input.tokenId);
+        const state = await this.mapReader.readRevealCell(input.tokenId);
         this.assertOwner(input.tokenId, state, wallet.getAddress(), 'demolish');
         if (state === null || state.building === null) {
             throw new Error(
@@ -121,7 +121,7 @@ export class BuildService {
         };
     }
 
-    private assertBuildable(input: BuildInput, state: CellState | null, address: string): void {
+    private assertBuildable(input: BuildInput, state: Cell | null, address: string): void {
         this.assertOwner(input.tokenId, state, address, 'build');
         if (state === null) {
             return;
@@ -141,13 +141,13 @@ export class BuildService {
         }
     }
 
-    private assertOwner(tokenId: string, state: CellState | null, address: string, action: string): void {
+    private assertOwner(tokenId: string, state: Cell | null, address: string, action: string): void {
         if (state !== null && state.owner.toLowerCase() !== address.toLowerCase()) {
             throw new Error(`You do not own cell ${tokenId} (owner ${state.owner}); only the owner can ${action}.`);
         }
     }
 
-    private assertNoProcess(tokenId: string, state: CellState, action: string): void {
+    private assertNoProcess(tokenId: string, state: Cell, action: string): void {
         if (state.process !== null) {
             throw new Error(
                 `Cell ${tokenId} has an active ${state.process.kind} process; claim or finish it before you ${action}.`,
@@ -157,7 +157,7 @@ export class BuildService {
 
     // A hub anchoring open trade lots (reserved.lots > 0) reverts on-chain with CellBusy. Catch that common case
     // here; the chain still guards in-flight routes, which aren't visible in the local snapshot.
-    private assertHubIdle(tokenId: string, view: BuildingView, state: CellState | null): void {
+    private assertHubIdle(tokenId: string, view: BuildingView, state: Cell | null): void {
         if (view.kind !== BuildingKind.Hub || state === null) {
             return;
         }
@@ -180,7 +180,7 @@ export class BuildService {
         cpuToken: Address,
         input: BuildInput,
         tokenId: bigint,
-        state: CellState | null,
+        state: Cell | null,
     ): Promise<BuildPlacement> {
         const view = this.buildingView(config, input.buildingType);
         assertWarehouseHas(config.resources, state, view.buildInputs, input.tokenId, 'build');

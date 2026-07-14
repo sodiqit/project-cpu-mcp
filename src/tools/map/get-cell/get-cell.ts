@@ -13,7 +13,7 @@ export function registerGetCellTool(server: McpServer, context: AppContext): voi
         'cpu_get_cell',
         { description: GET_CELL_DESCRIPTION, inputSchema: getCellInputSchema },
         async (args) => {
-            const inspection = context.mapReader.inspectCell(args.tokenId, getWalletAddress(context));
+            const inspection = await context.mapReader.inspectCell(args.tokenId, getWalletAddress(context));
             if (inspection === null) {
                 throw new Error(`Cell ${args.tokenId} is not in the current map.`);
             }

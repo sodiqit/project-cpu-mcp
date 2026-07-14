@@ -10,12 +10,13 @@ import type {
     LotSort,
     RecipeView,
     RevealCostView,
+    StorageConfigView,
     TransportRoutingView,
 } from '../api/types.js';
 import type { Network } from '../config/types.js';
 import type { CellCoord } from '../geometry/types.js';
 import type { ILogger } from '../logger/types.js';
-import type { CellState, RevealCellReader } from '../map/types.js';
+import type { Cell, RevealCellReader } from '../map/types.js';
 import type { SessionManager } from '../session/manager.js';
 import type { IContractClient, TxStatus, WalletManager, WalletProvider } from '../wallet/types.js';
 
@@ -60,6 +61,7 @@ export interface AppConfig {
     transport: TransportRoutingView;
     /** Trade fee params, normalized to the MCP's percent surface. */
     trade: TradeConfigView;
+    storage: StorageConfigView;
 }
 
 export interface TradeConfigView {
@@ -269,7 +271,6 @@ export interface MiningStatusResult {
     nextBatchInSec: number | null;
     claimable: string;
     depositRemaining: string;
-    // Production halted because the mined resource's warehouse is full (server-authoritative).
     stalled: boolean;
     // The mined resource's warehouse; null when uncapped or storage is not reported.
     warehouseUsed: string | null;
@@ -407,7 +408,7 @@ export interface FinalizeResult {
 // ---- Route survey ----
 
 export interface RouteCellReader {
-    allCells(): Array<CellState>;
+    allCells(): Promise<Array<Cell>>;
 }
 
 export interface RouteServiceOptions {
@@ -429,6 +430,7 @@ export interface NextHopView {
     hopDistance: number;
     isOwn: boolean;
     isHub: boolean;
+    ready: boolean | null;
     owner: string;
     transitFeePerUnit: string | null;
     distanceToTarget: number | null;
@@ -437,6 +439,7 @@ export interface NextHopView {
 export interface NextHopsResult {
     from: string;
     fromIsHub: boolean;
+    fromReady: boolean | null;
     towards: string | null;
     targetDistance: number | null;
     reach: { moveRadius: number; hubRadius: number };
@@ -455,6 +458,7 @@ export interface NetworkNodeView {
     pos: CellCoord;
     isOwn: boolean;
     isHub: boolean;
+    ready: boolean | null;
     owner: string;
     transitFeePerUnit: string | null;
     distFromSource: number | null;
@@ -532,7 +536,6 @@ export interface CraftStatusResult {
     claimableBatches: number;
     startAt: number | null;
     durationSec: number | null;
-    // Production halted because at least one output warehouse is full (server-authoritative).
     stalled: boolean;
     // The recipe outputs whose warehouse is full — offload one of these to resume.
     blockedResourceIds: Array<number>;

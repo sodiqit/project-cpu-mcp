@@ -1,4 +1,4 @@
-import { CellProcessKind, type CellProcessView, type CellResource, type CellState } from '../../map/types.js';
+import { CellProcessKind, type CellProcessView, type CellResource, type Cell } from '../../map/types.js';
 import { resourceName, type ResourceNames } from '../../utils/format.utils.js';
 
 type LabeledResource = CellResource & { resourceName: string };
@@ -17,7 +17,7 @@ function labelProcess(resources: ResourceNames, process: CellProcessView | null)
     return process;
 }
 
-export function labelCell<T extends CellState>(cell: T, resources: ResourceNames) {
+export function labelCell<T extends Cell>(cell: T, resources: ResourceNames) {
     return {
         ...cell,
         resources: cell.resources.map((resource) => labelResource(resources, resource)),

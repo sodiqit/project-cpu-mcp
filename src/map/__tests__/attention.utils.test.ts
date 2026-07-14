@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { makeCell, makeCraftProcess, makeMiningProcess, makeResource, makeStorage } from './fixtures.js';
+import {
+    makeCell,
+    makeCraftProcess,
+    makeMiningProcess,
+    makeProjectionConfig,
+    makeResource,
+    makeStorage,
+} from './fixtures.js';
 import { BuildingType } from '../../api/types.js';
 import { buildAttentionReport, withExtraItems } from '../attention.utils.js';
+import { toCell } from '../cell-view.utils.js';
 import { AttentionReason, AttentionSeverity, type AttentionItem } from '../types.js';
 
 const BASE = {
@@ -14,7 +22,12 @@ const BASE = {
 };
 
 function report(cells: Array<Parameters<typeof makeCell>[0]>, craftOutputsByRecipe = {}) {
-    return buildAttentionReport({ ...BASE, craftOutputsByRecipe, ownedCells: cells.map((o) => makeCell(o)) });
+    const config = makeProjectionConfig({ craftOutputsByRecipe });
+    return buildAttentionReport({
+        ...BASE,
+        craftOutputsByRecipe,
+        ownedCells: cells.map((o) => toCell(makeCell(o), BASE.serverTime, config)),
+    });
 }
 
 describe('buildAttentionReport', () => {
@@ -31,7 +44,7 @@ describe('buildAttentionReport', () => {
                 tokenId: '1',
                 revealCount: 1,
                 building: { type: BuildingType.Mine, buildFinishAt: null },
-                process: makeMiningProcess({ resource: 7, stalled: true }),
+                process: makeMiningProcess({ resource: 7 }),
                 resources: [
                     makeResource({
                         resourceId: 7,
@@ -41,7 +54,6 @@ describe('buildAttentionReport', () => {
                             used: '50',
                             cap: '50',
                             reserved: { incomingTransport: '30', lots: '0' },
-                            stalled: true,
                         }),
                     }),
                 ],
@@ -63,23 +75,23 @@ describe('buildAttentionReport', () => {
                     tokenId: '2',
                     revealCount: 1,
                     building: { type: BuildingType.Mine, buildFinishAt: null },
-                    process: makeCraftProcess({ recipeId: 'refine', stalled: true }),
+                    process: makeCraftProcess({ recipeId: 'refine' }),
                     resources: [
                         makeResource({
                             resourceId: 10,
                             deposit: '1000',
-                            storage: makeStorage({ used: '60', cap: '60', stalled: true }),
+                            storage: makeStorage({ used: '60', cap: '60' }),
                         }),
                         makeResource({
                             resourceId: 11,
                             deposit: '1000',
-                            storage: makeStorage({ used: '60', cap: '60', stalled: true }),
+                            storage: makeStorage({ used: '60', cap: '60' }),
                         }),
                         // Not an output of this recipe → must not be flagged even though its box is full.
                         makeResource({
                             resourceId: 99,
                             deposit: '1000',
-                            storage: makeStorage({ used: '60', cap: '60', stalled: true }),
+                            storage: makeStorage({ used: '60', cap: '60' }),
                         }),
                     ],
                 },
@@ -97,7 +109,7 @@ describe('buildAttentionReport', () => {
                 tokenId: '3',
                 revealCount: 1,
                 building: { type: BuildingType.Mine, buildFinishAt: null },
-                process: makeMiningProcess({ resource: 5, stalled: false }),
+                process: makeMiningProcess({ resource: 5 }),
                 resources: [
                     // Mined resource at 95% → warning.
                     makeResource({ resourceId: 5, deposit: '1000', storage: makeStorage({ used: '95', cap: '100' }) }),
@@ -118,7 +130,7 @@ describe('buildAttentionReport', () => {
                 tokenId: '4',
                 revealCount: 1,
                 building: { type: BuildingType.Mine, buildFinishAt: null },
-                process: makeMiningProcess({ resource: 1, stalled: false }),
+                process: makeMiningProcess({ resource: 1 }),
                 resources: [
                     makeResource({
                         resourceId: 1,
@@ -185,9 +197,7 @@ describe('buildAttentionReport', () => {
                 tokenId: '9',
                 revealCount: 1,
                 building: { type: BuildingType.Hub, buildFinishAt: null },
-                resources: [
-                    makeResource({ resourceId: 1, storage: makeStorage({ used: '500', cap: '500', stalled: true }) }),
-                ],
+                resources: [makeResource({ resourceId: 1, storage: makeStorage({ used: '500', cap: '500' }) })],
             },
         ]);
         expect(r.items).toEqual([]);
@@ -200,12 +210,12 @@ describe('buildAttentionReport', () => {
                 tokenId: 'a',
                 revealCount: 1,
                 building: { type: BuildingType.Mine, buildFinishAt: null },
-                process: makeMiningProcess({ resource: 1, stalled: true }),
+                process: makeMiningProcess({ resource: 1 }),
                 resources: [
                     makeResource({
                         resourceId: 1,
                         deposit: '1000',
-                        storage: makeStorage({ used: '50', cap: '50', stalled: true }),
+                        storage: makeStorage({ used: '50', cap: '50' }),
                     }),
                 ],
             },

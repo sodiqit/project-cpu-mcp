@@ -167,6 +167,10 @@ export interface TradeFeeView {
     maxSaleFeeBp: number;
 }
 
+export interface StorageConfigView {
+    hubStorageMultiplier: number;
+}
+
 /** `GET /api/v1/config?network=` response — chainId + contract addresses for one network. */
 export interface AppConfigResponse {
     network: string;
@@ -181,6 +185,7 @@ export interface AppConfigResponse {
     reveal: RevealCostView;
     transport: TransportRoutingView;
     trade: TradeFeeView;
+    storage: StorageConfigView;
 }
 
 /** The building types a cell can hold — 6 tier-1 extractors, tier-2..5 crafters, and the Hub. */

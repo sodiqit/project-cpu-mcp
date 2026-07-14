@@ -59,6 +59,8 @@ const inspection: CellInspection = {
             stalled: false,
         },
         updated: 10,
+        ready: true,
+        activeHub: false,
         neighbors: [{ tokenId: '8', relation: NeighborRelation.Owned }],
     },
     neighbors: [],

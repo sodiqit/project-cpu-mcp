@@ -1,43 +1,62 @@
 import { describe, expect, it } from 'vitest';
 
-import { FakeAppConfig, makeConfig, WALLET_ADDRESS } from './service-fakes.js';
-import { BuildingType } from '../../api/types.js';
+import { DEFAULT_SERVER_TIME, FakeAppConfig, makeConfig, WALLET_ADDRESS } from './service-fakes.js';
+import { type BuildingView, BuildingKind, BuildingType } from '../../api/types.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import { makeCell } from '../../map/__tests__/fixtures.js';
-import type { CellState } from '../../map/types.js';
+import { toCell } from '../../map/cell-view.utils.js';
+import { toProjectionConfig } from '../../map/reader.utils.js';
+import type { RawCell } from '../../map/types.js';
+import { formatUnixSeconds } from '../../utils/format.utils.js';
 import type { WalletProvider } from '../../wallet/types.js';
 import { RouteService } from '../route.service.js';
 
 const RIVAL = '0x000000000000000000000000000000000000beef';
 const RES = 3;
+const UPGRADED_HUB = BuildingType.Datacenter;
+const UNFINISHED_AT = DEFAULT_SERVER_TIME + 1000;
 
-function own(tokenId: string, over: Partial<CellState> = {}): CellState {
+function own(tokenId: string, over: Partial<RawCell> = {}): RawCell {
     return makeCell({ tokenId, owner: WALLET_ADDRESS, revealCount: 1, ...over });
 }
 
-function foreignHub(tokenId: string, feePerUnit: string): CellState {
+function hub(tokenId: string, owner: string, over: Partial<RawCell> = {}): RawCell {
     return makeCell({
         tokenId,
-        owner: RIVAL,
+        owner,
         revealCount: 1,
         building: { type: BuildingType.Hub, buildFinishAt: null },
-        transitFeeOverrides: { [RES]: feePerUnit },
+        ...over,
     });
 }
 
-function makeService(cells: Array<CellState>, defaultMoveFeePerUnit = '0'): RouteService {
+function foreignHub(tokenId: string, feePerUnit: string, over: Partial<RawCell> = {}): RawCell {
+    return hub(tokenId, RIVAL, { transitFeeOverrides: { [RES]: feePerUnit }, ...over });
+}
+
+function upgradedHubCatalogEntry(base: Array<BuildingView>): BuildingView {
+    const entry = base.find((b) => b.kind === BuildingKind.Hub) as BuildingView;
+    return { ...entry, type: UPGRADED_HUB, onChainId: 99, name: 'Mega Hub', tier: 2 };
+}
+
+function makeService(cells: Array<RawCell>, defaultMoveFeePerUnit = '0'): RouteService {
     const wallet = { get: () => ({ getAddress: () => WALLET_ADDRESS }) } as unknown as WalletProvider;
     const base = makeConfig();
-    const config = { ...base, transport: { ...base.transport, defaultMoveFeePerUnit } };
+    const config = {
+        ...base,
+        transport: { ...base.transport, defaultMoveFeePerUnit },
+        buildings: [...base.buildings, upgradedHubCatalogEntry(base.buildings)],
+    };
+    const projection = toProjectionConfig(config);
     return new RouteService({
         wallet,
         appConfig: new FakeAppConfig(config),
-        mapReader: { allCells: () => cells },
+        mapReader: { allCells: async () => cells.map((c) => toCell(c, DEFAULT_SERVER_TIME, projection)) },
         logger: new NoopLogger(),
     });
 }
 
-function survey(cells: Array<CellState>, from: number, towards: number | null = null, resourceId = RES) {
+function survey(cells: Array<RawCell>, from: number, towards: number | null = null, resourceId = RES) {
     return makeService(cells).nextHops({ from, towards, resourceId });
 }
 
@@ -91,22 +110,68 @@ describe('RouteService.nextHops', () => {
     });
 
     it('reaches farther when surveying from a hub', async () => {
-        const cells = [
-            makeCell({
-                tokenId: '72',
-                owner: WALLET_ADDRESS,
-                revealCount: 1,
-                building: { type: BuildingType.Hub, buildFinishAt: null },
-            }),
-            own('75'),
-            own('76'),
-        ];
+        const cells = [hub('72', WALLET_ADDRESS), own('75'), own('76')];
 
         const result = await survey(cells, 72);
 
         expect(result.fromIsHub).toBe(true);
+        expect(result.fromReady).toBe(true);
         expect(result.hops.map((h) => h.tokenId)).toEqual(['75']);
         expect(result.hops[0]?.hopDistance).toBe(3);
+    });
+
+    it('skips a foreign hub that is still under construction — it is no waypoint yet', async () => {
+        const unfinished = foreignHub('75', '0.5', {
+            building: { type: BuildingType.Hub, buildFinishAt: UNFINISHED_AT },
+        });
+
+        const result = await survey([own('72'), unfinished], 72);
+
+        expect(result.hops).toEqual([]);
+    });
+
+    it('counts an upgraded finished hub the catalog names as a waypoint', async () => {
+        const upgraded = foreignHub('75', '0.5', { building: { type: UPGRADED_HUB, buildFinishAt: null } });
+
+        const result = await survey([own('72'), upgraded], 72);
+
+        expect(result.hops).toHaveLength(1);
+        expect(result.hops[0]).toMatchObject({
+            tokenId: '75',
+            hopDistance: 3,
+            isHub: true,
+            ready: true,
+            transitFeePerUnit: '0.5',
+        });
+    });
+
+    it('keeps an owned cell whose hub is still going up as an origin, with normal reach and no hub bonus', async () => {
+        const building = { type: BuildingType.Hub, buildFinishAt: UNFINISHED_AT };
+        const cells = [own('72', { building, transitFeeOverrides: { [RES]: '0.5' } }), own('73'), own('75')];
+
+        const result = await survey(cells, 72);
+
+        expect(result.fromIsHub).toBe(false);
+        expect(result.fromReady).toBe(false);
+        expect(result.hops.map((h) => h.tokenId)).toEqual(['73']);
+    });
+
+    it('reports a bare waypoint as ready: null rather than not-ready', async () => {
+        const result = await survey([own('72'), own('73')], 72);
+
+        expect(result.fromReady).toBeNull();
+        expect(result.hops[0]?.ready).toBeNull();
+    });
+
+    it('rejects routing from a hub still under construction, naming when it will be ready', async () => {
+        const unfinished = foreignHub('75', '0.5', {
+            building: { type: BuildingType.Hub, buildFinishAt: UNFINISHED_AT },
+        });
+
+        await expect(survey([own('72'), unfinished], 75)).rejects.toThrow(
+            `The Hub on cell 75 is still under construction (ready ${formatUnixSeconds(UNFINISHED_AT)}); ` +
+                'it counts as a waypoint only once construction finishes.',
+        );
     });
 
     it('rejects ineligible or unknown origins with specific errors', async () => {
@@ -168,19 +233,60 @@ describe('RouteService.network', () => {
         expect(walled.edges).toEqual([]);
         expect(walled.components).toBe(2);
 
-        const hub72 = makeCell({
-            tokenId: '72',
-            owner: WALLET_ADDRESS,
-            revealCount: 1,
-            building: { type: BuildingType.Hub, buildFinishAt: null },
-        });
-        const bridged = await makeService([hub72, rival, own('74')]).network({
+        const bridged = await makeService([hub('72', WALLET_ADDRESS), rival, own('74')]).network({
             from: null,
             towards: null,
             resourceId: RES,
         });
         expect(bridged.edges).toEqual([{ a: '72', b: '74', distance: 2 }]);
         expect(bridged.components).toBe(1);
+    });
+
+    it('drops a foreign hub that is still under construction from the network', async () => {
+        const unfinished = foreignHub('75', '0.5', {
+            building: { type: BuildingType.Hub, buildFinishAt: UNFINISHED_AT },
+        });
+
+        const result = await makeService([own('72'), unfinished]).network({
+            from: null,
+            towards: null,
+            resourceId: RES,
+        });
+
+        expect(result.nodes.map((n) => n.tokenId)).toEqual(['72']);
+    });
+
+    it('an upgraded finished hub is a node and bridges a wall', async () => {
+        const rival = makeCell({ tokenId: '73', owner: RIVAL, revealCount: 1 });
+        const upgraded = own('72', { building: { type: UPGRADED_HUB, buildFinishAt: null } });
+
+        const result = await makeService([upgraded, rival, own('74')]).network({
+            from: null,
+            towards: null,
+            resourceId: RES,
+        });
+
+        expect(result.nodes.find((n) => n.tokenId === '72')).toMatchObject({ isHub: true, ready: true });
+        expect(result.edges).toEqual([{ a: '72', b: '74', distance: 2 }]);
+    });
+
+    it('an owned cell whose hub is unfinished stays a node with normal reach and no transit fee', async () => {
+        const rival = makeCell({ tokenId: '73', owner: RIVAL, revealCount: 1 });
+        const building = { type: BuildingType.Hub, buildFinishAt: UNFINISHED_AT };
+        const goingUp = own('72', { building, transitFeeOverrides: { [RES]: '0.5' } });
+
+        const result = await makeService([goingUp, rival, own('74')]).network({
+            from: null,
+            towards: null,
+            resourceId: RES,
+        });
+
+        expect(result.nodes.find((n) => n.tokenId === '72')).toMatchObject({
+            isHub: false,
+            ready: false,
+            transitFeePerUnit: null,
+        });
+        expect(result.edges).toEqual([]);
     });
 
     it('shows a disconnected target as a separate component', async () => {

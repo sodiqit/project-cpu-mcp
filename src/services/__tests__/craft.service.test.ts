@@ -126,7 +126,6 @@ describe('CraftService.getStatus', () => {
                 batches: 2,
                 claimedBatches: 0,
                 durationSec: 60,
-                stalled: false,
                 startAt: 1,
             },
         });
@@ -160,7 +159,6 @@ describe('CraftService.getStatus', () => {
                 batches: 2,
                 claimedBatches: 0,
                 durationSec: 60,
-                stalled: true,
                 startAt: 1,
             },
             resources: [
@@ -169,7 +167,7 @@ describe('CraftService.getStatus', () => {
                     deposit: '0',
                     balance: '60',
                     strength: null,
-                    storage: makeStorage({ used: '60', cap: '60', stalled: true }),
+                    storage: makeStorage({ used: '60', cap: '60' }),
                 },
             ],
         });

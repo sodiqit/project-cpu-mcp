@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { makeCell } from './fixtures.js';
+import { makeCell, makeMiningProcess, makeCraftProcess, makeResource, makeStorage, projectCell } from './fixtures.js';
 import {
     buildResourceIndex,
     classifyNeighbors,
     filterCells,
     isNewer,
-    parseCellState,
+    parseCell,
     parseSnapshot,
     summarizeMap,
 } from '../map.utils.js';
-import { type CellState, CellProcessKind, MapReadiness, MapScope, type MapQuery, NeighborRelation } from '../types.js';
+import { MapReadiness, MapScope, type MapQuery, NeighborRelation, type RawCell } from '../types.js';
 
 function query(overrides: Partial<MapQuery>): MapQuery {
     return { scope: MapScope.All, tokenIds: null, around: null, ownerAddress: null, ...overrides };
@@ -51,24 +51,24 @@ describe('isNewer', () => {
     });
 });
 
-describe('parseCellState', () => {
+describe('parseCell', () => {
     it('returns the cell for a valid payload', () => {
-        expect(parseCellState(makeCell())).not.toBeNull();
+        expect(parseCell(makeCell())).not.toBeNull();
     });
 
     it('returns null for invalid payloads', () => {
-        expect(parseCellState({})).toBeNull();
-        expect(parseCellState(makeCell({ updated: 'soon' as unknown as number }))).toBeNull();
+        expect(parseCell({})).toBeNull();
+        expect(parseCell(makeCell({ updated: 'soon' as unknown as number }))).toBeNull();
     });
 });
 
 describe('classifyNeighbors', () => {
     it('labels each grid neighbour owned / other / empty (case-insensitive owner)', () => {
-        const grid = new Map<string, CellState>([
+        const grid = new Map<string, RawCell>([
             ['71', makeCell({ tokenId: '71', owner: '0xME' })],
             ['73', makeCell({ tokenId: '73', owner: '0xrival' })],
         ]);
-        const getByTokenId = (tokenId: string): CellState | null => grid.get(tokenId) ?? null;
+        const getByTokenId = (tokenId: string): RawCell | null => grid.get(tokenId) ?? null;
 
         const refs = classifyNeighbors(makeCell({ tokenId: '72' }), getByTokenId, '0xme');
 
@@ -172,35 +172,23 @@ describe('summarizeMap', () => {
             makeCell({
                 tokenId: 'm',
                 revealCount: 1,
-                process: {
-                    kind: CellProcessKind.Mining,
-                    resource: 1,
-                    durationSec: 180,
-                    batch: 77,
-                    startAt: 1,
-                    stalled: true,
-                },
+                process: makeMiningProcess({ resource: 1, startAt: 1 }),
+                resources: [
+                    makeResource({ resourceId: 1, deposit: '1000', storage: makeStorage({ used: '50', cap: '50' }) }),
+                ],
             }),
             makeCell({
                 tokenId: 'c',
                 revealCount: 1,
-                process: {
-                    kind: CellProcessKind.Craft,
-                    recipeId: 'r',
-                    batches: 1,
-                    claimedBatches: 0,
-                    durationSec: 60,
-                    startAt: 1,
-                    stalled: false,
-                },
+                process: makeCraftProcess({ recipeId: 'r', startAt: 1 }),
             }),
             makeCell({ tokenId: 'i', revealCount: 1 }),
             makeCell({
                 tokenId: 'd',
                 revealCount: 1,
-                resources: [{ resourceId: 1, deposit: '0', balance: '0', strength: null, storage: null }],
+                resources: [makeResource({ resourceId: 1, deposit: '0' })],
             }),
-        ];
+        ].map((cell) => projectCell(cell));
 
         const summary = summarizeMap({ ...base, ownedCells });
 

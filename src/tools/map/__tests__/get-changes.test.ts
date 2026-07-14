@@ -25,6 +25,8 @@ const CHANGED: EnrichedCell = {
     saleFeeOverrides: null,
     process: null,
     updated: 5,
+    ready: null,
+    activeHub: false,
     neighbors: [],
 };
 

@@ -13,7 +13,7 @@ export function registerGetChangesTool(server: McpServer, context: AppContext): 
         async (args) => {
             const health = context.api.getServerHealth();
             const since = args.sinceVersion ?? 0;
-            const changes = context.mapReader.getChanges(since, getWalletAddress(context));
+            const changes = await context.mapReader.getChanges(since, getWalletAddress(context));
             const { resources } = await context.appConfig.load();
 
             const serverTag = health.reachable ? 'server=up' : 'server=DOWN';

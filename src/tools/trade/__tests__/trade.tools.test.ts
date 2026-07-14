@@ -1,11 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it } from 'vitest';
 
-import { type LotView, type MarketResourceSummary, LotState } from '../../../api/types.js';
+import { type LotView, type MarketResourceSummary, BuildingType, LotState } from '../../../api/types.js';
 import { Network } from '../../../config/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
-import { makeCell } from '../../../map/__tests__/fixtures.js';
-import type { CellState } from '../../../map/types.js';
+import { makeCell, projectCell } from '../../../map/__tests__/fixtures.js';
+import type { Cell } from '../../../map/types.js';
 import type {
     BalanceResult,
     BuyLotResult,
@@ -133,8 +133,11 @@ const market: MarketResourceSummary = {
     distanceFromAnchor: 3,
 };
 
-function hubCell(saleFeeOverrides: Record<number, number> | null): CellState {
-    return makeCell({ tokenId: '5', saleFeeOverrides });
+function hubCell(
+    saleFeeOverrides: Record<number, number> | null,
+    building: Cell['building'] | null = { type: BuildingType.Hub, buildFinishAt: 0 },
+): Cell {
+    return projectCell(makeCell({ tokenId: '5', building, saleFeeOverrides }));
 }
 
 describe('create_lot / cancel_lot tools', () => {
@@ -267,10 +270,10 @@ describe('discovery read tools', () => {
         expect(result.content[0]?.text).toMatch(/sale fee 1.5%/);
     });
 
-    it('get_markets enriches the live sale fee from the world map', async () => {
+    it('get_markets enriches the live sale fee from an active hub with an override', async () => {
         const handler = capture(registerGetMarketsTool, {
             trade: { getMarkets: async () => [market] },
-            mapReader: { readRevealCell: (id: string) => (id === '5' ? hubCell({ 3: 2.5 }) : null) },
+            mapReader: { readRevealCell: async (id: string) => (id === '5' ? hubCell({ 3: 2.5 }) : null) },
         });
         const result = await handler({} as never);
         expect(result.content[0]?.text).toMatch(/Hub 5 · /);
@@ -281,30 +284,42 @@ describe('discovery read tools', () => {
         expect(json[0]?.liveSaleFeePercent).toBe(2.5);
     });
 
-    it('get_markets reports a known hub with no rate for the resource as 0%', async () => {
+    it('get_markets reports an active hub with no override as 0%', async () => {
         const handler = capture(registerGetMarketsTool, {
             trade: { getMarkets: async () => [market] },
-            mapReader: { readRevealCell: () => hubCell({}) },
+            mapReader: { readRevealCell: async () => hubCell({}) },
         });
         const result = await handler({} as never);
         const json = JSON.parse(result.content[1]?.text ?? '[]') as Array<{ liveSaleFeePercent: number | null }>;
         expect(json[0]?.liveSaleFeePercent).toBe(0);
     });
 
-    it('get_markets degrades liveSaleFeePercent to null when the map has no read on the hub', async () => {
+    it('get_markets reports null for a hub still under construction, even with an override set', async () => {
         const handler = capture(registerGetMarketsTool, {
             trade: { getMarkets: async () => [market] },
-            mapReader: { readRevealCell: () => null },
+            mapReader: {
+                readRevealCell: async () => hubCell({ 3: 2.5 }, { type: BuildingType.Hub, buildFinishAt: 100 }),
+            },
         });
         const result = await handler({} as never);
         const json = JSON.parse(result.content[1]?.text ?? '[]') as Array<{ liveSaleFeePercent: number | null }>;
         expect(json[0]?.liveSaleFeePercent).toBeNull();
     });
 
-    it('get_markets reports null (not a fabricated 0) for a hub not serving sale fees', async () => {
+    it('get_markets reports null for a cell with no hub-kind building at all', async () => {
         const handler = capture(registerGetMarketsTool, {
             trade: { getMarkets: async () => [market] },
-            mapReader: { readRevealCell: () => hubCell(null) },
+            mapReader: { readRevealCell: async () => hubCell(null, null) },
+        });
+        const result = await handler({} as never);
+        const json = JSON.parse(result.content[1]?.text ?? '[]') as Array<{ liveSaleFeePercent: number | null }>;
+        expect(json[0]?.liveSaleFeePercent).toBeNull();
+    });
+
+    it('get_markets degrades liveSaleFeePercent to null when the map has no read on the hub', async () => {
+        const handler = capture(registerGetMarketsTool, {
+            trade: { getMarkets: async () => [market] },
+            mapReader: { readRevealCell: async () => null },
         });
         const result = await handler({} as never);
         const json = JSON.parse(result.content[1]?.text ?? '[]') as Array<{ liveSaleFeePercent: number | null }>;

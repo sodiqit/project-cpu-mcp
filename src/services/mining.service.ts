@@ -15,7 +15,7 @@ import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
 import { computeMaturation } from '../map/process.utils.js';
 import { capByRoom } from '../map/storage.utils.js';
-import { CellProcessKind, type CellState, type RevealCellReader } from '../map/types.js';
+import { CellProcessKind, type Cell, type RevealCellReader } from '../map/types.js';
 import { formatUnixSeconds, resourceLabel } from '../utils/format.utils.js';
 import type { IContractClient, WalletProvider } from '../wallet/types.js';
 
@@ -38,7 +38,7 @@ export class MiningService {
 
     async getStatus(tokenId: string): Promise<MiningStatusResult> {
         await this.mapReader.refresh();
-        const state = this.mapReader.readRevealCell(tokenId);
+        const state = await this.mapReader.readRevealCell(tokenId);
         if (state === null) {
             throw new Error(`Cell ${tokenId} is not in the current map.`);
         }
@@ -143,7 +143,7 @@ export class MiningService {
         }
 
         await this.mapReader.refresh();
-        const state = this.mapReader.readRevealCell(input.tokenId);
+        const state = await this.mapReader.readRevealCell(input.tokenId);
         const target = this.resolveMiningTarget(config, state, input, wallet.getAddress());
 
         this.logger.info('starting mining', { tokenId: input.tokenId, target });
@@ -164,7 +164,7 @@ export class MiningService {
 
     private resolveMiningTarget(
         config: AppConfig,
-        state: CellState | null,
+        state: Cell | null,
         input: StartMiningInput,
         address: string,
     ): number {
@@ -184,10 +184,11 @@ export class MiningService {
                 `The ${name} on cell ${input.tokenId} is not an extractor and cannot mine — crafters run cpu_craft.`,
             );
         }
-        if (state.building.buildFinishAt !== null && state.building.buildFinishAt > Math.floor(Date.now() / 1000)) {
+        const buildFinishAt = state.building.buildFinishAt;
+        if (buildFinishAt !== null && state.ready === false) {
             throw new Error(
                 `The ${view.name} on cell ${input.tokenId} is still under construction (ready ` +
-                    `${formatUnixSeconds(state.building.buildFinishAt)}); start mining once it finishes.`,
+                    `${formatUnixSeconds(buildFinishAt)}); start mining once it finishes.`,
             );
         }
         if (state.process !== null) {

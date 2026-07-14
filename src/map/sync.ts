@@ -2,13 +2,13 @@ import { MAP_HTTP_PATH, SERVER_INITIATED_DISCONNECT_REASON, STARTUP_FETCH_RETRY_
 import { parseSnapshot } from './map.utils.js';
 import type { MapStore } from './store.js';
 import {
-    type CellState,
     type IMapApi,
     type ISocketClient,
     MapReadiness,
     type MapSocketFactory,
     type MapStatus,
     type MapSyncOptions,
+    type RawCell,
 } from './types.js';
 import { HttpStatus } from '../api/types.js';
 import type { ILogger } from '../logger/types.js';
@@ -162,7 +162,7 @@ export class MapSync implements MapStatus {
         this.logger.warn('map socket error', { error: error.message });
     }
 
-    private handleCellUpdate(cell: CellState): void {
+    private handleCellUpdate(cell: RawCell): void {
         if (this.store.applyCell(cell)) {
             this.logger.debug('cell updated', { tokenId: cell.tokenId, latest: this.store.getLatestUpdated() });
         }
