@@ -54,6 +54,7 @@ const CONFIG: AppConfig = {
     reveal: { firstFree: true, reRevealCost: '1000' },
     transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2, defaultMoveFeePerUnit: '0.1' },
     trade: { saleBurnPercent: 1, maxSaleFeePercent: 50 },
+    storage: { hubStorageMultiplier: 10 },
 };
 
 function capture(): (args: never) => Promise<ToolResult> {
@@ -86,11 +87,13 @@ describe('get_game_config tool', () => {
         expect(header).toMatch(/5:Iron/);
         expect(header).toMatch(/cell 0x5555555555555555555555555555555555555555/);
         expect(header).toMatch(/1% sale burn, sale-fee cap 50%, default transit fee 0.1 \$CPU\/u/);
+        expect(header).toMatch(/an active hub multiplies a cell's storage cap by 10x/);
 
         const json = JSON.parse(result.content[1]?.text ?? '{}') as AppConfig;
         expect(json.buildings[0]?.buildCost).toBe('5');
         expect(json.reveal.reRevealCost).toBe('1000');
         expect(json.trade).toEqual({ saleBurnPercent: 1, maxSaleFeePercent: 50 });
         expect(json.transport.defaultMoveFeePerUnit).toBe('0.1');
+        expect(json.storage).toEqual({ hubStorageMultiplier: 10 });
     });
 });

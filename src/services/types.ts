@@ -10,6 +10,7 @@ import type {
     LotSort,
     RecipeView,
     RevealCostView,
+    StorageConfigView,
     TransportRoutingView,
 } from '../api/types.js';
 import type { Network } from '../config/types.js';
@@ -60,6 +61,7 @@ export interface AppConfig {
     transport: TransportRoutingView;
     /** Trade fee params, normalized to the MCP's percent surface. */
     trade: TradeConfigView;
+    storage: StorageConfigView;
 }
 
 export interface TradeConfigView {

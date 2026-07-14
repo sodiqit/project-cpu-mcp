@@ -54,6 +54,7 @@ function makeResponse(overrides: Partial<AppConfigResponse> = {}): AppConfigResp
         reveal: { firstFree: true, reRevealCost: '1000' },
         transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2, defaultMoveFeePerUnit: '0.1' },
         trade: { saleBurnPercent: 1, maxSaleFeeBp: 5000 },
+        storage: { hubStorageMultiplier: 10 },
         ...overrides,
     };
 }
@@ -82,6 +83,7 @@ describe('AppConfigService', () => {
         expect(first.resources[5]).toBe('Iron');
         expect(first.transport.defaultMoveFeePerUnit).toBe('0.1');
         expect(first.trade).toEqual({ saleBurnPercent: 1, maxSaleFeePercent: 50 });
+        expect(first.storage).toEqual({ hubStorageMultiplier: 10 });
         expect(second).toBe(first);
     });
 
@@ -94,6 +96,7 @@ describe('AppConfigService', () => {
                     chainId: 1,
                     contracts: { land: '', cpuToken: '', cpuHook: '', cell: '' },
                     resources: {},
+                    storage: { hubStorageMultiplier: 10 },
                 },
             }),
         ).load();
@@ -125,6 +128,7 @@ describe('AppConfigService', () => {
                     chainId: 1,
                     contracts: { land: '', cpuToken: '', cpuHook: '', cell: '' },
                     resources: {},
+                    storage: { hubStorageMultiplier: 10 },
                 },
             }),
         ).load();
@@ -136,5 +140,11 @@ describe('AppConfigService', () => {
     it('throws on a non-200 config response', async () => {
         const api = new FakeApi({ status: 500, data: {} });
         await expect(makeService(api).load()).rejects.toThrow(/Failed to load chain config/i);
+    });
+
+    it('has no client-side default for the storage multiplier and fails loudly when the API omits it', async () => {
+        const { storage: _storage, ...withoutStorage } = makeResponse();
+        const api = new FakeApi({ status: 200, data: withoutStorage });
+        await expect(makeService(api).load()).rejects.toThrow();
     });
 });

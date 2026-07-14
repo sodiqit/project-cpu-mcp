@@ -167,6 +167,12 @@ export interface TradeFeeView {
     maxSaleFeeBp: number;
 }
 
+/** Storage rules that apply cell-wide, independent of any one resource. */
+export interface StorageConfigView {
+    /** Factor an active hub multiplies a cell's base storage cap by. */
+    hubStorageMultiplier: number;
+}
+
 /** `GET /api/v1/config?network=` response — chainId + contract addresses for one network. */
 export interface AppConfigResponse {
     network: string;
@@ -181,6 +187,7 @@ export interface AppConfigResponse {
     reveal: RevealCostView;
     transport: TransportRoutingView;
     trade: TradeFeeView;
+    storage: StorageConfigView;
 }
 
 /** The building types a cell can hold — 6 tier-1 extractors, tier-2..5 crafters, and the Hub. */
