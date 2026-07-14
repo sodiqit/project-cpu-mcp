@@ -271,7 +271,6 @@ export interface MiningStatusResult {
     nextBatchInSec: number | null;
     claimable: string;
     depositRemaining: string;
-    // Production halted because the mined resource's warehouse is full (server-authoritative).
     stalled: boolean;
     // The mined resource's warehouse; null when uncapped or storage is not reported.
     warehouseUsed: string | null;
@@ -534,7 +533,6 @@ export interface CraftStatusResult {
     claimableBatches: number;
     startAt: number | null;
     durationSec: number | null;
-    // Production halted because at least one output warehouse is full (server-authoritative).
     stalled: boolean;
     // The recipe outputs whose warehouse is full — offload one of these to resume.
     blockedResourceIds: Array<number>;

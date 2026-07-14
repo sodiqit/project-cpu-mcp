@@ -167,9 +167,7 @@ export interface TradeFeeView {
     maxSaleFeeBp: number;
 }
 
-/** Storage rules that apply cell-wide, independent of any one resource. */
 export interface StorageConfigView {
-    /** Factor an active hub multiplies a cell's base storage cap by. */
     hubStorageMultiplier: number;
 }
 

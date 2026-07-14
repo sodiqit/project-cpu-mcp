@@ -57,7 +57,6 @@ export class AppConfigService implements IAppConfig {
                 saleBurnPercent: data.trade?.saleBurnPercent ?? 0,
                 maxSaleFeePercent: bpToPercent(data.trade?.maxSaleFeeBp ?? 0),
             },
-            // No fallback: an active hub's warehouse would silently read as a tenth of its real capacity.
             storage: { hubStorageMultiplier: data.storage.hubStorageMultiplier },
         };
         this.cached = config;
