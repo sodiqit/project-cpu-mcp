@@ -10,8 +10,8 @@ function originNote(result: NextHopsResult): string {
         return '';
     }
     return (
-        ` ${result.from} has a building still under construction, so it is not an active Hub — your reach from ` +
-        'here is normal cell reach.'
+        ` ${result.from} has a building still under construction, so your reach from here is normal cell reach — ` +
+        'a Hub grants hub reach only once its construction finishes.'
     );
 }
 
