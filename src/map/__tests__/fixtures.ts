@@ -1,24 +1,29 @@
+import { BuildingType } from '../../api/types.js';
+import { toCell } from '../cell-view.utils.js';
 import {
-    type CellProcessCraftView,
-    type CellProcessMiningView,
-    type CellResource,
-    type CellResourceStorage,
     type Cell,
+    type CellProjectionConfig,
     CellProcessKind,
     type MapSnapshotResponse,
+    type RawCell,
+    type RawCellProcessCraftView,
+    type RawCellProcessMiningView,
+    type RawCellResource,
+    type RawCellResourceStorage,
 } from '../types.js';
 
-export function makeStorage(overrides: Partial<CellResourceStorage> = {}): CellResourceStorage {
+export const TEST_HUB_STORAGE_MULTIPLIER = 10;
+
+export function makeStorage(overrides: Partial<RawCellResourceStorage> = {}): RawCellResourceStorage {
     return {
         used: '0',
         cap: '100',
         reserved: { incomingTransport: '0', lots: '0' },
-        stalled: false,
         ...overrides,
     };
 }
 
-export function makeResource(overrides: Partial<CellResource> = {}): CellResource {
+export function makeResource(overrides: Partial<RawCellResource> = {}): RawCellResource {
     return {
         resourceId: 1,
         deposit: '0',
@@ -29,19 +34,18 @@ export function makeResource(overrides: Partial<CellResource> = {}): CellResourc
     };
 }
 
-export function makeMiningProcess(overrides: Partial<CellProcessMiningView> = {}): CellProcessMiningView {
+export function makeMiningProcess(overrides: Partial<RawCellProcessMiningView> = {}): RawCellProcessMiningView {
     return {
         kind: CellProcessKind.Mining,
         resource: 1,
         durationSec: 180,
         batch: 77,
         startAt: 0,
-        stalled: false,
         ...overrides,
     };
 }
 
-export function makeCraftProcess(overrides: Partial<CellProcessCraftView> = {}): CellProcessCraftView {
+export function makeCraftProcess(overrides: Partial<RawCellProcessCraftView> = {}): RawCellProcessCraftView {
     return {
         kind: CellProcessKind.Craft,
         recipeId: 'recipe',
@@ -49,12 +53,11 @@ export function makeCraftProcess(overrides: Partial<CellProcessCraftView> = {}):
         claimedBatches: 0,
         durationSec: 60,
         startAt: 0,
-        stalled: false,
         ...overrides,
     };
 }
 
-export function makeCell(overrides: Partial<Cell> = {}): Cell {
+export function makeCell(overrides: Partial<RawCell> = {}): RawCell {
     return {
         tokenId: '1',
         owner: '0xowner',
@@ -78,4 +81,17 @@ export function makeSnapshot(overrides: Partial<MapSnapshotResponse> = {}): MapS
         cells: [],
         ...overrides,
     };
+}
+
+export function makeProjectionConfig(overrides: Partial<CellProjectionConfig> = {}): CellProjectionConfig {
+    return {
+        hubStorageMultiplier: TEST_HUB_STORAGE_MULTIPLIER,
+        hubBuildingTypes: new Set<string>([BuildingType.Hub]),
+        craftOutputsByRecipe: {},
+        ...overrides,
+    };
+}
+
+export function projectCell(raw: RawCell, serverTime = 0, config: CellProjectionConfig = makeProjectionConfig()): Cell {
+    return toCell(raw, serverTime, config);
 }

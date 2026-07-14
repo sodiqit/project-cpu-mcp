@@ -408,7 +408,7 @@ export interface FinalizeResult {
 // ---- Route survey ----
 
 export interface RouteCellReader {
-    allCells(): Array<Cell>;
+    allCells(): Promise<Array<Cell>>;
 }
 
 export interface RouteServiceOptions {

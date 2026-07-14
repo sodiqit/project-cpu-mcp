@@ -14,7 +14,7 @@ export function registerGetMapTool(server: McpServer, context: AppContext): void
         async (args) => {
             const ownerAddress = getWalletAddress(context);
             const scope = resolveScope(args.scope, ownerAddress);
-            const result = context.mapReader.query(buildMapQuery(scope, args, ownerAddress));
+            const result = await context.mapReader.query(buildMapQuery(scope, args, ownerAddress));
             const { resources } = await context.appConfig.load();
             const health = context.api.getServerHealth();
 

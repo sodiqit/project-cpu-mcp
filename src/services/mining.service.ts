@@ -38,7 +38,7 @@ export class MiningService {
 
     async getStatus(tokenId: string): Promise<MiningStatusResult> {
         await this.mapReader.refresh();
-        const state = this.mapReader.readRevealCell(tokenId);
+        const state = await this.mapReader.readRevealCell(tokenId);
         if (state === null) {
             throw new Error(`Cell ${tokenId} is not in the current map.`);
         }
@@ -143,7 +143,7 @@ export class MiningService {
         }
 
         await this.mapReader.refresh();
-        const state = this.mapReader.readRevealCell(input.tokenId);
+        const state = await this.mapReader.readRevealCell(input.tokenId);
         const target = this.resolveMiningTarget(config, state, input, wallet.getAddress());
 
         this.logger.info('starting mining', { tokenId: input.tokenId, target });

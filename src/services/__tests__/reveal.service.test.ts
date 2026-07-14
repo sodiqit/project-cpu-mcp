@@ -98,7 +98,7 @@ class FakeRevealCellReader {
         private state: Cell | null,
         private readonly bumpTo: number | null = null,
     ) {}
-    readRevealCell(): Cell | null {
+    async readRevealCell(): Promise<Cell | null> {
         return this.state;
     }
     getServerTime(): number {

@@ -52,7 +52,7 @@ export class BuildService {
         // Paid action — pull a fresh snapshot so the pre-checks below gate on current on-chain state, not a
         // possibly-stale local cache (mirrors mining's start path).
         await this.mapReader.refresh();
-        const state = this.mapReader.readRevealCell(input.tokenId);
+        const state = await this.mapReader.readRevealCell(input.tokenId);
         this.assertBuildable(input, state, wallet.getAddress());
 
         const alreadyBuilt = state?.building?.type === input.buildingType;
@@ -80,7 +80,7 @@ export class BuildService {
         const tokenId = BigInt(input.tokenId);
 
         await this.mapReader.refresh();
-        const state = this.mapReader.readRevealCell(input.tokenId);
+        const state = await this.mapReader.readRevealCell(input.tokenId);
         this.assertOwner(input.tokenId, state, wallet.getAddress(), 'demolish');
         if (state === null || state.building === null) {
             throw new Error(

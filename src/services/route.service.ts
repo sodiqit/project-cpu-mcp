@@ -50,7 +50,7 @@ export class RouteService {
 
         const nodes = new Map<string, RouteNode>();
         const cellsByToken = new Map<string, Cell>();
-        for (const cell of this.mapReader.allCells()) {
+        for (const cell of await this.mapReader.allCells()) {
             cellsByToken.set(cell.tokenId, cell);
             const isOwn = cell.owner.toLowerCase() === address;
             const isHub = cell.building !== null && cell.building.type === BuildingType.Hub;
@@ -122,7 +122,7 @@ export class RouteService {
 
         const nodes = new Map<string, RouteNode>();
         const cellsByToken = new Map<string, Cell>();
-        for (const cell of this.mapReader.allCells()) {
+        for (const cell of await this.mapReader.allCells()) {
             cellsByToken.set(cell.tokenId, cell);
             const isOwn = cell.owner.toLowerCase() === address;
             const isHub = cell.building !== null && cell.building.type === BuildingType.Hub;

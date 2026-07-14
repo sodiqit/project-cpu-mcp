@@ -8,11 +8,11 @@ import { summarizeMarkets } from '../format.utils.js';
 import { marketsInputSchema, type EnrichedMarketSummary } from '../types.js';
 
 interface SaleFeeReader {
-    readRevealCell(tokenId: string): Cell | null;
+    readRevealCell(tokenId: string): Promise<Cell | null>;
 }
 
-function enrichLiveSaleFee(mapReader: SaleFeeReader, row: MarketResourceSummary): EnrichedMarketSummary {
-    const cell = mapReader.readRevealCell(row.hubTokenId);
+async function enrichLiveSaleFee(mapReader: SaleFeeReader, row: MarketResourceSummary): Promise<EnrichedMarketSummary> {
+    const cell = await mapReader.readRevealCell(row.hubTokenId);
     const liveSaleFeePercent =
         cell === null || cell.saleFeeOverrides === null ? null : (cell.saleFeeOverrides[row.resourceId] ?? 0);
     return { ...row, liveSaleFeePercent };
@@ -24,7 +24,7 @@ export function registerGetMarketsTool(server: McpServer, context: AppContext): 
         { description: GET_MARKETS_DESCRIPTION, inputSchema: marketsInputSchema },
         async (args) => {
             const markets = await context.trade.getMarkets(args);
-            const enriched = markets.map((row) => enrichLiveSaleFee(context.mapReader, row));
+            const enriched = await Promise.all(markets.map((row) => enrichLiveSaleFee(context.mapReader, row)));
             const { resources } = await context.appConfig.load();
 
             return {

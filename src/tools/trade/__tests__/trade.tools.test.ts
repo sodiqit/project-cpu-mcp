@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { type LotView, type MarketResourceSummary, LotState } from '../../../api/types.js';
 import { Network } from '../../../config/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
-import { makeCell } from '../../../map/__tests__/fixtures.js';
+import { makeCell, projectCell } from '../../../map/__tests__/fixtures.js';
 import type { Cell } from '../../../map/types.js';
 import type {
     BalanceResult,
@@ -134,7 +134,7 @@ const market: MarketResourceSummary = {
 };
 
 function hubCell(saleFeeOverrides: Record<number, number> | null): Cell {
-    return makeCell({ tokenId: '5', saleFeeOverrides });
+    return projectCell(makeCell({ tokenId: '5', saleFeeOverrides }));
 }
 
 describe('create_lot / cancel_lot tools', () => {
@@ -270,7 +270,7 @@ describe('discovery read tools', () => {
     it('get_markets enriches the live sale fee from the world map', async () => {
         const handler = capture(registerGetMarketsTool, {
             trade: { getMarkets: async () => [market] },
-            mapReader: { readRevealCell: (id: string) => (id === '5' ? hubCell({ 3: 2.5 }) : null) },
+            mapReader: { readRevealCell: async (id: string) => (id === '5' ? hubCell({ 3: 2.5 }) : null) },
         });
         const result = await handler({} as never);
         expect(result.content[0]?.text).toMatch(/Hub 5 · /);
@@ -284,7 +284,7 @@ describe('discovery read tools', () => {
     it('get_markets reports a known hub with no rate for the resource as 0%', async () => {
         const handler = capture(registerGetMarketsTool, {
             trade: { getMarkets: async () => [market] },
-            mapReader: { readRevealCell: () => hubCell({}) },
+            mapReader: { readRevealCell: async () => hubCell({}) },
         });
         const result = await handler({} as never);
         const json = JSON.parse(result.content[1]?.text ?? '[]') as Array<{ liveSaleFeePercent: number | null }>;
@@ -294,7 +294,7 @@ describe('discovery read tools', () => {
     it('get_markets degrades liveSaleFeePercent to null when the map has no read on the hub', async () => {
         const handler = capture(registerGetMarketsTool, {
             trade: { getMarkets: async () => [market] },
-            mapReader: { readRevealCell: () => null },
+            mapReader: { readRevealCell: async () => null },
         });
         const result = await handler({} as never);
         const json = JSON.parse(result.content[1]?.text ?? '[]') as Array<{ liveSaleFeePercent: number | null }>;
@@ -304,7 +304,7 @@ describe('discovery read tools', () => {
     it('get_markets reports null (not a fabricated 0) for a hub not serving sale fees', async () => {
         const handler = capture(registerGetMarketsTool, {
             trade: { getMarkets: async () => [market] },
-            mapReader: { readRevealCell: () => hubCell(null) },
+            mapReader: { readRevealCell: async () => hubCell(null) },
         });
         const result = await handler({} as never);
         const json = JSON.parse(result.content[1]?.text ?? '[]') as Array<{ liveSaleFeePercent: number | null }>;

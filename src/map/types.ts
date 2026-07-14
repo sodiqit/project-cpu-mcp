@@ -4,6 +4,7 @@ import type { MapStore } from './store.js';
 import { BuildingType } from '../api/types.js';
 import type { CellCoord } from '../geometry/types.js';
 import type { ILogger } from '../logger/types.js';
+import type { IAppConfig } from '../services/types.js';
 import { saleFeeOverridesToPercent } from '../utils/format.utils.js';
 
 export enum CellProcessKind {
@@ -76,34 +77,10 @@ export const rawCellSchema = z.object({
     updated: z.number(),
 });
 
-export const cellResourceStorageSchema = rawCellResourceStorageSchema.extend({ stalled: z.boolean() });
-
-export const cellResourceSchema = rawCellResourceSchema.extend({
-    storage: cellResourceStorageSchema.nullable().default(null),
-});
-
-export const cellProcessMiningViewSchema = rawCellProcessMiningViewSchema.extend({
-    stalled: z.boolean().default(false),
-});
-
-export const cellProcessCraftViewSchema = rawCellProcessCraftViewSchema.extend({
-    stalled: z.boolean().default(false),
-});
-
-export const cellProcessViewSchema = z.discriminatedUnion('kind', [
-    cellProcessMiningViewSchema,
-    cellProcessCraftViewSchema,
-]);
-
-export const cellSchema = rawCellSchema.extend({
-    resources: z.array(cellResourceSchema),
-    process: cellProcessViewSchema.nullable().default(null),
-});
-
 export const mapSnapshotResponseSchema = z.object({
     serverTime: z.number(),
     version: z.number(),
-    cells: z.array(cellSchema),
+    cells: z.array(rawCellSchema),
 });
 
 export type RawCellResource = z.infer<typeof rawCellResourceSchema>;
@@ -113,32 +90,26 @@ export type RawCellProcessCraftView = z.infer<typeof rawCellProcessCraftViewSche
 export type RawCellProcessView = z.infer<typeof rawCellProcessViewSchema>;
 export type RawCell = z.infer<typeof rawCellSchema>;
 
-export type CellResource = z.infer<typeof cellResourceSchema>;
-export type CellResourceStorage = z.infer<typeof cellResourceStorageSchema>;
 export type CellBuildingView = z.infer<typeof cellBuildingViewSchema>;
-export type CellProcessMiningView = z.infer<typeof cellProcessMiningViewSchema>;
-export type CellProcessCraftView = z.infer<typeof cellProcessCraftViewSchema>;
-export type CellProcessView = z.infer<typeof cellProcessViewSchema>;
-export type Cell = z.infer<typeof cellSchema>;
 export type MapSnapshotResponse = z.infer<typeof mapSnapshotResponseSchema>;
 
-export interface DerivedCellResourceStorage extends RawCellResourceStorage {
+export interface CellResourceStorage extends RawCellResourceStorage {
     stalled: boolean;
 }
 
-export interface DerivedCellResource extends Omit<RawCellResource, 'storage'> {
-    storage: DerivedCellResourceStorage | null;
+export interface CellResource extends Omit<RawCellResource, 'storage'> {
+    storage: CellResourceStorage | null;
 }
 
-export type DerivedCellProcessMiningView = RawCellProcessMiningView & { stalled: boolean };
+export type CellProcessMiningView = RawCellProcessMiningView & { stalled: boolean };
 
-export type DerivedCellProcessCraftView = RawCellProcessCraftView & { stalled: boolean };
+export type CellProcessCraftView = RawCellProcessCraftView & { stalled: boolean };
 
-export type DerivedCellProcessView = DerivedCellProcessMiningView | DerivedCellProcessCraftView;
+export type CellProcessView = CellProcessMiningView | CellProcessCraftView;
 
-export interface DerivedCell extends Omit<RawCell, 'resources' | 'process'> {
-    resources: Array<DerivedCellResource>;
-    process: DerivedCellProcessView | null;
+export interface Cell extends Omit<RawCell, 'resources' | 'process'> {
+    resources: Array<CellResource>;
+    process: CellProcessView | null;
     ready: boolean | null;
     activeHub: boolean;
 }
@@ -181,7 +152,7 @@ export interface SocketLifecycleHandlers {
     onConnect: () => void;
     onDisconnect: (reason: string) => void;
     onError: (error: Error) => void;
-    onCellUpdate: (cell: Cell) => void;
+    onCellUpdate: (cell: RawCell) => void;
 }
 
 // Abstraction over the realtime socket so tests can drive lifecycle events with a fake.
@@ -216,7 +187,7 @@ export interface MapStatus {
 }
 
 export interface RevealCellReader {
-    readRevealCell(tokenId: string): Cell | null;
+    readRevealCell(tokenId: string): Promise<Cell | null>;
     // The map snapshot's server clock — the reference "now" for maturation, same domain as a process `startAt`.
     getServerTime(): number;
     refresh(): Promise<void>;
@@ -234,6 +205,7 @@ export interface MapSyncOptions {
 export interface MapReaderOptions {
     store: MapStore;
     status: MapStatus;
+    appConfig: IAppConfig;
 }
 
 export interface AroundQuery {

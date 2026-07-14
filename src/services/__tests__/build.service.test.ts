@@ -116,7 +116,6 @@ describe('BuildService', () => {
                 durationSec: 180,
                 batch: 77,
                 startAt: 1,
-                stalled: false,
             },
         });
         const { service, contracts } = makeService({ cell });
@@ -189,7 +188,6 @@ describe('BuildService', () => {
                 durationSec: 180,
                 batch: 77,
                 startAt: 1,
-                stalled: false,
             },
         });
         const { service, contracts } = makeService({ cell });

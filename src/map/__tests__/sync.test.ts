@@ -4,13 +4,13 @@ import { FakeMapSocket } from '../../__mocks__/in-memory-socket.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import { MapStore } from '../store.js';
 import { MapSync } from '../sync.js';
-import { type IMapApi, MapReadiness } from '../types.js';
+import { type IMapApi, MapReadiness, type RawCell } from '../types.js';
 import { makeCell, makeSnapshot } from './fixtures.js';
 
 class FakeApi implements IMapApi {
     public readonly calls: Array<string> = [];
 
-    constructor(private readonly snapshotCells: Array<ReturnType<typeof makeCell>>) {}
+    constructor(private readonly snapshotCells: Array<RawCell>) {}
 
     async request<T>(path: string): Promise<{ status: number; data: T }> {
         this.calls.push(path);
@@ -27,7 +27,7 @@ class FakeApi implements IMapApi {
 const GRACE_MS = 1000;
 const POLL_MS = 1000;
 
-function setup(snapshotCells: Array<ReturnType<typeof makeCell>>): {
+function setup(snapshotCells: Array<RawCell>): {
     sync: MapSync;
     socket: FakeMapSocket;
     api: FakeApi;

@@ -5,7 +5,9 @@ import { BuildingKind, BuildingType, CraftRecipeId } from '../../api/types.js';
 import { Network } from '../../config/types.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import type { ILogger } from '../../logger/types.js';
-import type { Cell, RevealCellReader } from '../../map/types.js';
+import { toCell } from '../../map/cell-view.utils.js';
+import { toProjectionConfig } from '../../map/reader.utils.js';
+import type { Cell, RawCell, RevealCellReader } from '../../map/types.js';
 import {
     type ConfirmedTx,
     type IContractClient,
@@ -287,7 +289,7 @@ export class FakeMapReader implements RevealCellReader {
         private readonly cell: Cell | null = null,
         private readonly serverTime: number = DEFAULT_SERVER_TIME,
     ) {}
-    readRevealCell(): Cell | null {
+    async readRevealCell(): Promise<Cell | null> {
         return this.cell;
     }
     getServerTime(): number {
@@ -314,7 +316,7 @@ export type CellHarnessOptions = Partial<{
     walletChainId: number;
     config: AppConfig;
     approve: Hash | null | Error;
-    cell: Cell | null;
+    cell: RawCell | null;
     serverTime: number;
 }>;
 
@@ -335,10 +337,16 @@ export function makeCellHarness<T>(
     const allowance = new FakeAllowance(opts.approve ?? null);
     const contracts = new FakeContractClient(opts.receipts ?? [], opts.logs ?? []);
     const cellClient = new CellClient({ contracts, logger: new NoopLogger() });
-    const mapReader = new FakeMapReader(opts.cell ?? null, opts.serverTime ?? DEFAULT_SERVER_TIME);
+    const config = opts.config ?? makeConfig();
+    const serverTime = opts.serverTime ?? DEFAULT_SERVER_TIME;
+    const raw = opts.cell ?? null;
+    const mapReader = new FakeMapReader(
+        raw === null ? null : toCell(raw, serverTime, toProjectionConfig(config)),
+        serverTime,
+    );
     const service = create({
         wallet,
-        appConfig: new FakeAppConfig(opts.config ?? makeConfig()),
+        appConfig: new FakeAppConfig(config),
         allowance,
         cellClient,
         contracts,

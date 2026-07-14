@@ -1,21 +1,23 @@
 import { describe, expect, it } from 'vitest';
 
-import { FakeAppConfig, makeConfig, WALLET_ADDRESS } from './service-fakes.js';
+import { DEFAULT_SERVER_TIME, FakeAppConfig, makeConfig, WALLET_ADDRESS } from './service-fakes.js';
 import { BuildingType } from '../../api/types.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import { makeCell } from '../../map/__tests__/fixtures.js';
-import type { Cell } from '../../map/types.js';
+import { toCell } from '../../map/cell-view.utils.js';
+import { toProjectionConfig } from '../../map/reader.utils.js';
+import type { RawCell } from '../../map/types.js';
 import type { WalletProvider } from '../../wallet/types.js';
 import { RouteService } from '../route.service.js';
 
 const RIVAL = '0x000000000000000000000000000000000000beef';
 const RES = 3;
 
-function own(tokenId: string, over: Partial<Cell> = {}): Cell {
+function own(tokenId: string, over: Partial<RawCell> = {}): RawCell {
     return makeCell({ tokenId, owner: WALLET_ADDRESS, revealCount: 1, ...over });
 }
 
-function foreignHub(tokenId: string, feePerUnit: string): Cell {
+function foreignHub(tokenId: string, feePerUnit: string): RawCell {
     return makeCell({
         tokenId,
         owner: RIVAL,
@@ -25,19 +27,20 @@ function foreignHub(tokenId: string, feePerUnit: string): Cell {
     });
 }
 
-function makeService(cells: Array<Cell>, defaultMoveFeePerUnit = '0'): RouteService {
+function makeService(cells: Array<RawCell>, defaultMoveFeePerUnit = '0'): RouteService {
     const wallet = { get: () => ({ getAddress: () => WALLET_ADDRESS }) } as unknown as WalletProvider;
     const base = makeConfig();
     const config = { ...base, transport: { ...base.transport, defaultMoveFeePerUnit } };
+    const projection = toProjectionConfig(config);
     return new RouteService({
         wallet,
         appConfig: new FakeAppConfig(config),
-        mapReader: { allCells: () => cells },
+        mapReader: { allCells: async () => cells.map((c) => toCell(c, DEFAULT_SERVER_TIME, projection)) },
         logger: new NoopLogger(),
     });
 }
 
-function survey(cells: Array<Cell>, from: number, towards: number | null = null, resourceId = RES) {
+function survey(cells: Array<RawCell>, from: number, towards: number | null = null, resourceId = RES) {
     return makeService(cells).nextHops({ from, towards, resourceId });
 }
 

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { BuildingType } from '../../api/types.js';
 import { CELL_ABI } from '../../contracts/cell.abi.js';
 import { makeCell, makeResource, makeStorage } from '../../map/__tests__/fixtures.js';
-import { CellProcessKind, type Cell } from '../../map/types.js';
+import { CellProcessKind, type RawCell } from '../../map/types.js';
 import { MiningService } from '../mining.service.js';
 import type { AppConfig } from '../types.js';
 import { CELL, makeCellHarness, makeConfig, WALLET_ADDRESS } from './service-fakes.js';
@@ -51,7 +51,6 @@ describe('MiningService.getStatus', () => {
                 durationSec: 10,
                 batch: 10,
                 startAt: 1,
-                stalled: false,
             },
             resources: [{ resourceId: 3, deposit: '500', balance: '0', strength: null, storage: null }],
         });
@@ -82,7 +81,6 @@ describe('MiningService.getStatus', () => {
                 durationSec: 180,
                 batch: 77,
                 startAt,
-                stalled: false,
             },
             resources: [{ resourceId: 3, deposit: '100000', balance: '0', strength: null, storage: null }],
         });
@@ -107,7 +105,6 @@ describe('MiningService.getStatus', () => {
                 durationSec: 180,
                 batch: 77,
                 startAt: 1,
-                stalled: false,
             },
             resources: [{ resourceId: 3, deposit: '100', balance: '0', strength: null, storage: null }],
         });
@@ -129,7 +126,6 @@ describe('MiningService.getStatus', () => {
                 durationSec: 10,
                 batch: 10,
                 startAt: 1,
-                stalled: true,
             },
             resources: [
                 {
@@ -137,7 +133,7 @@ describe('MiningService.getStatus', () => {
                     deposit: '500',
                     balance: '50',
                     strength: null,
-                    storage: makeStorage({ used: '50', cap: '50', stalled: true }),
+                    storage: makeStorage({ used: '50', cap: '50' }),
                 },
             ],
         });
@@ -162,7 +158,6 @@ describe('MiningService.getStatus', () => {
                 durationSec: 10,
                 batch: 10,
                 startAt: 1,
-                stalled: false,
             },
             resources: [
                 {
@@ -170,7 +165,7 @@ describe('MiningService.getStatus', () => {
                     deposit: '500',
                     balance: '80',
                     strength: null,
-                    storage: makeStorage({ used: '80', cap: '100', stalled: false }),
+                    storage: makeStorage({ used: '80', cap: '100' }),
                 },
             ],
         });
@@ -235,7 +230,7 @@ describe('MiningService.claim', () => {
 });
 
 // A ready Mine (mines Iron=5 / Copper=6 in makeConfig) on an owned cell with an Iron deposit.
-function mineCell(overrides: Partial<Cell> = {}): Cell {
+function mineCell(overrides: Partial<RawCell> = {}): RawCell {
     return makeCell({
         tokenId: '42',
         owner: WALLET_ADDRESS,

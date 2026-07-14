@@ -49,7 +49,7 @@ export class RevealService {
             throw new Error(`Cell contract is not configured for network ${config.network}; cannot reveal.`);
         }
 
-        const state = this.mapReader.readRevealCell(tokenId);
+        const state = await this.mapReader.readRevealCell(tokenId);
         if (state === null) {
             throw new Error(`Cell ${tokenId} is not in the current map; cannot verify ownership before reveal.`);
         }
@@ -122,7 +122,7 @@ export class RevealService {
         while (Date.now() < deadline) {
             await sleep(REVEAL_POLL_INTERVAL_MS);
             await this.mapReader.refresh();
-            const state = this.mapReader.readRevealCell(tokenId);
+            const state = await this.mapReader.readRevealCell(tokenId);
             if (state !== null && state.revealCount > previousRevealCount) {
                 return true;
             }

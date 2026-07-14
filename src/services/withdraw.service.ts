@@ -38,7 +38,7 @@ export class WithdrawService {
         const tokenId = BigInt(input.tokenId);
         const amount = BigInt(input.amount);
 
-        const state = this.mapReader.readRevealCell(input.tokenId);
+        const state = await this.mapReader.readRevealCell(input.tokenId);
         this.assertOwner(input.tokenId, state, wallet.getAddress());
 
         this.logger.info('withdrawing wCPU', {

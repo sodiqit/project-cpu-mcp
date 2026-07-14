@@ -73,7 +73,7 @@ export class CraftService {
         // Paid action — refresh, then verify the warehouse holds the per-batch inputs × batches before spending
         // gas, instead of letting startCraft revert InsufficientLiquid after the $CPU approve.
         await this.mapReader.refresh();
-        const state = this.mapReader.readRevealCell(input.tokenId);
+        const state = await this.mapReader.readRevealCell(input.tokenId);
         const required = recipe.inputs.map((i) => ({ resourceId: i.resourceId, amount: i.amount * input.batches }));
         assertWarehouseHas(config.resources, state, required, input.tokenId, 'craft');
 
@@ -134,7 +134,7 @@ export class CraftService {
 
     async getStatus(tokenId: string): Promise<CraftStatusResult> {
         await this.mapReader.refresh();
-        const state = this.mapReader.readRevealCell(tokenId);
+        const state = await this.mapReader.readRevealCell(tokenId);
         if (state === null) {
             throw new Error(`Cell ${tokenId} is not in the current map.`);
         }
