@@ -430,6 +430,7 @@ export interface NextHopView {
     hopDistance: number;
     isOwn: boolean;
     isHub: boolean;
+    ready: boolean | null;
     owner: string;
     transitFeePerUnit: string | null;
     distanceToTarget: number | null;
@@ -438,6 +439,7 @@ export interface NextHopView {
 export interface NextHopsResult {
     from: string;
     fromIsHub: boolean;
+    fromReady: boolean | null;
     towards: string | null;
     targetDistance: number | null;
     reach: { moveRadius: number; hubRadius: number };
@@ -456,6 +458,7 @@ export interface NetworkNodeView {
     pos: CellCoord;
     isOwn: boolean;
     isHub: boolean;
+    ready: boolean | null;
     owner: string;
     transitFeePerUnit: string | null;
     distFromSource: number | null;

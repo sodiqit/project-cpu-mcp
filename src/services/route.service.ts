@@ -8,6 +8,7 @@ import {
     type RouteNode,
 } from './route.utils.js';
 import type {
+    AppConfig,
     IAppConfig,
     NetworkNodeView,
     NextHopsInput,
@@ -18,10 +19,11 @@ import type {
     RouteNetworkResult,
     RouteServiceOptions,
 } from './types.js';
-import { BuildingType } from '../api/types.js';
+import { BuildingKind } from '../api/types.js';
 import { tokenIdToPos } from '../geometry/token.utils.js';
 import type { ILogger } from '../logger/types.js';
 import type { Cell } from '../map/types.js';
+import { formatUnixSeconds } from '../utils/format.utils.js';
 import type { WalletProvider } from '../wallet/types.js';
 
 export class RouteService {
@@ -53,15 +55,16 @@ export class RouteService {
         for (const cell of await this.mapReader.allCells()) {
             cellsByToken.set(cell.tokenId, cell);
             const isOwn = cell.owner.toLowerCase() === address;
-            const isHub = cell.building !== null && cell.building.type === BuildingType.Hub;
+            const isHub = cell.activeHub;
             if (cell.revealCount === 0 || (!isOwn && !isHub)) {
                 continue;
             }
             nodes.set(cell.tokenId, { tokenId: cell.tokenId, isOwn, isHub });
         }
 
-        this.assertEligible(from, nodes, cellsByToken);
+        this.assertEligible(from, nodes, cellsByToken, config);
         const fromNode = nodes.get(from) as RouteNode;
+        const fromCell = cellsByToken.get(from) as Cell;
 
         const reachable = reachableWaypoints(fromNode, nodes, routing.moveRadius, routing.hubRadius);
 
@@ -83,6 +86,7 @@ export class RouteService {
                 hopDistance,
                 isOwn: node.isOwn,
                 isHub: node.isHub,
+                ready: cell.ready,
                 owner: cell.owner,
                 transitFeePerUnit: waypointTransitFee(
                     node,
@@ -104,6 +108,7 @@ export class RouteService {
         return {
             from,
             fromIsHub: fromNode.isHub,
+            fromReady: fromCell.ready,
             towards,
             targetDistance,
             reach: { moveRadius: routing.moveRadius, hubRadius: routing.hubRadius },
@@ -125,7 +130,7 @@ export class RouteService {
         for (const cell of await this.mapReader.allCells()) {
             cellsByToken.set(cell.tokenId, cell);
             const isOwn = cell.owner.toLowerCase() === address;
-            const isHub = cell.building !== null && cell.building.type === BuildingType.Hub;
+            const isHub = cell.activeHub;
             if (cell.revealCount === 0 || (!isOwn && !isHub)) {
                 continue;
             }
@@ -155,6 +160,7 @@ export class RouteService {
                     pos: tokenIdToPos(node.tokenId),
                     isOwn: node.isOwn,
                     isHub: node.isHub,
+                    ready: cell.ready,
                     owner: cell.owner,
                     transitFeePerUnit: waypointTransitFee(
                         node,
@@ -186,7 +192,12 @@ export class RouteService {
         return result;
     }
 
-    private assertEligible(tokenId: string, nodes: Map<string, RouteNode>, cells: Map<string, Cell>): void {
+    private assertEligible(
+        tokenId: string,
+        nodes: Map<string, RouteNode>,
+        cells: Map<string, Cell>,
+        config: AppConfig,
+    ): void {
         if (nodes.has(tokenId)) {
             return;
         }
@@ -197,6 +208,19 @@ export class RouteService {
         if (cell.revealCount === 0) {
             throw new Error(`Cell ${tokenId} is not revealed; reveal it first (cpu_reveal).`);
         }
-        throw new Error(`Cell ${tokenId} is not an eligible waypoint: it must be a cell you own or carry a Hub.`);
+        const building = cell.building;
+        if (building !== null && building.buildFinishAt !== null && cell.ready === false) {
+            const view = config.buildings.find((b) => b.type === building.type) ?? null;
+            if (view !== null && view.kind === BuildingKind.Hub) {
+                throw new Error(
+                    `The ${view.name} on cell ${tokenId} is still under construction (ready ` +
+                        `${formatUnixSeconds(building.buildFinishAt)}); it counts as a waypoint only once ` +
+                        'construction finishes.',
+                );
+            }
+        }
+        throw new Error(
+            `Cell ${tokenId} is not an eligible waypoint: it must be a cell you own or carry a finished Hub.`,
+        );
     }
 }
