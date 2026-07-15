@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ApiClient } from '../../api/client.js';
-import { type AppConfigResponse, BuildingKind, BuildingType, CraftRecipeId } from '../../api/types.js';
+import {
+    type AppConfigResponse,
+    type BuildingView,
+    BuildingKind,
+    BuildingType,
+    CraftRecipeId,
+} from '../../api/types.js';
 import { Network } from '../../config/types.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import { AppConfigService } from '../app-config.service.js';
+import type { CatalogBuildingView } from '../types.js';
 
 const CPU_HOOK = '0x4444444444444444444444444444444444444444';
 const CELL = '0x5555555555555555555555555555555555555555';
@@ -47,6 +54,7 @@ function makeResponse(overrides: Partial<AppConfigResponse> = {}): AppConfigResp
                 buildTimeSec: 120,
                 buildInputs: [],
                 demolishCost: { cpu: '2.5', inputs: [] },
+                modeSwitchCost: '1',
                 minableResources: [5, 6],
                 recipes: [],
                 effects: { cycleTimePercent: 100, veinDrainPercent: 100, inputEfficiency: [] },
@@ -67,6 +75,40 @@ function makeService(api: FakeApi): AppConfigService {
         logger: new NoopLogger(),
     });
 }
+
+describe('AppConfigService mode switch cost', () => {
+    async function loadBuilding(modeSwitchCost: string | null | undefined): Promise<CatalogBuildingView> {
+        const base = makeResponse();
+        const [mine] = base.buildings;
+        const row = { ...(mine as BuildingView), modeSwitchCost } as BuildingView;
+        if (modeSwitchCost === undefined) {
+            delete (row as Partial<BuildingView>).modeSwitchCost;
+        }
+        const config = await makeService(new FakeApi({ status: 200, data: { ...base, buildings: [row] } })).load();
+        return config.buildings[0] as CatalogBuildingView;
+    }
+
+    it('reads a catalog that predates the field as unknown — not as impossible, and never as zero', async () => {
+        const building = await loadBuilding(undefined);
+
+        expect(building.modeSwitch).toEqual({ kind: 'unknown' });
+    });
+
+    it('states "can never switch" positively and carries no price field at all for it', async () => {
+        const building = await loadBuilding(null);
+
+        expect(building.modeSwitch).toEqual({ kind: 'impossible' });
+        expect('costCpu' in building.modeSwitch).toBe(false);
+        expect(JSON.stringify(building.modeSwitch)).not.toMatch(/costCpu/);
+    });
+
+    it('carries the price inside the possible tag, keeping the raw field alongside it', async () => {
+        const building = await loadBuilding('2');
+
+        expect(building.modeSwitch).toEqual({ kind: 'possible', costCpu: '2' });
+        expect(building.modeSwitchCost).toBe('2');
+    });
+});
 
 describe('AppConfigService', () => {
     it('loads config for the configured network and caches it', async () => {

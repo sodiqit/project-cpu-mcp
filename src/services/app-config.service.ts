@@ -1,3 +1,4 @@
+import { toModeSwitchView } from './app-config.utils.js';
 import type { AppConfig, AppConfigServiceOptions, IAppConfig } from './types.js';
 import type { ApiClient } from '../api/client.js';
 import { type AppConfigResponse, HttpStatus } from '../api/types.js';
@@ -50,6 +51,7 @@ export class AppConfigService implements IAppConfig {
             buildings: (data.buildings ?? []).map((b) => ({
                 ...b,
                 demolishCost: b.demolishCost ?? { cpu: '0', inputs: [] },
+                modeSwitch: toModeSwitchView(b.modeSwitchCost),
             })),
             reveal: data.reveal ?? { firstFree: true, reRevealCost: '0' },
             transport: { ...data.transport, defaultMoveFeePerUnit: data.transport?.defaultMoveFeePerUnit ?? '0' },

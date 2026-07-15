@@ -47,6 +47,51 @@ export interface AppContracts {
 }
 
 /** Chain + contract addresses for the configured network, loaded from the game API. */
+export enum ModeSwitchKind {
+    Possible = 'possible',
+    Impossible = 'impossible',
+    Unknown = 'unknown',
+}
+
+export type ModeSwitchView =
+    | { kind: ModeSwitchKind.Possible; costCpu: string }
+    | { kind: ModeSwitchKind.Impossible }
+    | { kind: ModeSwitchKind.Unknown };
+
+export interface CatalogBuildingView extends BuildingView {
+    modeSwitch: ModeSwitchView;
+}
+
+export type ModeKey = string | number | bigint;
+
+export enum ModeCostKind {
+    Free = 'free',
+    Paid = 'paid',
+    Unknown = 'unknown',
+}
+
+export enum ModeFreeReason {
+    FirstPick = 'first_pick',
+    SameOutput = 'same_output',
+}
+
+export type ModeCostView =
+    | { kind: ModeCostKind.Free; why: ModeFreeReason }
+    | { kind: ModeCostKind.Paid; costCpu: string }
+    | { kind: ModeCostKind.Unknown };
+
+export interface CellOutputView {
+    resourceId: number | null;
+    resourceName: string | null;
+    recipeId: CraftRecipeId | null;
+    cost: ModeCostView;
+}
+
+export interface BuildingMode {
+    resourceId: number | null;
+    recipeId: CraftRecipeId | null;
+}
+
 export interface AppConfig {
     network: Network;
     chainId: number;
@@ -55,7 +100,7 @@ export interface AppConfig {
     resources: Record<number, string>;
     recipes: Array<RecipeView>;
     /** Per-building catalog — on-chain id, kind, costs, and mine/craft bindings. */
-    buildings: Array<BuildingView>;
+    buildings: Array<CatalogBuildingView>;
     /** First-reveal-free + re-reveal cost params. */
     reveal: RevealCostView;
     transport: TransportRoutingView;
@@ -138,7 +183,14 @@ export interface WithdrawCpuParams {
     amount: bigint;
 }
 
+export interface CellViewResult {
+    buildingType: number;
+    modeResource: number;
+    modeRecipeId: bigint;
+}
+
 export interface ICellClient {
+    readCellView(cell: Address, tokenId: bigint): Promise<CellViewResult>;
     quoteRevealFee(cell: Address): Promise<bigint>;
     requestReveal(params: RequestRevealParams): Promise<Hash>;
     place(params: PlaceParams): Promise<Hash>;
@@ -252,6 +304,7 @@ export interface WithdrawResult {
 export interface MiningServiceOptions {
     wallet: WalletProvider;
     appConfig: IAppConfig;
+    allowance: IAllowanceService;
     cellClient: ICellClient;
     contracts: IContractClient;
     mapReader: RevealCellReader;
@@ -300,12 +353,20 @@ export interface StartMiningInput {
     batches: number;
 }
 
+export interface ModeSwitchCharge {
+    cost: ModeCostView;
+    exact: boolean;
+    burnedCpu: string | null;
+}
+
 export interface StartMiningResult {
     tokenId: string;
     targetResourceId: number;
     yieldPerCycle: number | null;
     batches: number | null;
     durationSec: number | null;
+    modeSwitch: ModeSwitchCharge;
+    approveTxHash: Hash | null;
     txHash: Hash;
     status: TxStatus;
     blockNumber: string;
@@ -511,8 +572,9 @@ export interface CraftStartResult {
     tokenId: string;
     recipeId: CraftRecipeId;
     batches: number;
-    /** Total $CPU cost for all batches (decimal); "0" for a free recipe. */
+    /** Total $CPU cost for all batches (decimal); "0" for a free recipe. Excludes any Switch cost. */
     costCpu: string;
+    modeSwitch: ModeSwitchCharge;
     approveTxHash: Hash | null;
     txHash: Hash;
     status: TxStatus;

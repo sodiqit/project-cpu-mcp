@@ -1,21 +1,28 @@
-import { isAddress, parseEther, parseEventLogs, type Address, type Log } from 'viem';
+import { isAddress, parseEther, parseEventLogs, type Address, type Hash, type Log } from 'viem';
 
+import { MAX_APPROVE_AMOUNT } from './allowance.constants.js';
+import { decodeBurnedCpu, feeWeiOf } from './burn.utils.js';
 import { recipeNameFromUint64, recipeNameToUint64 } from './cell.utils.js';
-import type {
-    AppConfig,
-    CraftClaimResult,
-    CraftInput,
-    CraftOutput,
-    CraftServiceOptions,
-    CraftStartResult,
-    CraftStatusResult,
-    IAllowanceService,
-    IAppConfig,
-    ICellClient,
+import {
+    type AppConfig,
+    type CraftClaimResult,
+    type CraftInput,
+    type CraftOutput,
+    type CraftServiceOptions,
+    type CraftStartResult,
+    type CraftStatusResult,
+    type ModeCostView,
+    type ModeSwitchCharge,
+    type IAllowanceService,
+    type IAppConfig,
+    type ICellClient,
+    ModeCostKind,
 } from './types.js';
 import { assertWarehouseHas } from './warehouse.utils.js';
+import type { CraftRecipeId } from '../api/types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
+import { modeCost } from '../map/mode.utils.js';
 import { processOutputs } from '../map/process.utils.js';
 import { toSettleConfig } from '../map/reader.utils.js';
 import { cellProcessProgress } from '../map/settle.utils.js';
@@ -61,23 +68,26 @@ export class CraftService {
         const required = recipe.inputs.map((i) => ({ resourceId: i.resourceId, amount: i.amount * input.batches }));
         assertWarehouseHas(config.resources, state, required, input.tokenId, 'craft');
 
-        const totalCostWei = parseEther(recipe.costCpu) * BigInt(input.batches);
-        let approveTxHash = null;
-        if (totalCostWei > 0n) {
-            const cpuToken = this.requireCpuToken(config);
-            approveTxHash = await this.allowance.ensureAllowance(cpuToken, cell, totalCostWei);
-        }
+        const recipeCostWei = parseEther(recipe.costCpu) * BigInt(input.batches);
+        const tokenId = BigInt(input.tokenId);
+        const targetRecipe = recipeNameToUint64(input.recipeId);
+        const view = config.buildings.find((b) => b.type === state?.building?.type) ?? null;
+        const { mode, exact } = await this.readChainMode(cell, tokenId, state?.building?.modeRecipeId ?? null);
+        const cost = modeCost(view, mode, targetRecipe);
+        const approveTxHash = await this.approve(config, cell, recipeCostWei, cost);
 
         this.logger.info('starting craft', {
             tokenId: input.tokenId,
             recipeId: input.recipeId,
             batches: input.batches,
-            costCpu: cpuFromWei(totalCostWei.toString()),
+            costCpu: cpuFromWei(recipeCostWei.toString()),
+            switchCost: cost,
+            switchCostExact: exact,
         });
         const txHash = await this.cellClient.startCraft({
             cell,
-            tokenId: BigInt(input.tokenId),
-            recipeId: recipeNameToUint64(input.recipeId),
+            tokenId,
+            recipeId: targetRecipe,
             batches: input.batches,
         });
         const confirmed = await this.contracts.confirm(txHash, 'Craft transaction');
@@ -86,12 +96,64 @@ export class CraftService {
             tokenId: input.tokenId,
             recipeId: input.recipeId,
             batches: input.batches,
-            costCpu: cpuFromWei(totalCostWei.toString()),
+            costCpu: cpuFromWei(recipeCostWei.toString()),
+            modeSwitch: this.chargeOf(config, cost, exact, confirmed.logs, recipeCostWei),
             approveTxHash,
             txHash: confirmed.txHash,
             status: confirmed.status,
             blockNumber: confirmed.blockNumber,
         };
+    }
+
+    // Same reasoning as the mining start: the mode is verified on-chain because an understated fee cannot
+    // revert against an unbounded allowance, and a failed read never blocks the start.
+    private async readChainMode(
+        cell: Address,
+        tokenId: bigint,
+        fallback: string | null,
+    ): Promise<{ mode: bigint | null; exact: boolean }> {
+        try {
+            const view = await this.cellClient.readCellView(cell, tokenId);
+            return { mode: view.modeRecipeId === 0n ? null : view.modeRecipeId, exact: true };
+        } catch (error) {
+            this.logger.warn('could not read the cell mode on-chain — pricing the switch off the map', {
+                tokenId: tokenId.toString(),
+                error,
+            });
+            // Hashed rather than looked up by name, so a recipe this client does not know still compares.
+            return { mode: fallback === null ? null : recipeNameToUint64(fallback as CraftRecipeId), exact: false };
+        }
+    }
+
+    // The contract burns `recipe cost × batches + fee` in one call, so one allowance covers both.
+    private async approve(
+        config: AppConfig,
+        cell: Address,
+        recipeCostWei: bigint,
+        cost: ModeCostView,
+    ): Promise<Hash | null> {
+        const totalWei = recipeCostWei + feeWeiOf(cost);
+        if (totalWei === 0n && cost.kind !== ModeCostKind.Unknown) {
+            return null;
+        }
+        const cpuToken = this.requireCpuToken(config);
+        const needed = cost.kind === ModeCostKind.Unknown ? MAX_APPROVE_AMOUNT : totalWei;
+        return this.allowance.ensureAllowance(cpuToken, cell, needed);
+    }
+
+    private chargeOf(
+        config: AppConfig,
+        cost: ModeCostView,
+        exact: boolean,
+        logs: Array<Log>,
+        recipeCostWei: bigint,
+    ): ModeSwitchCharge {
+        const cpuToken = config.contracts.cpuToken;
+        if (!isAddress(cpuToken, { strict: false })) {
+            return { cost, exact, burnedCpu: null };
+        }
+        const burned = decodeBurnedCpu(logs, cpuToken, this.wallet.get().getAddress());
+        return { cost, exact, burnedCpu: cpuFromWei((burned - recipeCostWei).toString()) };
     }
 
     async claim(tokenId: string): Promise<CraftClaimResult> {

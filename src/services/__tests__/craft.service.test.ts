@@ -3,21 +3,31 @@ import {
     encodeAbiParameters,
     encodeEventTopics,
     parseEther,
+    zeroAddress,
     type Address,
     type Hex,
     type Log,
 } from 'viem';
 import { describe, expect, it } from 'vitest';
 
-import { CraftRecipeId } from '../../api/types.js';
+import { BuildingType, CraftRecipeId } from '../../api/types.js';
 import { CELL_ABI } from '../../contracts/cell.abi.js';
+import { ERC20_ABI } from '../../contracts/erc20.abi.js';
 import { makeCell, makeResource, makeStorage } from '../../map/__tests__/fixtures.js';
 import { CellProcessKind } from '../../map/types.js';
 import { TxStatus } from '../../wallet/types.js';
 import { recipeNameToUint64 } from '../cell.utils.js';
 import { CraftService } from '../craft.service.js';
 import type { CraftInput } from '../types.js';
-import { APPROVE_HASH, CELL, CPU_TOKEN, makeCellHarness, makeConfig } from './service-fakes.js';
+import {
+    APPROVE_HASH,
+    CELL,
+    CPU_TOKEN,
+    chainCellView,
+    makeCellHarness,
+    makeConfig,
+    WALLET_ADDRESS,
+} from './service-fakes.js';
 
 const FORGE: CraftInput = { tokenId: '42', recipeId: CraftRecipeId.ForgeWcpu, batches: 1 };
 const STEEL: CraftInput = { tokenId: '42', recipeId: CraftRecipeId.SmeltSteel, batches: 2 };
@@ -244,5 +254,116 @@ describe('CraftService.claim', () => {
         const result = await service.claim('42');
         expect(result.outputs).toHaveLength(0);
         expect(result.batches).toBe(0);
+    });
+});
+
+function burnLog(from: Address, amountWei: bigint): Log {
+    const topics = encodeEventTopics({ abi: ERC20_ABI, eventName: 'Transfer', args: { from, to: zeroAddress } });
+    const data = encodeAbiParameters([{ type: 'uint256' }], [amountWei]);
+    return {
+        address: CPU_TOKEN as Address,
+        topics,
+        data,
+        blockHash: `0x${'0'.repeat(64)}`,
+        blockNumber: 1n,
+        logIndex: 1,
+        transactionHash: `0x${'0'.repeat(64)}`,
+        transactionIndex: 0,
+        removed: false,
+    } as unknown as Log;
+}
+
+function fabCell(modeRecipeId: string | null = null) {
+    return makeCell({
+        tokenId: '42',
+        owner: WALLET_ADDRESS,
+        building: { type: BuildingType.WaferFab, buildFinishAt: null, modeResource: null, modeRecipeId },
+        resources: [makeResource({ resourceId: 5, deposit: '0', balance: '1000' })],
+    });
+}
+
+describe('CraftService.craft mode switch cost', () => {
+    it('folds the switch fee into the same allowance as the recipe cost', async () => {
+        const { service, allowance, contracts } = makeService({
+            cell: fabCell(CraftRecipeId.SmeltSteel),
+            reads: { getCell: chainCellView({ modeRecipeId: recipeNameToUint64(CraftRecipeId.SmeltSteel) }) },
+            approve: APPROVE_HASH,
+            logs: [[burnLog(WALLET_ADDRESS, parseEther('122'))]],
+        });
+
+        const result = await service.craft(FORGE);
+
+        expect(allowance.calls).toEqual([{ token: CPU_TOKEN, spender: CELL, needed: parseEther('122') }]);
+        expect(result.costCpu).toBe('100');
+        expect(result.modeSwitch.cost).toEqual({ kind: 'paid', costCpu: '22' });
+        expect(result.modeSwitch.burnedCpu).toBe('22');
+        expect(contracts.sent).toHaveLength(1);
+    });
+
+    it('reports the recipe cost and the switch cost separately', async () => {
+        const { service } = makeService({
+            cell: fabCell(CraftRecipeId.SmeltSteel),
+            reads: { getCell: chainCellView({ modeRecipeId: recipeNameToUint64(CraftRecipeId.SmeltSteel) }) },
+            logs: [[burnLog(WALLET_ADDRESS, parseEther('122'))]],
+        });
+
+        const result = await service.craft(FORGE);
+
+        expect(result.costCpu).toBe('100');
+        expect(result.modeSwitch.burnedCpu).toBe('22');
+    });
+
+    it('asks for no allowance when both the recipe and the switch are free', async () => {
+        const { service, allowance } = makeService({
+            cell: fabCell(CraftRecipeId.SmeltSteel),
+            reads: { getCell: chainCellView({ modeRecipeId: recipeNameToUint64(CraftRecipeId.SmeltSteel) }) },
+        });
+
+        const result = await service.craft(STEEL);
+
+        expect(result.modeSwitch.cost).toEqual({ kind: 'free', why: 'same_output' });
+        expect(allowance.calls).toEqual([]);
+    });
+
+    it('prices the switch against the chain’s recipe mode, not the map’s', async () => {
+        const { service, allowance } = makeService({
+            cell: fabCell(CraftRecipeId.ForgeWcpu),
+            reads: { getCell: chainCellView({ modeRecipeId: recipeNameToUint64(CraftRecipeId.SmeltSteel) }) },
+            logs: [[burnLog(WALLET_ADDRESS, parseEther('122'))]],
+        });
+
+        const result = await service.craft(FORGE);
+
+        expect(result.modeSwitch.cost).toEqual({ kind: 'paid', costCpu: '22' });
+        expect(result.modeSwitch.exact).toBe(true);
+        expect(allowance.calls[0]?.needed).toBe(parseEther('122'));
+    });
+
+    it('still starts the craft when the chain mode cannot be read, marking the price inexact', async () => {
+        const { service, contracts } = makeService({
+            cell: fabCell(CraftRecipeId.SmeltSteel),
+            reads: { getCell: new Error('rpc is down') },
+            logs: [[burnLog(WALLET_ADDRESS, parseEther('122'))]],
+        });
+
+        const result = await service.craft(FORGE);
+
+        expect(contracts.sent).toHaveLength(1);
+        expect(result.modeSwitch.cost).toEqual({ kind: 'paid', costCpu: '22' });
+        expect(result.modeSwitch.exact).toBe(false);
+        expect(result.modeSwitch.burnedCpu).toBe('22');
+    });
+
+    it('reports the switch burn the receipt carries even when the estimate said free', async () => {
+        const { service } = makeService({
+            cell: fabCell(),
+            reads: { getCell: chainCellView({ modeRecipeId: 0n }) },
+            logs: [[burnLog(WALLET_ADDRESS, parseEther('122'))]],
+        });
+
+        const result = await service.craft(FORGE);
+
+        expect(result.modeSwitch.cost).toEqual({ kind: 'free', why: 'first_pick' });
+        expect(result.modeSwitch.burnedCpu).toBe('22');
     });
 });

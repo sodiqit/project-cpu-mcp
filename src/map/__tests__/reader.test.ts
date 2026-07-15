@@ -28,7 +28,7 @@ function hubCell(tokenId: string, owner: string, buildFinishAt: number | null): 
         owner,
         updated: 50,
         revealCount: 1,
-        building: { type: BuildingType.Hub, buildFinishAt },
+        building: { type: BuildingType.Hub, buildFinishAt, modeResource: null, modeRecipeId: null },
         resources: [makeResource({ resourceId: 1, deposit: '1000', storage: makeStorage({ used: '0', cap: '100' }) })],
     });
 }
@@ -188,7 +188,7 @@ describe('MapReader projection', () => {
                 owner: '0xme',
                 updated: 50,
                 revealCount: 1,
-                building: { type: BuildingType.Mine, buildFinishAt: 500 },
+                building: { type: BuildingType.Mine, buildFinishAt: 500, modeResource: null, modeRecipeId: null },
                 process: makeMiningProcess({ resource: 1 }),
                 resources: [
                     makeResource({ resourceId: 1, deposit: '1000', storage: makeStorage({ used: '100', cap: '100' }) }),

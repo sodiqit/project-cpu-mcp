@@ -76,7 +76,7 @@ function rawCell(overrides: Partial<RawCell> = {}): RawCell {
 }
 
 function hub(buildFinishAt: number | null = FINISH_AT): RawCell['building'] {
-    return { type: BuildingType.Hub, buildFinishAt };
+    return { type: BuildingType.Hub, buildFinishAt, modeResource: null, modeRecipeId: null };
 }
 
 describe('toCell readiness', () => {
@@ -104,7 +104,7 @@ describe('toCell active hub', () => {
         ['a finished hub is active', hub(), FINISH_AT, true],
         [
             'a finished non-hub building is ready but not a hub',
-            { type: BuildingType.Quarry, buildFinishAt: FINISH_AT },
+            { type: BuildingType.Quarry, buildFinishAt: FINISH_AT, modeResource: null, modeRecipeId: null },
             FINISH_AT,
             false,
         ],
@@ -113,7 +113,9 @@ describe('toCell active hub', () => {
     });
 
     it('counts every hub kind the catalog names, so an upgraded hub is active too', () => {
-        const cell = rawCell({ building: { type: UPGRADED_HUB, buildFinishAt: FINISH_AT } });
+        const cell = rawCell({
+            building: { type: UPGRADED_HUB, buildFinishAt: FINISH_AT, modeResource: null, modeRecipeId: null },
+        });
         const catalog = config({ hubBuildingTypes: new Set<string>([BuildingType.Hub, UPGRADED_HUB]) });
         expect(toCell(cell, FINISH_AT, catalog).activeHub).toBe(true);
     });
@@ -126,7 +128,7 @@ describe('toCell storage cap', () => {
         ['keeps the base cap while the hub is still going up', hub(), FINISH_AT - 1, BASE_CAP],
         [
             'keeps the base cap under a finished non-hub building',
-            { type: BuildingType.Quarry, buildFinishAt: FINISH_AT },
+            { type: BuildingType.Quarry, buildFinishAt: FINISH_AT, modeResource: null, modeRecipeId: null },
             FINISH_AT,
             BASE_CAP,
         ],

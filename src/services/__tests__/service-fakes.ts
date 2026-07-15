@@ -19,7 +19,14 @@ import {
     type WalletProvider,
 } from '../../wallet/types.js';
 import { CellClient } from '../cell.client.js';
-import type { AppConfig, IAllowanceService, IAppConfig, ICellClient } from '../types.js';
+import {
+    type AppConfig,
+    type CellViewResult,
+    type IAllowanceService,
+    type IAppConfig,
+    type ICellClient,
+    ModeSwitchKind,
+} from '../types.js';
 
 /**
  * Shared in-memory doubles for the paid-action services (build / reveal / transport / craft), which
@@ -51,7 +58,7 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
             transport: TRANSPORT,
             trade: TRADE,
         },
-        resources: { 1: 'WCPU', 5: 'Iron', 6: 'Copper', 101: 'Concrete', 102: 'Steel' },
+        resources: { 1: 'WCPU', 5: 'Iron', 6: 'Copper', 7: 'Water', 101: 'Concrete', 102: 'Steel' },
         recipes: [
             {
                 id: CraftRecipeId.SmeltSteel,
@@ -83,6 +90,8 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
                 buildTimeSec: 120,
                 buildInputs: [],
                 demolishCost: { cpu: '2.5', inputs: [] },
+                modeSwitchCost: '1',
+                modeSwitch: { kind: ModeSwitchKind.Possible, costCpu: '1' },
                 minableResources: [5, 6],
                 recipes: [],
                 effects: { cycleTimePercent: 100, veinDrainPercent: 100, inputEfficiency: [] },
@@ -97,8 +106,26 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
                 buildTimeSec: 900,
                 buildInputs: [{ resourceId: 101, amount: 8 }],
                 demolishCost: { cpu: '10', inputs: [{ resourceId: 101, amount: 2 }] },
+                modeSwitchCost: null,
+                modeSwitch: { kind: ModeSwitchKind.Impossible },
                 minableResources: [],
                 recipes: [CraftRecipeId.SmeltSteel],
+                effects: { cycleTimePercent: 100, veinDrainPercent: 100, inputEfficiency: [] },
+            },
+            {
+                type: BuildingType.WaferFab,
+                onChainId: 17,
+                name: 'Wafer Fab',
+                kind: BuildingKind.Crafter,
+                tier: 3,
+                buildCost: '88',
+                buildTimeSec: 1200,
+                buildInputs: [],
+                demolishCost: { cpu: '44', inputs: [] },
+                modeSwitchCost: '22',
+                modeSwitch: { kind: ModeSwitchKind.Possible, costCpu: '22' },
+                minableResources: [],
+                recipes: [CraftRecipeId.SmeltSteel, CraftRecipeId.ForgeWcpu],
                 effects: { cycleTimePercent: 100, veinDrainPercent: 100, inputEfficiency: [] },
             },
             {
@@ -111,7 +138,25 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
                 buildTimeSec: 120,
                 buildInputs: [],
                 demolishCost: { cpu: '20', inputs: [] },
+                modeSwitchCost: null,
+                modeSwitch: { kind: ModeSwitchKind.Impossible },
                 minableResources: [],
+                recipes: [],
+                effects: { cycleTimePercent: 100, veinDrainPercent: 100, inputEfficiency: [] },
+            },
+            {
+                type: BuildingType.PumpStation,
+                onChainId: 1,
+                name: 'Pump Station',
+                kind: BuildingKind.Extractor,
+                tier: 1,
+                buildCost: '8',
+                buildTimeSec: 120,
+                buildInputs: [],
+                demolishCost: { cpu: '4', inputs: [] },
+                modeSwitchCost: null,
+                modeSwitch: { kind: ModeSwitchKind.Impossible },
+                minableResources: [7],
                 recipes: [],
                 effects: { cycleTimePercent: 100, veinDrainPercent: 100, inputEfficiency: [] },
             },
@@ -253,6 +298,8 @@ export function makeHarness<T>(create: (opts: PaidServiceOptions) => T, opts: Ha
     return { service, api, wallet, allowance };
 }
 
+export type FakeReadResult = unknown | Error;
+
 export class FakeContractClient implements IContractClient {
     public readonly sent: Array<TransactionRequest> = [];
     public readonly reads: Array<ReadContractParams> = [];
@@ -261,11 +308,16 @@ export class FakeContractClient implements IContractClient {
     constructor(
         private readonly receipts: Array<TxStatus> = [],
         private readonly logsByConfirm: Array<Array<Log>> = [],
+        private readonly readsByFunction: Record<string, FakeReadResult> = {},
     ) {}
 
     async read<T>(params: ReadContractParams): Promise<T> {
         this.reads.push(params);
-        return undefined as T;
+        const result = this.readsByFunction[params.functionName];
+        if (result instanceof Error) {
+            throw result;
+        }
+        return result as T;
     }
     async send(tx: TransactionRequest, _errorAbi: Abi | null): Promise<Hash> {
         this.sent.push(tx);
@@ -280,6 +332,11 @@ export class FakeContractClient implements IContractClient {
         }
         return { txHash: hash, status, blockNumber: '100', logs };
     }
+}
+
+// The chain's `getCell`, whose mode fields use 0 for "no output picked yet".
+export function chainCellView(overrides: Partial<CellViewResult> = {}): CellViewResult {
+    return { buildingType: 4, modeResource: 0, modeRecipeId: 0n, ...overrides };
 }
 
 // A large default so `startAt: 1` fixtures mature far more cycles than any cap — tests that need an exact
@@ -321,6 +378,7 @@ export type CellHarnessOptions = Partial<{
     approve: Hash | null | Error;
     cell: RawCell | null;
     serverTime: number;
+    reads: Record<string, FakeReadResult>;
 }>;
 
 export interface CellHarness<T> {
@@ -338,7 +396,11 @@ export function makeCellHarness<T>(
 ): CellHarness<T> {
     const wallet = new FakeWallet(opts.walletChainId ?? 1);
     const allowance = new FakeAllowance(opts.approve ?? null);
-    const contracts = new FakeContractClient(opts.receipts ?? [], opts.logs ?? []);
+    const contracts = new FakeContractClient(
+        opts.receipts ?? [],
+        opts.logs ?? [],
+        opts.reads ?? { getCell: chainCellView() },
+    );
     const cellClient = new CellClient({ contracts, logger: new NoopLogger() });
     const config = opts.config ?? makeConfig();
     const serverTime = opts.serverTime ?? DEFAULT_SERVER_TIME;

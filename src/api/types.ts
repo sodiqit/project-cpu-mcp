@@ -149,6 +149,7 @@ export interface BuildingView {
     buildInputs: Array<CraftStackView>;
     /** Cost to tear it down — burned $CPU + warehouse resources consumed. */
     demolishCost: DemolishCostView;
+    modeSwitchCost: string | null;
     /** Resource ids an extractor produces; empty for crafters/hub. Ids → `resources`. */
     minableResources: Array<number>;
     /** Recipe ids a crafter runs; empty for extractors/hub. */

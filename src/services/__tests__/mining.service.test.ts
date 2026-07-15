@@ -1,13 +1,32 @@
-import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, type Address, type Hex, type Log } from 'viem';
+import {
+    decodeFunctionData,
+    encodeAbiParameters,
+    encodeEventTopics,
+    parseEther,
+    zeroAddress,
+    type Address,
+    type Hex,
+    type Log,
+} from 'viem';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BuildingType } from '../../api/types.js';
 import { CELL_ABI } from '../../contracts/cell.abi.js';
+import { ERC20_ABI } from '../../contracts/erc20.abi.js';
 import { makeCell, makeMiningProcess, makeResource, makeStorage } from '../../map/__tests__/fixtures.js';
 import type { RawCell, RawCellProcessMiningView } from '../../map/types.js';
+import { MAX_APPROVE_AMOUNT } from '../allowance.constants.js';
 import { MiningService } from '../mining.service.js';
-import type { AppConfig } from '../types.js';
-import { CELL, DEFAULT_SERVER_TIME, makeCellHarness, makeConfig, WALLET_ADDRESS } from './service-fakes.js';
+import { type AppConfig, ModeSwitchKind } from '../types.js';
+import {
+    CELL,
+    CPU_TOKEN,
+    DEFAULT_SERVER_TIME,
+    chainCellView,
+    makeCellHarness,
+    makeConfig,
+    WALLET_ADDRESS,
+} from './service-fakes.js';
 
 function makeService(opts: Parameters<typeof makeCellHarness>[1] = {}) {
     return makeCellHarness((deps) => new MiningService(deps), opts);
@@ -44,7 +63,7 @@ function miningCell(process: Partial<RawCellProcessMiningView>, resources: RawCe
     return makeCell({
         tokenId: '42',
         owner: WALLET_ADDRESS,
-        building: { type: BuildingType.Mine, buildFinishAt: null },
+        building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: null, modeRecipeId: null },
         process: makeMiningProcess({ resource: 3, ...process }),
         resources,
     });
@@ -271,7 +290,7 @@ function mineCell(overrides: Partial<RawCell> = {}): RawCell {
     return makeCell({
         tokenId: '42',
         owner: WALLET_ADDRESS,
-        building: { type: BuildingType.Mine, buildFinishAt: null },
+        building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: null, modeRecipeId: null },
         resources: [makeResource({ resourceId: 5, deposit: '1000' })],
         ...overrides,
     });
@@ -327,7 +346,9 @@ describe('MiningService.startMining', () => {
 
     it('rejects while the extractor is still under construction', async () => {
         const future = DEFAULT_SERVER_TIME + 3600;
-        const cell = mineCell({ building: { type: BuildingType.Mine, buildFinishAt: future } });
+        const cell = mineCell({
+            building: { type: BuildingType.Mine, buildFinishAt: future, modeResource: null, modeRecipeId: null },
+        });
         const { service, contracts } = makeService({ cell });
         await expect(service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 })).rejects.toThrow(
             /still under construction/i,
@@ -338,7 +359,9 @@ describe('MiningService.startMining', () => {
     it('rejects against the map clock even when the local wall clock reads far past finish', async () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date(4_000_000_000 * 1000));
-        const cell = mineCell({ building: { type: BuildingType.Mine, buildFinishAt: 1000 } });
+        const cell = mineCell({
+            building: { type: BuildingType.Mine, buildFinishAt: 1000, modeResource: null, modeRecipeId: null },
+        });
         const { service, contracts } = makeService({ cell, serverTime: 500 });
         await expect(service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 })).rejects.toThrow(
             /still under construction/i,
@@ -349,7 +372,9 @@ describe('MiningService.startMining', () => {
     it('accepts against the map clock even when the local wall clock reads before finish', async () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date(0));
-        const cell = mineCell({ building: { type: BuildingType.Mine, buildFinishAt: 1000 } });
+        const cell = mineCell({
+            building: { type: BuildingType.Mine, buildFinishAt: 1000, modeResource: null, modeRecipeId: null },
+        });
         const { service, contracts } = makeService({ cell, serverTime: 1000, logs: [[startedLog(5, 180, 77n)]] });
         const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
         expect(result.targetResourceId).toBe(5);
@@ -357,7 +382,9 @@ describe('MiningService.startMining', () => {
     });
 
     it('rejects when the building is a crafter, not an extractor', async () => {
-        const cell = mineCell({ building: { type: BuildingType.SteelMill, buildFinishAt: null } });
+        const cell = mineCell({
+            building: { type: BuildingType.SteelMill, buildFinishAt: null, modeResource: null, modeRecipeId: null },
+        });
         const { service } = makeService({ cell });
         await expect(service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 })).rejects.toThrow(
             /not an extractor/i,
@@ -378,5 +405,148 @@ describe('MiningService.startMining', () => {
         await expect(service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 })).rejects.toThrow(
             /do not own/i,
         );
+    });
+});
+
+function burnLog(from: Address, amountWei: bigint): Log {
+    const topics = encodeEventTopics({
+        abi: ERC20_ABI,
+        eventName: 'Transfer',
+        args: { from, to: zeroAddress },
+    });
+    const data = encodeAbiParameters([{ type: 'uint256' }], [amountWei]);
+    return { address: CPU_TOKEN as Address, topics, data, ...LOG_META } as unknown as Log;
+}
+
+describe('MiningService.startMining mode switch cost', () => {
+    it('prices the first pick on a fresh extractor as free and asks for no allowance', async () => {
+        const { service, allowance } = makeService({
+            cell: mineCell(),
+            reads: { getCell: chainCellView({ modeResource: 0 }) },
+            logs: [[startedLog(5, 180, 77n)]],
+        });
+
+        const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
+
+        expect(result.modeSwitch.cost).toEqual({ kind: 'free', why: 'first_pick' });
+        expect(result.modeSwitch.exact).toBe(true);
+        expect(allowance.calls).toEqual([]);
+    });
+
+    it('prices restarting the same resource as free and asks for no allowance', async () => {
+        const { service, allowance } = makeService({
+            cell: mineCell(),
+            reads: { getCell: chainCellView({ modeResource: 5 }) },
+            logs: [[startedLog(5, 180, 77n)]],
+        });
+
+        const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
+
+        expect(result.modeSwitch.cost).toEqual({ kind: 'free', why: 'same_output' });
+        expect(allowance.calls).toEqual([]);
+    });
+
+    it('discloses the fee and covers it with an allowance when re-pointing the extractor', async () => {
+        const { service, allowance } = makeService({
+            cell: mineCell(),
+            reads: { getCell: chainCellView({ modeResource: 6 }) },
+            logs: [[startedLog(5, 180, 77n), burnLog(WALLET_ADDRESS, parseEther('1'))]],
+        });
+
+        const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
+
+        expect(result.modeSwitch.cost).toEqual({ kind: 'paid', costCpu: '1' });
+        expect(allowance.calls).toEqual([{ token: CPU_TOKEN, spender: CELL, needed: parseEther('1') }]);
+    });
+
+    it('prices against the mode the chain holds, not the one a lagging map holds', async () => {
+        const cell = mineCell({
+            building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: 5, modeRecipeId: null },
+        });
+        const { service } = makeService({
+            cell,
+            reads: { getCell: chainCellView({ modeResource: 6 }) },
+            logs: [[startedLog(5, 180, 77n), burnLog(WALLET_ADDRESS, parseEther('1'))]],
+        });
+
+        const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
+
+        expect(result.modeSwitch.cost).toEqual({ kind: 'paid', costCpu: '1' });
+        expect(result.modeSwitch.exact).toBe(true);
+    });
+
+    it('still starts the job when the chain mode cannot be read, marking the price inexact', async () => {
+        const cell = mineCell({
+            building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: 6, modeRecipeId: null },
+        });
+        const { service, contracts } = makeService({
+            cell,
+            reads: { getCell: new Error('rpc is rate limited') },
+            logs: [[startedLog(5, 180, 77n), burnLog(WALLET_ADDRESS, parseEther('1'))]],
+        });
+
+        const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
+
+        expect(contracts.sent).toHaveLength(1);
+        expect(result.modeSwitch.cost).toEqual({ kind: 'paid', costCpu: '1' });
+        expect(result.modeSwitch.exact).toBe(false);
+        expect(result.modeSwitch.burnedCpu).toBe('1');
+    });
+
+    it('discloses an unknown price as unknown and still covers the burn with an allowance', async () => {
+        const config = makeConfig();
+        config.buildings = config.buildings.map((b) =>
+            b.type === BuildingType.Mine ? { ...b, modeSwitch: { kind: ModeSwitchKind.Unknown } } : b,
+        );
+        const { service, allowance } = makeService({
+            cell: mineCell(),
+            config,
+            reads: { getCell: chainCellView({ modeResource: 6 }) },
+            logs: [[startedLog(5, 180, 77n), burnLog(WALLET_ADDRESS, parseEther('1'))]],
+        });
+
+        const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
+
+        expect(result.modeSwitch.cost).toEqual({ kind: 'unknown' });
+        expect(allowance.calls[0]?.needed).toBe(MAX_APPROVE_AMOUNT);
+        expect(result.modeSwitch.burnedCpu).toBe('1');
+    });
+
+    it('reports the burn the receipt actually carries, even when it contradicts the estimate', async () => {
+        const { service } = makeService({
+            cell: mineCell(),
+            reads: { getCell: chainCellView({ modeResource: 0 }) },
+            logs: [[startedLog(5, 180, 77n), burnLog(WALLET_ADDRESS, parseEther('3'))]],
+        });
+
+        const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
+
+        expect(result.modeSwitch.cost).toEqual({ kind: 'free', why: 'first_pick' });
+        expect(result.modeSwitch.burnedCpu).toBe('3');
+    });
+
+    it('reports a zero burn when the receipt carries no burn at all', async () => {
+        const { service } = makeService({
+            cell: mineCell(),
+            reads: { getCell: chainCellView({ modeResource: 5 }) },
+            logs: [[startedLog(5, 180, 77n)]],
+        });
+
+        const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
+
+        expect(result.modeSwitch.burnedCpu).toBe('0');
+    });
+
+    it('ignores a burn by another wallet in the same transaction', async () => {
+        const other = '0x000000000000000000000000000000000000bEEF' as Address;
+        const { service } = makeService({
+            cell: mineCell(),
+            reads: { getCell: chainCellView({ modeResource: 5 }) },
+            logs: [[startedLog(5, 180, 77n), burnLog(other, parseEther('9'))]],
+        });
+
+        const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
+
+        expect(result.modeSwitch.burnedCpu).toBe('0');
     });
 });

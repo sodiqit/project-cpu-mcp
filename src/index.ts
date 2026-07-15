@@ -125,6 +125,7 @@ async function main(): Promise<void> {
     const mining = new MiningService({
         wallet,
         appConfig,
+        allowance,
         cellClient,
         contracts,
         mapReader,
