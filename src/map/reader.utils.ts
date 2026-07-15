@@ -19,6 +19,5 @@ export function toProjectionConfig(config: AppConfig): CellProjectionConfig {
         hubStorageMultiplier: config.storage.hubStorageMultiplier,
         hubBuildingTypes: buildingTypesOfKind(config, BuildingKind.Hub),
         craftOutputsByRecipe: craftOutputsByRecipe(config),
-        veinDrainPercentByBuilding: veinDrainPercentByBuilding(config),
     };
 }

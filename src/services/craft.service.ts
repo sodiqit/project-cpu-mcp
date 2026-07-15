@@ -16,8 +16,9 @@ import type {
 import { assertWarehouseHas } from './warehouse.utils.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
-import { computeBatchProgress } from '../map/process.utils.js';
-import { fitBatchesByRoom } from '../map/storage.utils.js';
+import { computeBatchSchedule, toProcessProgress } from '../map/process.utils.js';
+import { settleCraft } from '../map/settle.utils.js';
+import { blockedResourceIds } from '../map/storage.utils.js';
 import { CellProcessKind, type RevealCellReader } from '../map/types.js';
 import { cpuFromWei } from '../utils/format.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
@@ -142,40 +143,43 @@ export class CraftService {
             };
         }
 
-        const progress = computeBatchProgress({
+        const serverTime = this.mapReader.getServerTime();
+        const schedule = computeBatchSchedule({
             durationSec: process.durationSec,
             batches: process.batches,
             claimedBatches: process.claimedBatches,
             startAtSec: process.startAt,
-            nowSec: this.mapReader.getServerTime(),
+            nowSec: serverTime,
         });
         const config = await this.appConfig.load();
         const outputs = config.recipes.find((r) => r.id === process.recipeId)?.outputs ?? [];
         // Matured batches only bank while every output fits; mirror the on-chain fitByRoom so a blocked
         // output box reports 0 claimable instead of a phantom count (same room shape as mining).
-        const batchesThatFit = fitBatchesByRoom(outputs, state.resources);
-        const claimableBatches =
-            batchesThatFit === null ? progress.claimableBatches : Math.min(progress.claimableBatches, batchesThatFit);
-        const blockedResourceIds = outputs
-            .map((o) => o.resourceId)
-            .filter((id) => state.resources.find((r) => r.resourceId === id)?.storage?.full === true);
+        const settlement = settleCraft({
+            outputs,
+            maturedBatches: schedule.maturedBatches,
+            resources: state.resources,
+        });
+        const progress = toProcessProgress({
+            schedule,
+            claimedBatches: process.claimedBatches,
+            settledBatches: settlement.settledBatches,
+            depleted: settlement.depleted,
+            stalled: process.stalled,
+        });
 
         return {
             tokenId,
             active: true,
-            serverTime: this.mapReader.getServerTime(),
+            serverTime,
             recipeId: process.recipeId,
             batches: process.batches,
             claimedBatches: process.claimedBatches,
-            completedBatches: progress.completedBatches,
-            claimableBatches,
-            isFinished: progress.isFinished,
+            ...progress,
             startAt: process.startAt,
             durationSec: process.durationSec,
-            endsAtSec: progress.endsAtSec,
-            nextBatchAtSec: progress.nextBatchAtSec,
             stalled: process.stalled,
-            blockedResourceIds,
+            blockedResourceIds: blockedResourceIds(outputs, state.resources),
         };
     }
 

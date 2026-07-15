@@ -177,9 +177,44 @@ describe('CraftService.getStatus', () => {
 
         expect(status.stalled).toBe(true);
         expect(status.blockedResourceIds).toEqual([102]);
-        // The single output box is full, so no matured batch fits — claimable is clamped to 0.
         expect(status.claimableBatches).toBe(0);
-        expect(status.completedBatches).toBe(2);
+        expect(status.completedBatches).toBe(0);
+        expect(status.isFinished).toBe(false);
+        expect(status.nextBatchAtSec).toBeNull();
+    });
+
+    it('stalls before the box is full, naming the output with no room for a whole batch', async () => {
+        const config = makeConfig();
+        config.recipes = config.recipes.map((r) =>
+            r.id === CraftRecipeId.SmeltSteel ? { ...r, outputs: [{ resourceId: 102, amount: 10 }] } : r,
+        );
+        const cell = makeCell({
+            tokenId: '42',
+            process: {
+                kind: CellProcessKind.Craft,
+                recipeId: CraftRecipeId.SmeltSteel,
+                batches: 2,
+                claimedBatches: 0,
+                durationSec: 60,
+                startAt: 1,
+            },
+            resources: [
+                {
+                    resourceId: 102,
+                    deposit: '0',
+                    balance: '57',
+                    strength: null,
+                    storage: makeStorage({ used: '57', cap: '60' }),
+                },
+            ],
+        });
+        const { service } = makeService({ cell, config });
+
+        const status = await service.getStatus('42');
+
+        expect(status.stalled).toBe(true);
+        expect(status.blockedResourceIds).toEqual([102]);
+        expect(status.claimableBatches).toBe(0);
     });
 });
 

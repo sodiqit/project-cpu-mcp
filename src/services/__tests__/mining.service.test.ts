@@ -163,6 +163,27 @@ describe('MiningService.getStatus', () => {
         expect(status.claimable).toBe('20');
     });
 
+    it('does not call a stalled job finished — its schedule survives the wait', async () => {
+        const nowSec = 100_000;
+        const cell = miningCell({ durationSec: 10, yieldPerCycle: 10, batches: 10, startAt: nowSec - 15 * 10 }, [
+            makeResource({
+                resourceId: 3,
+                deposit: '500',
+                balance: '50',
+                storage: makeStorage({ used: '50', cap: '50' }),
+            }),
+        ]);
+        const { service } = makeService({ cell, serverTime: nowSec });
+
+        const status = await service.getStatus('42');
+
+        expect(status.stalled).toBe(true);
+        expect(status.isFinished).toBe(false);
+        expect(status.completedBatches).toBe(0);
+        expect(status.claimableBatches).toBe(0);
+        expect(status.nextBatchAtSec).toBeNull();
+    });
+
     it('reports a full box as stalled with nothing claimable', async () => {
         const cell = miningCell({ durationSec: 10, yieldPerCycle: 10, batches: 100, startAt: 1 }, [
             makeResource({

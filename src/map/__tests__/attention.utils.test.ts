@@ -18,6 +18,7 @@ const BASE = {
     serverTime: 10,
     nearFullPct: 90,
     craftOutputsByRecipe: {},
+    veinDrainPercentByBuilding: {},
     extractorBuildingTypes: new Set<string>([BuildingType.Mine]),
 };
 

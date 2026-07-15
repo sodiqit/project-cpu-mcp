@@ -38,15 +38,23 @@ export function fitBatchesByRoom(
     return fit === null ? null : Number(fit);
 }
 
+export function blockedResourceIds(
+    outputs: ReadonlyArray<ProcessOutput>,
+    resources: ReadonlyArray<CellResource>,
+): Array<number> {
+    const blocked: Array<number> = [];
+    for (const [resourceId, need] of needByResource(outputs)) {
+        const room = roomFor(resources, resourceId);
+        if (need > 0n && room !== null && room < need) {
+            blocked.push(resourceId);
+        }
+    }
+    return blocked;
+}
+
 export function isProcessStalled(
     outputs: ReadonlyArray<ProcessOutput>,
     resources: ReadonlyArray<CellResource>,
 ): boolean {
-    for (const [resourceId, need] of needByResource(outputs)) {
-        const room = roomFor(resources, resourceId);
-        if (need > 0n && room !== null && room < need) {
-            return true;
-        }
-    }
-    return false;
+    return blockedResourceIds(outputs, resources).length > 0;
 }

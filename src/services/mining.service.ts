@@ -1,7 +1,5 @@
 import { isAddress, parseEventLogs, type Address, type Log } from 'viem';
 
-import { FULL_VEIN_DRAIN_PERCENT } from './constants.js';
-import { settleMining, veinDrawPerCycle } from './mining.utils.js';
 import type {
     AppConfig,
     MiningClaimResult,
@@ -15,7 +13,9 @@ import type {
 import { BuildingKind, type BuildingView } from '../api/types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
-import { computeBatchProgress } from '../map/process.utils.js';
+import { FULL_VEIN_DRAIN_PERCENT } from '../map/constants.js';
+import { computeBatchSchedule, toProcessProgress } from '../map/process.utils.js';
+import { settleMining, veinDrawPerCycle } from '../map/settle.utils.js';
 import { CellProcessKind, type Cell, type RevealCellReader } from '../map/types.js';
 import { formatUnixSeconds, resourceLabel } from '../utils/format.utils.js';
 import type { IContractClient, WalletProvider } from '../wallet/types.js';
@@ -72,13 +72,14 @@ export class MiningService {
         const resource = state.resources.find((r) => r.resourceId === process.resource) ?? null;
         const deposit = resource?.deposit ?? '0';
         const storage = resource?.storage ?? null;
+        const serverTime = this.mapReader.getServerTime();
 
-        const progress = computeBatchProgress({
+        const schedule = computeBatchSchedule({
             durationSec: process.durationSec,
             batches: process.batches,
             claimedBatches: process.claimedBatches,
             startAtSec: process.startAt,
-            nowSec: this.mapReader.getServerTime(),
+            nowSec: serverTime,
         });
 
         const config = await this.appConfig.load();
@@ -87,26 +88,29 @@ export class MiningService {
             resourceId: process.resource,
             yieldPerCycle: process.yieldPerCycle,
             drawPerCycle: veinDrawPerCycle(process.yieldPerCycle, drainPercent ?? FULL_VEIN_DRAIN_PERCENT),
-            claimableBatches: progress.claimableBatches,
+            maturedBatches: schedule.maturedBatches,
             depositRemaining: BigInt(deposit),
             resources: state.resources,
+        });
+        const progress = toProcessProgress({
+            schedule,
+            claimedBatches: process.claimedBatches,
+            settledBatches: settlement.settledBatches,
+            depleted: settlement.depleted,
+            stalled: process.stalled,
         });
 
         return {
             tokenId,
             active: true,
-            serverTime: this.mapReader.getServerTime(),
+            serverTime,
             targetResourceId: process.resource,
             yieldPerCycle: process.yieldPerCycle,
             durationSec: process.durationSec,
             startAt: process.startAt,
             batches: process.batches,
             claimedBatches: process.claimedBatches,
-            completedBatches: progress.completedBatches,
-            claimableBatches: settlement.settledBatches,
-            isFinished: progress.isFinished,
-            endsAtSec: progress.endsAtSec,
-            nextBatchAtSec: progress.nextBatchAtSec,
+            ...progress,
             claimable: settlement.minedUnits.toString(),
             depositRemaining: deposit,
             stalled: process.stalled,

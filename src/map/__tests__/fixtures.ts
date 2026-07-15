@@ -90,7 +90,6 @@ export function makeProjectionConfig(overrides: Partial<CellProjectionConfig> = 
         hubStorageMultiplier: TEST_HUB_STORAGE_MULTIPLIER,
         hubBuildingTypes: new Set<string>([BuildingType.Hub]),
         craftOutputsByRecipe: {},
-        veinDrainPercentByBuilding: {},
         ...overrides,
     };
 }

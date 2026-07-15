@@ -258,24 +258,27 @@ export interface MiningServiceOptions {
     logger: ILogger;
 }
 
-export interface MiningStatusResult {
+export interface ProcessStatusView {
     tokenId: string;
     active: boolean;
     serverTime: number;
-    targetResourceId: number | null;
-    yieldPerCycle: number | null;
-    durationSec: number | null;
-    startAt: number | null;
     batches: number;
     claimedBatches: number;
     completedBatches: number;
     claimableBatches: number;
     isFinished: boolean;
+    startAt: number | null;
+    durationSec: number | null;
     endsAtSec: number | null;
     nextBatchAtSec: number | null;
+    stalled: boolean;
+}
+
+export interface MiningStatusResult extends ProcessStatusView {
+    targetResourceId: number | null;
+    yieldPerCycle: number | null;
     claimable: string;
     depositRemaining: string;
-    stalled: boolean;
     warehouseUsed: string | null;
     warehouseCap: string | null;
 }
@@ -530,22 +533,8 @@ export interface CraftClaimResult {
     blockNumber: string;
 }
 
-export interface CraftStatusResult {
-    tokenId: string;
-    active: boolean;
-    serverTime: number;
+export interface CraftStatusResult extends ProcessStatusView {
     recipeId: string | null;
-    batches: number;
-    claimedBatches: number;
-    completedBatches: number;
-    claimableBatches: number;
-    isFinished: boolean;
-    startAt: number | null;
-    durationSec: number | null;
-    endsAtSec: number | null;
-    nextBatchAtSec: number | null;
-    stalled: boolean;
-    // The recipe outputs whose warehouse is full — offload one of these to resume.
     blockedResourceIds: Array<number>;
 }
 

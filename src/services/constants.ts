@@ -1,1 +1,0 @@
-export const FULL_VEIN_DRAIN_PERCENT = 100;

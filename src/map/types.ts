@@ -127,7 +127,6 @@ export interface CellProjectionConfig {
     hubStorageMultiplier: number;
     hubBuildingTypes: Set<string>;
     craftOutputsByRecipe: Record<string, Array<ProcessOutput>>;
-    veinDrainPercentByBuilding: Record<string, number>;
 }
 
 export interface ParsedSnapshot {

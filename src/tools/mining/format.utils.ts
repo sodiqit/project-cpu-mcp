@@ -34,10 +34,11 @@ export function summarizeMiningStatus(s: MiningStatusResult, resources: Resource
         ? ` Job FINISHED — claim to bank it and free the cell for its next job or a craft.`
         : '';
     const depleted = s.depositRemaining === '0' ? ' Deposit depleted.' : '';
-    const stalled = s.stalled
-        ? ` STALLED: the warehouse (${s.warehouseUsed}/${s.warehouseCap}) has room for less than one cycle, ` +
-          `so nothing settles and the wait is burnt; offload to resume.`
-        : '';
+    const stalled =
+        s.stalled && !s.isFinished
+            ? ` STALLED: the warehouse (${s.warehouseUsed}/${s.warehouseCap}) has room for less than one cycle, ` +
+              `so nothing settles and the wait is burnt; offload to resume.`
+            : '';
     return (
         `Cell ${s.tokenId} mining ${resourceLabel(resources, s.targetResourceId)}: ${cycle}` +
         `${s.claimable} claimable now (${s.claimableBatches} cycle${s.claimableBatches === 1 ? '' : 's'}, ` +

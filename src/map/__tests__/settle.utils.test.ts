@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { makeResource, makeStorage, makeCell, makeProjectionConfig } from '../../map/__tests__/fixtures.js';
-import { toCell } from '../../map/cell-view.utils.js';
-import type { CellResource, RawCellResource } from '../../map/types.js';
-import { settleMining, veinDrawPerCycle } from '../mining.utils.js';
+import { makeCell, makeProjectionConfig, makeResource, makeStorage } from './fixtures.js';
+import { toCell } from '../cell-view.utils.js';
+import { settleMining, veinDrawPerCycle } from '../settle.utils.js';
+import type { CellResource, RawCellResource } from '../types.js';
 
 function resources(...raw: Array<RawCellResource>): Array<CellResource> {
     return toCell(makeCell({ resources: raw }), 0, makeProjectionConfig()).resources;
@@ -16,7 +16,7 @@ const settle = (overrides: Partial<Parameters<typeof settleMining>[0]> = {}) =>
         resourceId: RESOURCE,
         yieldPerCycle: 100,
         drawPerCycle: 100,
-        claimableBatches: 5,
+        maturedBatches: 5,
         depositRemaining: 10_000n,
         resources: resources(makeResource({ resourceId: RESOURCE, deposit: '10000', storage: null })),
         ...overrides,
@@ -43,7 +43,7 @@ describe('veinDrawPerCycle', () => {
 
 describe('settleMining', () => {
     it('settles every matured cycle when nothing else binds', () => {
-        expect(settle()).toEqual({ settledBatches: 5, minedUnits: 500n, drainedUnits: 500n });
+        expect(settle()).toEqual({ settledBatches: 5, minedUnits: 500n, drainedUnits: 500n, depleted: false });
     });
 
     it('stops at the deposit, draining its last partial cycle in full', () => {
@@ -51,7 +51,7 @@ describe('settleMining', () => {
             depositRemaining: 250n,
             resources: resources(makeResource({ resourceId: RESOURCE, deposit: '250', storage: null })),
         });
-        expect(s).toEqual({ settledBatches: 3, minedUnits: 250n, drainedUnits: 250n });
+        expect(s).toEqual({ settledBatches: 3, minedUnits: 250n, drainedUnits: 250n, depleted: true });
     });
 
     it('credits a vein-drain extractor more than it drains', () => {
@@ -60,7 +60,7 @@ describe('settleMining', () => {
             depositRemaining: 400n,
             resources: resources(makeResource({ resourceId: RESOURCE, deposit: '400', storage: null })),
         });
-        expect(s).toEqual({ settledBatches: 5, minedUnits: 500n, drainedUnits: 400n });
+        expect(s).toEqual({ settledBatches: 5, minedUnits: 500n, drainedUnits: 400n, depleted: true });
     });
 
     it('settles whole cycles only — room for a partial cycle banks nothing', () => {
@@ -87,11 +87,16 @@ describe('settleMining', () => {
                 }),
             ),
         });
-        expect(s).toEqual({ settledBatches: 2, minedUnits: 200n, drainedUnits: 200n });
+        expect(s).toEqual({ settledBatches: 2, minedUnits: 200n, drainedUnits: 200n, depleted: false });
     });
 
     it('banks nothing when no cycle has matured', () => {
-        expect(settle({ claimableBatches: 0 })).toEqual({ settledBatches: 0, minedUnits: 0n, drainedUnits: 0n });
+        expect(settle({ maturedBatches: 0 })).toEqual({
+            settledBatches: 0,
+            minedUnits: 0n,
+            drainedUnits: 0n,
+            depleted: false,
+        });
     });
 
     it('banks nothing on an empty deposit', () => {
@@ -99,6 +104,6 @@ describe('settleMining', () => {
             depositRemaining: 0n,
             resources: resources(makeResource({ resourceId: RESOURCE, deposit: '0', storage: null })),
         });
-        expect(s).toEqual({ settledBatches: 0, minedUnits: 0n, drainedUnits: 0n });
+        expect(s).toEqual({ settledBatches: 0, minedUnits: 0n, drainedUnits: 0n, depleted: true });
     });
 });

@@ -10,7 +10,7 @@ export function processOutputs(
     return craftOutputsByRecipe[process.recipeId] ?? [];
 }
 
-export interface BatchProgressInput {
+export interface BatchScheduleInput {
     durationSec: number;
     batches: number;
     claimedBatches: number;
@@ -18,7 +18,42 @@ export interface BatchProgressInput {
     nowSec: number;
 }
 
-export interface BatchProgress {
+export interface BatchSchedule {
+    maturedBatches: number;
+    remainingBatches: number;
+    endsAtSec: number;
+    nextBatchAtSec: number | null;
+}
+
+export function computeBatchSchedule({
+    durationSec,
+    batches,
+    claimedBatches,
+    startAtSec,
+    nowSec,
+}: BatchScheduleInput): BatchSchedule {
+    const remainingBatches = Math.max(0, batches - claimedBatches);
+    const elapsedSec = Math.max(0, nowSec - startAtSec);
+    const elapsedBatches = durationSec > 0 ? Math.floor(elapsedSec / durationSec) : remainingBatches;
+    const maturedBatches = Math.min(elapsedBatches, remainingBatches);
+
+    return {
+        maturedBatches,
+        remainingBatches,
+        endsAtSec: startAtSec + remainingBatches * durationSec,
+        nextBatchAtSec: maturedBatches >= remainingBatches ? null : startAtSec + (maturedBatches + 1) * durationSec,
+    };
+}
+
+export interface ProcessProgressInput {
+    schedule: BatchSchedule;
+    claimedBatches: number;
+    settledBatches: number;
+    depleted: boolean;
+    stalled: boolean;
+}
+
+export interface ProcessProgress {
     completedBatches: number;
     claimableBatches: number;
     isFinished: boolean;
@@ -26,24 +61,20 @@ export interface BatchProgress {
     nextBatchAtSec: number | null;
 }
 
-export function computeBatchProgress({
-    durationSec,
-    batches,
+export function toProcessProgress({
+    schedule,
     claimedBatches,
-    startAtSec,
-    nowSec,
-}: BatchProgressInput): BatchProgress {
-    const remaining = Math.max(0, batches - claimedBatches);
-    const elapsedSec = Math.max(0, nowSec - startAtSec);
-    const matured = durationSec > 0 ? Math.floor(elapsedSec / durationSec) : remaining;
-    const claimableBatches = Math.min(matured, remaining);
-    const isFinished = matured >= remaining;
+    settledBatches,
+    depleted,
+    stalled,
+}: ProcessProgressInput): ProcessProgress {
+    const isFinished = settledBatches >= schedule.remainingBatches || depleted;
 
     return {
-        completedBatches: claimedBatches + claimableBatches,
-        claimableBatches,
+        completedBatches: claimedBatches + settledBatches,
+        claimableBatches: settledBatches,
         isFinished,
-        endsAtSec: startAtSec + remaining * durationSec,
-        nextBatchAtSec: isFinished ? null : startAtSec + (claimableBatches + 1) * durationSec,
+        endsAtSec: schedule.endsAtSec,
+        nextBatchAtSec: isFinished || stalled ? null : schedule.nextBatchAtSec,
     };
 }
