@@ -14,31 +14,15 @@ import type {
     ICellClient,
 } from './types.js';
 import { assertWarehouseHas } from './warehouse.utils.js';
-import type { CraftStackView } from '../api/types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
-import { computeMaturation } from '../map/process.utils.js';
-import { warehouseRoom } from '../map/storage.utils.js';
-import { type CellResource, CellProcessKind, type RevealCellReader } from '../map/types.js';
+import { processOutputs } from '../map/process.utils.js';
+import { toSettleConfig } from '../map/reader.utils.js';
+import { cellProcessProgress } from '../map/settle.utils.js';
+import { blockedResourceIds } from '../map/storage.utils.js';
+import { CellProcessKind, type RevealCellReader } from '../map/types.js';
 import { cpuFromWei } from '../utils/format.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
-
-// Whole batches that fit given the room in every output box (min over outputs); null when no output is
-// capped (unbounded). Mirrors the on-chain fitByRoom = min(room[out] / outputAmount).
-function fitBatchesByRoom(outputs: Array<CraftStackView>, resources: Array<CellResource>): number | null {
-    let fit: bigint | null = null;
-    for (const out of outputs) {
-        const storage = resources.find((r) => r.resourceId === out.resourceId)?.storage ?? null;
-        const room = warehouseRoom(storage);
-        if (room === null) {
-            continue;
-        }
-        const amount = BigInt(out.amount);
-        const batches = amount > 0n ? room / amount : room;
-        fit = fit === null || batches < fit ? batches : fit;
-    }
-    return fit === null ? null : Number(fit);
-}
 
 export class CraftService {
     private readonly wallet: WalletProvider;
@@ -125,6 +109,7 @@ export class CraftService {
             tokenId,
             recipeId: claimed !== null ? recipeNameFromUint64(claimed.recipeId) : null,
             batches: claimed?.batches ?? 0,
+            claimedBatches: claimed?.claimedBatches ?? null,
             outputs: claimed?.outputs ?? [],
             txHash: confirmed.txHash,
             status: confirmed.status,
@@ -144,54 +129,47 @@ export class CraftService {
             return {
                 tokenId,
                 active: false,
+                serverTime: this.mapReader.getServerTime(),
                 recipeId: null,
                 batches: 0,
                 claimedBatches: 0,
-                maturedBatches: 0,
+                completedBatches: 0,
                 claimableBatches: 0,
+                isFinished: false,
                 startAt: null,
                 durationSec: null,
+                endsAtSec: null,
+                nextBatchAtSec: null,
                 stalled: false,
                 blockedResourceIds: [],
             };
         }
 
-        const { cycles } = computeMaturation({
-            startAt: process.startAt,
-            durationSec: process.durationSec,
-            now: this.mapReader.getServerTime(),
-        });
-        const matured = process.durationSec > 0 ? Math.min(process.batches, cycles) : process.batches;
+        const serverTime = this.mapReader.getServerTime();
         const config = await this.appConfig.load();
-        const outputs = config.recipes.find((r) => r.id === process.recipeId)?.outputs ?? [];
-        // Matured batches only bank while every output fits; mirror the on-chain fitByRoom so a full
-        // output box reports 0 claimable instead of a phantom count (same room shape as mining).
-        const matureClaimable = Math.max(0, matured - process.claimedBatches);
-        const batchesThatFit = fitBatchesByRoom(outputs, state.resources);
-        const claimableBatches = batchesThatFit === null ? matureClaimable : Math.min(matureClaimable, batchesThatFit);
-        const blockedResourceIds = outputs
-            .map((o) => o.resourceId)
-            .filter((id) => state.resources.find((r) => r.resourceId === id)?.storage?.stalled === true);
+        const settleConfig = toSettleConfig(config);
+        const { progress } = cellProcessProgress(state, process, serverTime, settleConfig);
+        const outputs = processOutputs(process, settleConfig.craftOutputsByRecipe);
 
         return {
             tokenId,
             active: true,
+            serverTime,
             recipeId: process.recipeId,
             batches: process.batches,
             claimedBatches: process.claimedBatches,
-            maturedBatches: matured,
-            claimableBatches,
+            ...progress,
             startAt: process.startAt,
             durationSec: process.durationSec,
             stalled: process.stalled,
-            blockedResourceIds,
+            blockedResourceIds: blockedResourceIds(outputs, state.resources),
         };
     }
 
     private decodeClaimed(
         logs: Array<Log>,
         cell: Address,
-    ): { recipeId: bigint; batches: number; outputs: Array<CraftOutput> } | null {
+    ): { recipeId: bigint; batches: number; claimedBatches: number; outputs: Array<CraftOutput> } | null {
         const events = parseEventLogs({ abi: CELL_ABI, eventName: 'CraftClaimed', logs });
         const event = events.find((e) => e.address.toLowerCase() === cell.toLowerCase());
         if (event === undefined) {
@@ -201,7 +179,12 @@ export class CraftService {
             resourceId,
             amount: (event.args.outputAmounts[i] ?? 0n).toString(),
         }));
-        return { recipeId: event.args.recipeId, batches: event.args.batches, outputs };
+        return {
+            recipeId: event.args.recipeId,
+            batches: event.args.batches,
+            claimedBatches: event.args.claimedBatches,
+            outputs,
+        };
     }
 
     private assertChain(config: AppConfig, wallet: WalletManager): void {

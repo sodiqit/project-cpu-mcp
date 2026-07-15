@@ -59,16 +59,22 @@ function claimHarness(outcome: MiningClaimResult | Error): Handler {
 }
 
 describe('get_mining_status tool', () => {
-    it('summarizes an active extractor with the batch, cycle timing, and resource name', async () => {
+    it('summarizes an active job with its yield, schedule, cycle timing, and resource name', async () => {
         const result = await statusHarness({
             tokenId: '42',
             active: true,
+            serverTime: 2000,
             targetResourceId: 3,
-            batch: 77,
+            yieldPerCycle: 77,
             durationSec: 180,
             startAt: 1700,
-            cyclesMatured: 2,
-            nextBatchInSec: 30,
+            batches: 10,
+            claimedBatches: 0,
+            completedBatches: 2,
+            claimableBatches: 2,
+            isFinished: false,
+            endsAtSec: 3500,
+            nextBatchAtSec: 2030,
             claimable: '120',
             depositRemaining: '500',
             stalled: false,
@@ -78,9 +84,9 @@ describe('get_mining_status tool', () => {
 
         const header = result.content[0]?.text ?? '';
         expect(header).toMatch(/Silica \(#3\)/);
-        expect(header).toMatch(/batch of 77 every 3 minutes/);
-        expect(header).toMatch(/120 claimable now \(2 cycles matured\)/);
-        expect(header).toMatch(/next batch in 30 seconds/);
+        expect(header).toMatch(/77 per 3 minutes cycle/);
+        expect(header).toMatch(/120 claimable now \(2 cycles, 2\/10 cycles done\)/);
+        expect(header).toMatch(/next in 30 seconds/);
         expect(header).toMatch(/500 left/);
 
         const parsed = JSON.parse(result.content[1]?.text ?? '{}') as MiningStatusResult;
@@ -91,12 +97,18 @@ describe('get_mining_status tool', () => {
         const result = await statusHarness({
             tokenId: '42',
             active: false,
+            serverTime: 2000,
             targetResourceId: null,
-            batch: null,
+            yieldPerCycle: null,
             durationSec: null,
             startAt: null,
-            cyclesMatured: 0,
-            nextBatchInSec: null,
+            batches: 0,
+            claimedBatches: 0,
+            completedBatches: 0,
+            claimableBatches: 0,
+            isFinished: false,
+            endsAtSec: null,
+            nextBatchAtSec: null,
             claimable: '0',
             depositRemaining: '0',
             stalled: false,
@@ -113,6 +125,7 @@ describe('claim_mining tool', () => {
         const result = await claimHarness({
             tokenId: '42',
             resourceId: 3,
+            claimedBatches: 1,
             claimedAmount: '120',
             txHash: '0xmine',
             status: TxStatus.Success,
@@ -128,6 +141,7 @@ describe('claim_mining tool', () => {
         const result = await claimHarness({
             tokenId: '42',
             resourceId: null,
+            claimedBatches: null,
             claimedAmount: '0',
             txHash: '0xmine',
             status: TxStatus.Success,

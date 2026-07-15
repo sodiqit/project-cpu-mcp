@@ -1,4 +1,7 @@
 import { demolishCooldownEnd, isDepleted } from './map.utils.js';
+import { processOutputs } from './process.utils.js';
+import { cellProcessProgress, type SettleConfig } from './settle.utils.js';
+import { blockedResourceIds, needByResource } from './storage.utils.js';
 import {
     type AttentionItem,
     AttentionReason,
@@ -18,6 +21,7 @@ const REASON_SEVERITY: Record<AttentionReason, AttentionSeverity> = {
     [AttentionReason.StalledCraft]: Critical,
     [AttentionReason.WarehouseNearFull]: Warning,
     [AttentionReason.DepositDepleted]: Warning,
+    [AttentionReason.ProcessFinished]: Warning,
     [AttentionReason.DeliveryReady]: Warning,
     [AttentionReason.Unbuilt]: Info,
     [AttentionReason.DemolishCooldown]: Info,
@@ -25,13 +29,11 @@ const REASON_SEVERITY: Record<AttentionReason, AttentionSeverity> = {
 
 const SEVERITY_RANK: Record<AttentionSeverity, number> = { [Critical]: 0, [Warning]: 1, [Info]: 2 };
 
-export interface BuildAttentionInput {
+export interface BuildAttentionInput extends SettleConfig {
     ownedCells: Array<Cell> | null;
     version: number;
     serverTime: number;
     nearFullPct: number;
-    // recipeId → its output resourceIds; lets craft signals stay precise without the map layer knowing recipes.
-    craftOutputsByRecipe: Record<string, Array<number>>;
     // Building types whose kind is `extractor`; injected so the map layer stays config-agnostic.
     extractorBuildingTypes: Set<string>;
 }
@@ -75,36 +77,34 @@ function storageFields(resource: CellResource): Partial<AttentionItem> {
     };
 }
 
-// Resources this cell is actively producing right now: the mining target, or the active craft's outputs.
-// Only these can stall or approach the cap, so near-full is scoped to them (a static full box does not).
-function producedResourceIds(cell: Cell, craftOutputsByRecipe: Record<string, Array<number>>): Set<number> {
-    const process = cell.process;
-    if (process?.kind === CellProcessKind.Mining) {
-        return new Set([process.resource]);
-    }
-    if (process?.kind === CellProcessKind.Craft) {
-        return new Set(craftOutputsByRecipe[process.recipeId] ?? []);
-    }
-    return new Set();
-}
-
 function isOperationalExtractor(cell: Cell, extractorTypes: Set<string>): boolean {
     const building = cell.building;
     return building !== null && extractorTypes.has(building.type) && cell.ready === true;
 }
 
+function finishedProcess(cell: Cell, input: BuildAttentionInput): boolean {
+    const process = cell.process;
+    if (process === null) {
+        return false;
+    }
+    return cellProcessProgress(cell, process, input.serverTime, input).progress.isFinished;
+}
+
 function cellItems(cell: Cell, input: BuildAttentionInput): Array<AttentionItem> {
     const items: Array<AttentionItem> = [];
-    const produced = producedResourceIds(cell, input.craftOutputsByRecipe);
+    const outputs = cell.process === null ? [] : processOutputs(cell.process, input.craftOutputsByRecipe);
+    const need = needByResource(outputs);
+    const blocked = new Set(blockedResourceIds(outputs, cell.resources));
     const isCraft = cell.process?.kind === CellProcessKind.Craft;
 
-    // One pass over produced, capped boxes: a full one stalls, an almost-full one warns.
+    // One pass over the boxes this process feeds: one that can't take a whole cycle stalls it, an
+    // almost-full one warns.
     for (const resource of cell.resources) {
         const s = resource.storage;
-        if (!s || s.cap === null || !produced.has(resource.resourceId)) {
+        if (!s || s.cap === null || (need.get(resource.resourceId) ?? 0n) === 0n) {
             continue;
         }
-        if (s.stalled) {
+        if (blocked.has(resource.resourceId)) {
             items.push(
                 attentionItem(
                     cell,
@@ -117,9 +117,17 @@ function cellItems(cell: Cell, input: BuildAttentionInput): Array<AttentionItem>
         }
     }
 
+    const minedResourceId = cell.process?.kind === CellProcessKind.Mining ? cell.process.resource : null;
+    if (finishedProcess(cell, input)) {
+        items.push(attentionItem(cell, AttentionReason.ProcessFinished, { resourceId: minedResourceId }));
+    }
     if (isOperationalExtractor(cell, input.extractorBuildingTypes) && isDepleted(cell)) {
-        const target = cell.process?.kind === CellProcessKind.Mining ? cell.process.resource : null;
-        items.push(attentionItem(cell, AttentionReason.DepositDepleted, { resourceId: target, depositRemaining: '0' }));
+        items.push(
+            attentionItem(cell, AttentionReason.DepositDepleted, {
+                resourceId: minedResourceId,
+                depositRemaining: '0',
+            }),
+        );
     }
     if (cell.revealCount > 0 && cell.building === null && !cell.revealPending) {
         // A just-demolished cell is empty but can't be rebuilt until its cooldown ends — flag the wait, not a

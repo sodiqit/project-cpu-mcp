@@ -40,12 +40,15 @@ export function summarizeCraftStatus(s: CraftStatusResult): string {
         return `Cell ${s.tokenId} has no active craft.`;
     }
     const claimable = s.claimableBatches > 0 ? `, ${s.claimableBatches} claimable now` : '';
-    const stalled = s.stalled
-        ? ` — output warehouse FULL (resources ${s.blockedResourceIds.join(', ')}), batches paused; offload a blocked output to resume.`
-        : '';
+    const stalled =
+        s.stalled && !s.isFinished
+            ? ` — STALLED: an output box (resources ${s.blockedResourceIds.join(', ')}) has room for less than one ` +
+              `whole batch, so nothing settles and the wait is burnt; offload a blocked output to resume.`
+            : '';
+    const finished = s.isFinished ? ' Run FINISHED — claim to bank it and free the cell.' : '';
     return (
-        `Cell ${s.tokenId} crafting ${s.recipeId}: ${s.maturedBatches}/${s.batches} batches matured ` +
-        `(${s.claimedBatches} already claimed)${claimable}.${stalled}`
+        `Cell ${s.tokenId} crafting ${s.recipeId}: ${s.completedBatches}/${s.batches} batches done ` +
+        `(${s.claimedBatches} already claimed)${claimable}.${finished}${stalled}`
     );
 }
 

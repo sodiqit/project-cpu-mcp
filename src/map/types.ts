@@ -37,9 +37,10 @@ export const cellBuildingViewSchema = z.object({
 export const rawCellProcessMiningViewSchema = z.object({
     kind: z.literal(CellProcessKind.Mining),
     resource: z.number(),
-    // An extractor mines in whole cycles: each `durationSec` cycle yields a fixed `batch` of units.
     durationSec: z.number(),
-    batch: z.number(),
+    yieldPerCycle: z.number(),
+    batches: z.number(),
+    claimedBatches: z.number(),
     startAt: z.number(),
 });
 
@@ -94,7 +95,7 @@ export type CellBuildingView = z.infer<typeof cellBuildingViewSchema>;
 export type MapSnapshotResponse = z.infer<typeof mapSnapshotResponseSchema>;
 
 export interface CellResourceStorage extends RawCellResourceStorage {
-    stalled: boolean;
+    full: boolean;
 }
 
 export interface CellResource extends Omit<RawCellResource, 'storage'> {
@@ -117,10 +118,15 @@ export interface Cell extends Omit<RawCell, 'resources' | 'process'> {
 // eslint-disable-next-line no-restricted-syntax
 export type UnderivedCell = RawCell & { ready?: never; activeHub?: never };
 
+export interface ProcessOutput {
+    resourceId: number;
+    amount: number;
+}
+
 export interface CellProjectionConfig {
     hubStorageMultiplier: number;
     hubBuildingTypes: Set<string>;
-    craftOutputsByRecipe: Record<string, Array<number>>;
+    craftOutputsByRecipe: Record<string, Array<ProcessOutput>>;
 }
 
 export interface ParsedSnapshot {
@@ -257,7 +263,6 @@ export interface MapSummary {
     myCells: number | null;
     myCellsByStatus: MapCellStatusCounts | null;
     depletedDeposits: number | null;
-    // Owned cells whose active process is stalled (warehouse full). null when the wallet is unknown.
     stalledCells: number | null;
 }
 
@@ -294,6 +299,7 @@ export enum AttentionReason {
     StalledCraft = 'stalled_craft',
     WarehouseNearFull = 'warehouse_near_full',
     DepositDepleted = 'deposit_depleted',
+    ProcessFinished = 'process_finished',
     DeliveryReady = 'delivery_ready',
     Unbuilt = 'unbuilt',
     DemolishCooldown = 'demolish_cooldown',

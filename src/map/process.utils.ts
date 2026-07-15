@@ -1,29 +1,80 @@
-// Shared maturation math for the matured-batch engine: both mining and craft advance in whole cycles of
-// `durationSec` from a snapshotted `startAt`. `now` must be the map's `serverTime` (same clock domain as the
-// on-chain `startAt`), not the client wall clock — that keeps the estimate skew-free and conservative
-// (serverTime <= the block.timestamp of a later claim, so it never over-counts matured cycles).
-export interface MaturationInput {
-    startAt: number;
-    durationSec: number;
-    now: number;
-}
+import { CellProcessKind, type ProcessOutput, type RawCellProcessView } from './types.js';
 
-export interface Maturation {
-    elapsed: number;
-    // Whole cycles matured since `startAt`; 0 when `durationSec <= 0`.
-    cycles: number;
-    // Seconds until the next cycle matures; null when `durationSec <= 0`.
-    nextCycleInSec: number | null;
-}
-
-export function computeMaturation({ startAt, durationSec, now }: MaturationInput): Maturation {
-    const elapsed = Math.max(0, now - startAt);
-    if (durationSec <= 0) {
-        return { elapsed, cycles: 0, nextCycleInSec: null };
+export function processOutputs(
+    process: RawCellProcessView,
+    craftOutputsByRecipe: Record<string, Array<ProcessOutput>>,
+): Array<ProcessOutput> {
+    if (process.kind === CellProcessKind.Mining) {
+        return [{ resourceId: process.resource, amount: process.yieldPerCycle }];
     }
+    return craftOutputsByRecipe[process.recipeId] ?? [];
+}
+
+export interface BatchScheduleInput {
+    durationSec: number;
+    batches: number;
+    claimedBatches: number;
+    startAtSec: number;
+    nowSec: number;
+}
+
+export interface BatchSchedule {
+    maturedBatches: number;
+    remainingBatches: number;
+    endsAtSec: number;
+    nextBatchAtSec: number | null;
+}
+
+export function computeBatchSchedule({
+    durationSec,
+    batches,
+    claimedBatches,
+    startAtSec,
+    nowSec,
+}: BatchScheduleInput): BatchSchedule {
+    const remainingBatches = Math.max(0, batches - claimedBatches);
+    const elapsedSec = Math.max(0, nowSec - startAtSec);
+    const elapsedBatches = durationSec > 0 ? Math.floor(elapsedSec / durationSec) : 0;
+    const maturedBatches = Math.min(elapsedBatches, remainingBatches);
+
     return {
-        elapsed,
-        cycles: Math.floor(elapsed / durationSec),
-        nextCycleInSec: durationSec - (elapsed % durationSec),
+        maturedBatches,
+        remainingBatches,
+        endsAtSec: startAtSec + remainingBatches * durationSec,
+        nextBatchAtSec: maturedBatches >= remainingBatches ? null : startAtSec + (maturedBatches + 1) * durationSec,
+    };
+}
+
+export interface ProcessProgressInput {
+    schedule: BatchSchedule;
+    claimedBatches: number;
+    settledBatches: number;
+    depleted: boolean;
+    stalled: boolean;
+}
+
+export interface ProcessProgress {
+    completedBatches: number;
+    claimableBatches: number;
+    isFinished: boolean;
+    endsAtSec: number;
+    nextBatchAtSec: number | null;
+}
+
+export function toProcessProgress({
+    schedule,
+    claimedBatches,
+    settledBatches,
+    depleted,
+    stalled,
+}: ProcessProgressInput): ProcessProgress {
+    const isFinished = settledBatches >= schedule.remainingBatches || depleted;
+
+    return {
+        completedBatches: claimedBatches + settledBatches,
+        claimableBatches: settledBatches,
+        isFinished,
+        endsAtSec: schedule.endsAtSec,
+        nextBatchAtSec: isFinished || stalled ? null : schedule.nextBatchAtSec,
     };
 }

@@ -59,9 +59,27 @@ describe('rawCellSchema wire shape', () => {
 
     it('parses a process that carries no stall flag', () => {
         const cell = parseCell(
+            rawCell({
+                process: {
+                    kind: 'mining',
+                    resource: 1,
+                    durationSec: 180,
+                    yieldPerCycle: 77,
+                    batches: 10,
+                    claimedBatches: 3,
+                    startAt: 1,
+                },
+            }),
+        );
+
+        expect(cell?.process).toMatchObject({ resource: 1, yieldPerCycle: 77, batches: 10, claimedBatches: 3 });
+    });
+
+    it('drops a mining process still carrying the pre-bounded-job shape', () => {
+        const cell = parseCell(
             rawCell({ process: { kind: 'mining', resource: 1, durationSec: 180, batch: 77, startAt: 1 } }),
         );
 
-        expect(cell?.process).toMatchObject({ resource: 1, batch: 77 });
+        expect(cell).toBeNull();
     });
 });

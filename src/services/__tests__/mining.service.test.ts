@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BuildingType } from '../../api/types.js';
 import { CELL_ABI } from '../../contracts/cell.abi.js';
-import { makeCell, makeResource, makeStorage } from '../../map/__tests__/fixtures.js';
-import { CellProcessKind, type RawCell } from '../../map/types.js';
+import { makeCell, makeMiningProcess, makeResource, makeStorage } from '../../map/__tests__/fixtures.js';
+import type { RawCell, RawCellProcessMiningView } from '../../map/types.js';
 import { MiningService } from '../mining.service.js';
 import type { AppConfig } from '../types.js';
 import { CELL, DEFAULT_SERVER_TIME, makeCellHarness, makeConfig, WALLET_ADDRESS } from './service-fakes.js';
@@ -16,17 +16,17 @@ function makeService(opts: Parameters<typeof makeCellHarness>[1] = {}) {
 function minedLog(resource: number, amount: bigint): Log {
     const topics = encodeEventTopics({ abi: CELL_ABI, eventName: 'ResourceMined', args: { tokenId: 42n } });
     const data = encodeAbiParameters(
-        [{ type: 'uint16' }, { type: 'uint64' }, { type: 'uint64' }, { type: 'uint64' }],
-        [resource, amount, amount, 0n],
+        [{ type: 'uint16' }, { type: 'uint64' }, { type: 'uint64' }, { type: 'uint64' }, { type: 'uint32' }],
+        [resource, amount, amount, 0n, 1],
     );
     return { address: CELL as Address, topics, data, ...LOG_META } as unknown as Log;
 }
 
-function startedLog(resource: number, durationSec: number, batch: bigint): Log {
+function startedLog(resource: number, durationSec: number, yieldPerCycle: bigint, batches = 10): Log {
     const topics = encodeEventTopics({ abi: CELL_ABI, eventName: 'MiningStarted', args: { tokenId: 42n } });
     const data = encodeAbiParameters(
-        [{ type: 'uint16' }, { type: 'uint32' }, { type: 'uint64' }, { type: 'uint64' }],
-        [resource, durationSec, batch, 0n],
+        [{ type: 'uint16' }, { type: 'uint32' }, { type: 'uint64' }, { type: 'uint32' }, { type: 'uint64' }],
+        [resource, durationSec, yieldPerCycle, batches, 0n],
     );
     return { address: CELL as Address, topics, data, ...LOG_META } as unknown as Log;
 }
@@ -40,142 +40,179 @@ const LOG_META = {
     removed: false,
 } as const;
 
+function miningCell(process: Partial<RawCellProcessMiningView>, resources: RawCell['resources']): RawCell {
+    return makeCell({
+        tokenId: '42',
+        owner: WALLET_ADDRESS,
+        building: { type: BuildingType.Mine, buildFinishAt: null },
+        process: makeMiningProcess({ resource: 3, ...process }),
+        resources,
+    });
+}
+
+const uncapped = (deposit: string) => [makeResource({ resourceId: 3, deposit, storage: null })];
+
 describe('MiningService.getStatus', () => {
-    it('computes claimable from matured cycles, capped by the deposit', async () => {
-        const cell = makeCell({
-            tokenId: '42',
-            owner: WALLET_ADDRESS,
-            process: {
-                kind: CellProcessKind.Mining,
-                resource: 3,
-                durationSec: 10,
-                batch: 10,
-                startAt: 1,
-            },
-            resources: [{ resourceId: 3, deposit: '500', balance: '0', strength: null, storage: null }],
-        });
-        const { service } = makeService({ cell });
+    it('reports the schedule and what the matured cycles would bank', async () => {
+        const nowSec = 100_000;
+        const cell = miningCell(
+            { durationSec: 180, yieldPerCycle: 77, batches: 10, startAt: nowSec - (2 * 180 + 30) },
+            uncapped('100000'),
+        );
+        const { service } = makeService({ cell, serverTime: nowSec });
 
         const status = await service.getStatus('42');
 
         expect(status.active).toBe(true);
         expect(status.targetResourceId).toBe(3);
-        expect(status.batch).toBe(10);
-        expect(status.durationSec).toBe(10);
-        expect(status.depositRemaining).toBe('500');
-        // Many cycles have matured since startAt=1, so gross output far exceeds the deposit — capped to it.
-        expect(status.claimable).toBe('500');
-        expect(status.stalled).toBe(false);
+        expect(status.yieldPerCycle).toBe(77);
+        expect(status.batches).toBe(10);
+        expect(status.completedBatches).toBe(2);
+        expect(status.claimableBatches).toBe(2);
+        expect(status.claimable).toBe('154');
+        expect(status.isFinished).toBe(false);
+        expect(status.nextBatchAtSec).toBe(nowSec - (2 * 180 + 30) + 3 * 180);
     });
 
-    it('matures whole cycles only — a cycle in progress banks nothing', async () => {
-        const nowSec = 100_000;
-        // Two full 180s cycles plus 30s into the third, measured against the map's server clock.
-        const startAt = nowSec - (2 * 180 + 30);
-        const cell = makeCell({
-            tokenId: '42',
-            owner: WALLET_ADDRESS,
-            process: {
-                kind: CellProcessKind.Mining,
-                resource: 3,
-                durationSec: 180,
-                batch: 77,
-                startAt,
-            },
-            resources: [{ resourceId: 3, deposit: '100000', balance: '0', strength: null, storage: null }],
-        });
-        const { service } = makeService({ cell, serverTime: nowSec });
-
-        const status = await service.getStatus('42');
-
-        expect(status.cyclesMatured).toBe(2);
-        expect(status.claimable).toBe('154'); // 2 × 77
-        expect(status.nextBatchInSec).toBe(150); // 180 − 30 into the current cycle
-    });
-
-    it('drains the deposit to exactly zero on the final partial cycle', async () => {
-        const cell = makeCell({
-            tokenId: '42',
-            owner: WALLET_ADDRESS,
-            // batch 77 but only 100 units left: matured output exceeds the deposit, so claimable is the whole
-            // remainder — the final cycle credits < a full batch and the deposit ends at exactly 0.
-            process: {
-                kind: CellProcessKind.Mining,
-                resource: 3,
-                durationSec: 180,
-                batch: 77,
-                startAt: 1,
-            },
-            resources: [{ resourceId: 3, deposit: '100', balance: '0', strength: null, storage: null }],
-        });
+    it('never banks past the schedule, however late the claim', async () => {
+        const cell = miningCell({ durationSec: 10, yieldPerCycle: 10, batches: 10, startAt: 1 }, uncapped('100000'));
         const { service } = makeService({ cell });
 
         const status = await service.getStatus('42');
 
+        expect(status.claimableBatches).toBe(10);
+        expect(status.claimable).toBe('100');
+        expect(status.isFinished).toBe(true);
+        expect(status.nextBatchAtSec).toBeNull();
+    });
+
+    it('measures cycles from the cursor a claim advanced, without double-counting claimedBatches', async () => {
+        const nowSec = 100_000;
+        const cell = miningCell(
+            { durationSec: 180, yieldPerCycle: 77, batches: 10, claimedBatches: 3, startAt: nowSec - 2 * 180 },
+            uncapped('100000'),
+        );
+        const { service } = makeService({ cell, serverTime: nowSec });
+
+        const status = await service.getStatus('42');
+
+        expect(status.claimableBatches).toBe(2);
+        expect(status.completedBatches).toBe(5);
+        expect(status.claimable).toBe('154');
+    });
+
+    it('ends early on the deposit, draining its last partial cycle in full', async () => {
+        const cell = miningCell({ durationSec: 10, yieldPerCycle: 77, batches: 1000, startAt: 1 }, uncapped('100'));
+        const { service } = makeService({ cell });
+
+        const status = await service.getStatus('42');
+
+        expect(status.claimableBatches).toBe(2);
         expect(status.claimable).toBe('100');
         expect(status.depositRemaining).toBe('100');
     });
 
-    it('reports zero claimable and stalled when the warehouse is full', async () => {
-        const cell = makeCell({
-            tokenId: '42',
-            owner: WALLET_ADDRESS,
-            process: {
-                kind: CellProcessKind.Mining,
-                resource: 3,
-                durationSec: 10,
-                batch: 10,
-                startAt: 1,
-            },
-            resources: [
-                {
-                    resourceId: 3,
-                    deposit: '500',
-                    balance: '50',
-                    strength: null,
-                    storage: makeStorage({ used: '50', cap: '50' }),
-                },
-            ],
-        });
+    it('takes less from the deposit than it yields on a vein-drain extractor', async () => {
+        const cell = miningCell({ durationSec: 10, yieldPerCycle: 100, batches: 1000, startAt: 1 }, uncapped('800'));
+        const config = makeConfig();
+        const mine = config.buildings.find((b) => b.type === BuildingType.Mine);
+        if (mine === undefined) {
+            throw new Error('expected a Mine in the fake config');
+        }
+        mine.effects = { ...mine.effects, veinDrainPercent: 80 };
+        const { service } = makeService({ cell, config });
+
+        const status = await service.getStatus('42');
+
+        expect(status.claimableBatches).toBe(10);
+        expect(status.claimable).toBe('1000');
+        expect(status.depositRemaining).toBe('800');
+    });
+
+    it('settles whole cycles only — a room that cannot take one banks nothing', async () => {
+        const cell = miningCell({ durationSec: 10, yieldPerCycle: 10, batches: 100, startAt: 1 }, [
+            makeResource({
+                resourceId: 3,
+                deposit: '500',
+                balance: '95',
+                storage: makeStorage({ used: '95', cap: '100' }),
+            }),
+        ]);
+        const { service } = makeService({ cell });
+
+        const status = await service.getStatus('42');
+
+        expect(status.claimableBatches).toBe(0);
+        expect(status.claimable).toBe('0');
+    });
+
+    it('banks only the whole cycles the room admits', async () => {
+        const cell = miningCell({ durationSec: 10, yieldPerCycle: 10, batches: 100, startAt: 1 }, [
+            makeResource({
+                resourceId: 3,
+                deposit: '500',
+                balance: '75',
+                storage: makeStorage({ used: '75', cap: '100' }),
+            }),
+        ]);
+        const { service } = makeService({ cell });
+
+        const status = await service.getStatus('42');
+
+        expect(status.claimableBatches).toBe(2);
+        expect(status.claimable).toBe('20');
+    });
+
+    it('does not call a stalled job finished — its schedule survives the wait', async () => {
+        const nowSec = 100_000;
+        const cell = miningCell({ durationSec: 10, yieldPerCycle: 10, batches: 10, startAt: nowSec - 15 * 10 }, [
+            makeResource({
+                resourceId: 3,
+                deposit: '500',
+                balance: '50',
+                storage: makeStorage({ used: '50', cap: '50' }),
+            }),
+        ]);
+        const { service } = makeService({ cell, serverTime: nowSec });
+
+        const status = await service.getStatus('42');
+
+        expect(status.stalled).toBe(true);
+        expect(status.isFinished).toBe(false);
+        expect(status.completedBatches).toBe(0);
+        expect(status.claimableBatches).toBe(0);
+        expect(status.nextBatchAtSec).toBeNull();
+    });
+
+    it('reports a full box as stalled with nothing claimable', async () => {
+        const cell = miningCell({ durationSec: 10, yieldPerCycle: 10, batches: 100, startAt: 1 }, [
+            makeResource({
+                resourceId: 3,
+                deposit: '500',
+                balance: '50',
+                storage: makeStorage({ used: '50', cap: '50' }),
+            }),
+        ]);
         const { service } = makeService({ cell });
 
         const status = await service.getStatus('42');
 
         expect(status.stalled).toBe(true);
         expect(status.claimable).toBe('0');
-        expect(status.nextBatchInSec).toBeNull();
         expect(status.warehouseUsed).toBe('50');
         expect(status.warehouseCap).toBe('50');
     });
 
-    it('caps claimable at the remaining warehouse room', async () => {
-        const cell = makeCell({
-            tokenId: '42',
-            owner: WALLET_ADDRESS,
-            process: {
-                kind: CellProcessKind.Mining,
-                resource: 3,
-                durationSec: 10,
-                batch: 10,
-                startAt: 1,
-            },
-            resources: [
-                {
-                    resourceId: 3,
-                    deposit: '500',
-                    balance: '80',
-                    strength: null,
-                    storage: makeStorage({ used: '80', cap: '100' }),
-                },
-            ],
-        });
+    it('retires a job predating bounded mining without crediting anything', async () => {
+        const cell = miningCell({ durationSec: 10, yieldPerCycle: 10, batches: 0, startAt: 1 }, uncapped('500'));
         const { service } = makeService({ cell });
 
         const status = await service.getStatus('42');
 
-        // Matured output and deposit both exceed the 20 units of remaining room, so claimable is clamped to room.
-        expect(status.claimable).toBe('20');
-        expect(status.stalled).toBe(false);
+        expect(status.isFinished).toBe(true);
+        expect(status.claimableBatches).toBe(0);
+        expect(status.claimable).toBe('0');
+        expect(status.depositRemaining).toBe('500');
     });
 
     it('reports inactive when the cell has no mining process', async () => {
@@ -186,10 +223,9 @@ describe('MiningService.getStatus', () => {
 
         expect(status.active).toBe(false);
         expect(status.targetResourceId).toBeNull();
-        expect(status.batch).toBeNull();
-        expect(status.durationSec).toBeNull();
-        expect(status.cyclesMatured).toBe(0);
-        expect(status.nextBatchInSec).toBeNull();
+        expect(status.yieldPerCycle).toBeNull();
+        expect(status.completedBatches).toBe(0);
+        expect(status.nextBatchAtSec).toBeNull();
         expect(status.claimable).toBe('0');
     });
 
@@ -213,6 +249,7 @@ describe('MiningService.claim', () => {
         expect(decodeFunctionData({ abi: CELL_ABI, data: tx.data as Hex }).functionName).toBe('claim');
         expect(result.resourceId).toBe(3);
         expect(result.claimedAmount).toBe('120');
+        expect(result.claimedBatches).toBe(1);
     });
 
     it('reports nothing claimed when no ResourceMined event is emitted', async () => {
@@ -245,29 +282,32 @@ describe('MiningService.startMining', () => {
         vi.useRealTimers();
     });
 
-    it('starts extraction of a valid target on a ready extractor and decodes the cycle', async () => {
+    it('starts a bounded job on a ready extractor and decodes the schedule', async () => {
         const { service, contracts } = makeService({ cell: mineCell(), logs: [[startedLog(5, 180, 77n)]] });
 
-        const result = await service.startMining({ tokenId: '42', targetResourceId: 5 });
+        const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
 
         expect(contracts.sent).toHaveLength(1);
         const call = decodeFunctionData({ abi: CELL_ABI, data: contracts.sent[0]?.data as Hex });
         expect(call.functionName).toBe('startMining');
-        expect(call.args).toEqual([42n, 5]);
+        expect(call.args).toEqual([42n, 5, 10]);
         expect(result.targetResourceId).toBe(5);
         expect(result.durationSec).toBe(180);
-        expect(result.batch).toBe(77);
+        expect(result.yieldPerCycle).toBe(77);
+        expect(result.batches).toBe(10);
     });
 
     it('rejects a target the extractor cannot mine', async () => {
         const { service, contracts } = makeService({ cell: mineCell() });
-        await expect(service.startMining({ tokenId: '42', targetResourceId: 102 })).rejects.toThrow(/cannot mine/i);
+        await expect(service.startMining({ tokenId: '42', targetResourceId: 102, batches: 10 })).rejects.toThrow(
+            /cannot mine/i,
+        );
         expect(contracts.sent).toHaveLength(0);
     });
 
     it('requires an explicit target when the extractor mines multiple resources', async () => {
         const { service } = makeService({ cell: mineCell() });
-        await expect(service.startMining({ tokenId: '42', targetResourceId: null })).rejects.toThrow(
+        await expect(service.startMining({ tokenId: '42', targetResourceId: null, batches: 10 })).rejects.toThrow(
             /pass targetResourceId/i,
         );
     });
@@ -279,7 +319,7 @@ describe('MiningService.startMining', () => {
         );
         const { service, contracts } = makeService({ cell: mineCell(), config });
 
-        const result = await service.startMining({ tokenId: '42', targetResourceId: null });
+        const result = await service.startMining({ tokenId: '42', targetResourceId: null, batches: 10 });
 
         expect(result.targetResourceId).toBe(5);
         expect(contracts.sent).toHaveLength(1);
@@ -289,7 +329,7 @@ describe('MiningService.startMining', () => {
         const future = DEFAULT_SERVER_TIME + 3600;
         const cell = mineCell({ building: { type: BuildingType.Mine, buildFinishAt: future } });
         const { service, contracts } = makeService({ cell });
-        await expect(service.startMining({ tokenId: '42', targetResourceId: 5 })).rejects.toThrow(
+        await expect(service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 })).rejects.toThrow(
             /still under construction/i,
         );
         expect(contracts.sent).toHaveLength(0);
@@ -300,7 +340,7 @@ describe('MiningService.startMining', () => {
         vi.setSystemTime(new Date(4_000_000_000 * 1000));
         const cell = mineCell({ building: { type: BuildingType.Mine, buildFinishAt: 1000 } });
         const { service, contracts } = makeService({ cell, serverTime: 500 });
-        await expect(service.startMining({ tokenId: '42', targetResourceId: 5 })).rejects.toThrow(
+        await expect(service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 })).rejects.toThrow(
             /still under construction/i,
         );
         expect(contracts.sent).toHaveLength(0);
@@ -311,7 +351,7 @@ describe('MiningService.startMining', () => {
         vi.setSystemTime(new Date(0));
         const cell = mineCell({ building: { type: BuildingType.Mine, buildFinishAt: 1000 } });
         const { service, contracts } = makeService({ cell, serverTime: 1000, logs: [[startedLog(5, 180, 77n)]] });
-        const result = await service.startMining({ tokenId: '42', targetResourceId: 5 });
+        const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
         expect(result.targetResourceId).toBe(5);
         expect(contracts.sent).toHaveLength(1);
     });
@@ -319,18 +359,24 @@ describe('MiningService.startMining', () => {
     it('rejects when the building is a crafter, not an extractor', async () => {
         const cell = mineCell({ building: { type: BuildingType.SteelMill, buildFinishAt: null } });
         const { service } = makeService({ cell });
-        await expect(service.startMining({ tokenId: '42', targetResourceId: 5 })).rejects.toThrow(/not an extractor/i);
+        await expect(service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 })).rejects.toThrow(
+            /not an extractor/i,
+        );
     });
 
     it('rejects when the cell has no live deposit for the target', async () => {
         const cell = mineCell({ resources: [makeResource({ resourceId: 5, deposit: '0' })] });
         const { service } = makeService({ cell });
-        await expect(service.startMining({ tokenId: '42', targetResourceId: 5 })).rejects.toThrow(/no .*deposit/i);
+        await expect(service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 })).rejects.toThrow(
+            /no .*deposit/i,
+        );
     });
 
     it('rejects a start on a cell owned by someone else', async () => {
         const cell = mineCell({ owner: '0xother' });
         const { service } = makeService({ cell });
-        await expect(service.startMining({ tokenId: '42', targetResourceId: 5 })).rejects.toThrow(/do not own/i);
+        await expect(service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 })).rejects.toThrow(
+            /do not own/i,
+        );
     });
 });

@@ -49,6 +49,7 @@ function makeResponse(overrides: Partial<AppConfigResponse> = {}): AppConfigResp
                 demolishCost: { cpu: '2.5', inputs: [] },
                 minableResources: [5, 6],
                 recipes: [],
+                effects: { cycleTimePercent: 100, veinDrainPercent: 100, inputEfficiency: [] },
             },
         ],
         reveal: { firstFree: true, reRevealCost: '1000' },

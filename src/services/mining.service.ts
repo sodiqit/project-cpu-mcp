@@ -13,8 +13,8 @@ import type {
 import { BuildingKind, type BuildingView } from '../api/types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
-import { computeMaturation } from '../map/process.utils.js';
-import { capByRoom } from '../map/storage.utils.js';
+import { toSettleConfig } from '../map/reader.utils.js';
+import { cellProcessProgress } from '../map/settle.utils.js';
 import { CellProcessKind, type Cell, type RevealCellReader } from '../map/types.js';
 import { formatUnixSeconds, resourceLabel } from '../utils/format.utils.js';
 import type { IContractClient, WalletProvider } from '../wallet/types.js';
@@ -48,12 +48,18 @@ export class MiningService {
             return {
                 tokenId,
                 active: false,
+                serverTime: this.mapReader.getServerTime(),
                 targetResourceId: null,
-                batch: null,
+                yieldPerCycle: null,
                 durationSec: null,
                 startAt: null,
-                cyclesMatured: 0,
-                nextBatchInSec: null,
+                batches: 0,
+                claimedBatches: 0,
+                completedBatches: 0,
+                claimableBatches: 0,
+                isFinished: false,
+                endsAtSec: null,
+                nextBatchAtSec: null,
                 claimable: '0',
                 depositRemaining: '0',
                 stalled: false,
@@ -65,33 +71,23 @@ export class MiningService {
         const resource = state.resources.find((r) => r.resourceId === process.resource) ?? null;
         const deposit = resource?.deposit ?? '0';
         const storage = resource?.storage ?? null;
-        const depositRemaining = BigInt(deposit);
+        const serverTime = this.mapReader.getServerTime();
 
-        // Mining matures in whole cycles: each `durationSec` yields `batch` units, and a cycle in progress
-        // accrues nothing until it completes. On-chain the miner banks min(matured, deposit, room), so mirror
-        // that — a full box reports ~0 claimable and the final partial cycle drains the deposit to exactly 0.
-        const { cycles: cyclesMatured, nextCycleInSec } = computeMaturation({
-            startAt: process.startAt,
-            durationSec: process.durationSec,
-            now: this.mapReader.getServerTime(),
-        });
-        const grossMatured = BigInt(cyclesMatured) * BigInt(process.batch);
-        const bankable = grossMatured < depositRemaining ? grossMatured : depositRemaining;
-        const claimable = capByRoom(bankable, storage);
-
-        // No next batch to wait for once the box is full (production idles) or the deposit is spent.
-        const nextBatchInSec = process.stalled || depositRemaining === 0n ? null : nextCycleInSec;
+        const config = await this.appConfig.load();
+        const { progress, settlement } = cellProcessProgress(state, process, serverTime, toSettleConfig(config));
 
         return {
             tokenId,
             active: true,
+            serverTime,
             targetResourceId: process.resource,
-            batch: process.batch,
+            yieldPerCycle: process.yieldPerCycle,
             durationSec: process.durationSec,
             startAt: process.startAt,
-            cyclesMatured,
-            nextBatchInSec,
-            claimable: claimable.toString(),
+            batches: process.batches,
+            claimedBatches: process.claimedBatches,
+            ...progress,
+            claimable: settlement.minedUnits.toString(),
             depositRemaining: deposit,
             stalled: process.stalled,
             warehouseUsed: storage?.used ?? null,
@@ -120,6 +116,7 @@ export class MiningService {
 
         return {
             tokenId,
+            claimedBatches: mined?.claimedBatches ?? null,
             resourceId: mined?.resource ?? null,
             claimedAmount: (mined?.amount ?? 0n).toString(),
             txHash: confirmed.txHash,
@@ -146,15 +143,21 @@ export class MiningService {
         const state = await this.mapReader.readRevealCell(input.tokenId);
         const target = this.resolveMiningTarget(config, state, input, wallet.getAddress());
 
-        this.logger.info('starting mining', { tokenId: input.tokenId, target });
-        const txHash = await this.cellClient.startMining({ cell, tokenId: BigInt(input.tokenId), target });
+        this.logger.info('starting mining', { tokenId: input.tokenId, target, batches: input.batches });
+        const txHash = await this.cellClient.startMining({
+            cell,
+            tokenId: BigInt(input.tokenId),
+            target,
+            batches: input.batches,
+        });
         const confirmed = await this.contracts.confirm(txHash, 'Start mining');
         const started = this.decodeStarted(confirmed.logs, cell);
 
         return {
             tokenId: input.tokenId,
             targetResourceId: target,
-            batch: started?.batch ?? null,
+            yieldPerCycle: started?.yieldPerCycle ?? null,
+            batches: started?.batches ?? null,
             durationSec: started?.durationSec ?? null,
             txHash: confirmed.txHash,
             status: confirmed.status,
@@ -230,24 +233,32 @@ export class MiningService {
         return requested;
     }
 
-    private decodeMined(logs: Array<Log>, cell: Address): { resource: number; amount: bigint } | null {
+    private decodeMined(
+        logs: Array<Log>,
+        cell: Address,
+    ): { resource: number; amount: bigint; claimedBatches: number } | null {
         const events = parseEventLogs({ abi: CELL_ABI, eventName: 'ResourceMined', logs });
         const event = events.find((e) => e.address.toLowerCase() === cell.toLowerCase());
         if (event === undefined) {
             return null;
         }
-        return { resource: event.args.resource, amount: event.args.amount };
+        return { resource: event.args.resource, amount: event.args.amount, claimedBatches: event.args.claimedBatches };
     }
 
     private decodeStarted(
         logs: Array<Log>,
         cell: Address,
-    ): { resource: number; durationSec: number; batch: number } | null {
+    ): { resource: number; durationSec: number; yieldPerCycle: number; batches: number } | null {
         const events = parseEventLogs({ abi: CELL_ABI, eventName: 'MiningStarted', logs });
         const event = events.find((e) => e.address.toLowerCase() === cell.toLowerCase());
         if (event === undefined) {
             return null;
         }
-        return { resource: event.args.resource, durationSec: event.args.durationSec, batch: Number(event.args.batch) };
+        return {
+            resource: event.args.resource,
+            durationSec: event.args.durationSec,
+            yieldPerCycle: Number(event.args.yieldPerCycle),
+            batches: event.args.batches,
+        };
     }
 }

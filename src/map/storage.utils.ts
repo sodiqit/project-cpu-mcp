@@ -1,7 +1,5 @@
-import type { CellResourceStorage } from './types.js';
+import type { CellResource, CellResourceStorage, ProcessOutput } from './types.js';
 
-// Remaining warehouse space for a resource: cap − used, floored at 0. null means uncapped (no limit) —
-// callers treat null as "fits anything", never as zero room.
 export function warehouseRoom(storage: CellResourceStorage | null): bigint | null {
     if (storage === null || storage.cap === null) {
         return null;
@@ -11,9 +9,52 @@ export function warehouseRoom(storage: CellResourceStorage | null): bigint | nul
     return cap > used ? cap - used : 0n;
 }
 
-// Clamp a would-be produced amount to the warehouse room, mirroring the on-chain settle
-// (mined = min(..., room)). A no-op when the resource is uncapped.
-export function capByRoom(amount: bigint, storage: CellResourceStorage | null): bigint {
-    const room = warehouseRoom(storage);
-    return room === null || room >= amount ? amount : room;
+export function needByResource(outputs: ReadonlyArray<ProcessOutput>): Map<number, bigint> {
+    const need = new Map<number, bigint>();
+    for (const output of outputs) {
+        need.set(output.resourceId, (need.get(output.resourceId) ?? 0n) + BigInt(output.amount));
+    }
+    return need;
+}
+
+function roomFor(resources: ReadonlyArray<CellResource>, resourceId: number): bigint | null {
+    const resource = resources.find((r) => r.resourceId === resourceId);
+    return resource === undefined ? null : warehouseRoom(resource.storage);
+}
+
+export function fitBatchesByRoom(
+    outputs: ReadonlyArray<ProcessOutput>,
+    resources: ReadonlyArray<CellResource>,
+): number | null {
+    let fit: bigint | null = null;
+    for (const [resourceId, need] of needByResource(outputs)) {
+        const room = roomFor(resources, resourceId);
+        if (room === null) {
+            continue;
+        }
+        const batches = need > 0n ? room / need : room;
+        fit = fit === null || batches < fit ? batches : fit;
+    }
+    return fit === null ? null : Number(fit);
+}
+
+export function blockedResourceIds(
+    outputs: ReadonlyArray<ProcessOutput>,
+    resources: ReadonlyArray<CellResource>,
+): Array<number> {
+    const blocked: Array<number> = [];
+    for (const [resourceId, need] of needByResource(outputs)) {
+        const room = roomFor(resources, resourceId);
+        if (need > 0n && room !== null && room < need) {
+            blocked.push(resourceId);
+        }
+    }
+    return blocked;
+}
+
+export function isProcessStalled(
+    outputs: ReadonlyArray<ProcessOutput>,
+    resources: ReadonlyArray<CellResource>,
+): boolean {
+    return blockedResourceIds(outputs, resources).length > 0;
 }

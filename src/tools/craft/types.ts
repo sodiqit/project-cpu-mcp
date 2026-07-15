@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { CraftRecipeId } from '../../api/types.js';
+import { MAX_BATCHES_PER_PROCESS } from '../../config/constants.js';
 import { tokenIdSchema } from '../../geometry/types.js';
 
 export const craftInputSchema = {
@@ -10,9 +11,12 @@ export const craftInputSchema = {
         .number()
         .int()
         .min(1)
-        .max(1000)
+        .max(MAX_BATCHES_PER_PROCESS)
         .default(1)
-        .describe('How many sequential batches to run; inputs are debited upfront for all of them.'),
+        .describe(
+            `How many sequential batches to run, 1..${MAX_BATCHES_PER_PROCESS}; inputs are debited upfront for ` +
+                'all of them. The run stops itself after these and there is no cancel.',
+        ),
 };
 
 export const craftCellInputSchema = {

@@ -18,6 +18,7 @@ const BASE = {
     serverTime: 10,
     nearFullPct: 90,
     craftOutputsByRecipe: {},
+    veinDrainPercentByBuilding: {},
     extractorBuildingTypes: new Set<string>([BuildingType.Mine]),
 };
 
@@ -96,7 +97,12 @@ describe('buildAttentionReport', () => {
                     ],
                 },
             ],
-            { refine: [10, 11] },
+            {
+                refine: [
+                    { resourceId: 10, amount: 20 },
+                    { resourceId: 11, amount: 20 },
+                ],
+            },
         );
         const stalled = r.items.filter((i) => i.reason === AttentionReason.StalledCraft);
         expect(stalled.map((i) => i.resourceId).sort()).toEqual([10, 11]);
@@ -109,9 +115,9 @@ describe('buildAttentionReport', () => {
                 tokenId: '3',
                 revealCount: 1,
                 building: { type: BuildingType.Mine, buildFinishAt: null },
-                process: makeMiningProcess({ resource: 5 }),
+                process: makeMiningProcess({ resource: 5, yieldPerCycle: 5 }),
                 resources: [
-                    // Mined resource at 95% → warning.
+                    // Mined resource at 95%, still room for a whole cycle → warning, not a stall.
                     makeResource({ resourceId: 5, deposit: '1000', storage: makeStorage({ used: '95', cap: '100' }) }),
                     // A different resource, also 95% but nothing produces it → not flagged.
                     makeResource({ resourceId: 6, deposit: '1000', storage: makeStorage({ used: '95', cap: '100' }) }),
@@ -166,6 +172,63 @@ describe('buildAttentionReport', () => {
             },
         ]);
         expect(constructing.items).toEqual([]);
+    });
+
+    it('flags a job that has run its scheduled cycles, but not one still running', () => {
+        const finished = report([
+            {
+                tokenId: '7',
+                revealCount: 1,
+                building: { type: BuildingType.Mine, buildFinishAt: 5 },
+                process: makeMiningProcess({ resource: 1, durationSec: 10, batches: 1, startAt: 0 }),
+                resources: [makeResource({ resourceId: 1, deposit: '1000' })],
+            },
+        ]);
+        const item = finished.items.find((i) => i.reason === AttentionReason.ProcessFinished);
+        expect(item?.severity).toBe(AttentionSeverity.Warning);
+        expect(item?.resourceId).toBe(1);
+
+        const running = report([
+            {
+                tokenId: '8',
+                revealCount: 1,
+                building: { type: BuildingType.Mine, buildFinishAt: 5 },
+                process: makeMiningProcess({ resource: 1, durationSec: 10, batches: 5, startAt: 0 }),
+                resources: [makeResource({ resourceId: 1, deposit: '1000' })],
+            },
+        ]);
+        expect(running.items.map((i) => i.reason)).not.toContain(AttentionReason.ProcessFinished);
+    });
+
+    it('flags a job predating bounded mining as finished, since its first claim retires it', () => {
+        const r = report([
+            {
+                tokenId: '9',
+                revealCount: 1,
+                building: { type: BuildingType.Mine, buildFinishAt: 5 },
+                process: makeMiningProcess({ resource: 1, batches: 0, startAt: 0 }),
+                resources: [makeResource({ resourceId: 1, deposit: '1000' })],
+            },
+        ]);
+        expect(r.items.map((i) => i.reason)).toContain(AttentionReason.ProcessFinished);
+    });
+
+    it('flags a finished craft too — the schedule is one rule for both kinds', () => {
+        const r = report(
+            [
+                {
+                    tokenId: '10',
+                    revealCount: 1,
+                    building: { type: BuildingType.Mine, buildFinishAt: 5 },
+                    process: makeCraftProcess({ recipeId: 'refine', durationSec: 10, batches: 1, startAt: 0 }),
+                    resources: [makeResource({ resourceId: 10, deposit: '1000' })],
+                },
+            ],
+            { refine: [{ resourceId: 10, amount: 20 }] },
+        );
+        const item = r.items.find((i) => i.reason === AttentionReason.ProcessFinished);
+        expect(item?.severity).toBe(AttentionSeverity.Warning);
+        expect(item?.resourceId).toBeNull();
     });
 
     it('flags a revealed cell with no building as info, but not a reveal-pending one', () => {

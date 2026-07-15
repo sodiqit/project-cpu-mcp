@@ -116,6 +116,7 @@ export interface StartMiningParams {
     cell: Address;
     tokenId: bigint;
     target: number;
+    batches: number;
 }
 
 export interface StartCraftParams {
@@ -257,28 +258,34 @@ export interface MiningServiceOptions {
     logger: ILogger;
 }
 
-export interface MiningStatusResult {
+export interface ProcessStatusView {
     tokenId: string;
     active: boolean;
-    targetResourceId: number | null;
-    // Units produced per matured cycle, and the cycle length; null when no extractor is active.
-    batch: number | null;
-    durationSec: number | null;
+    serverTime: number;
+    batches: number;
+    claimedBatches: number;
+    completedBatches: number;
+    claimableBatches: number;
+    isFinished: boolean;
     startAt: number | null;
-    // Whole cycles matured since `startAt` (before the deposit/room cap).
-    cyclesMatured: number;
-    // Seconds until the next cycle matures; null when inactive, stalled, or the deposit is depleted.
-    nextBatchInSec: number | null;
+    durationSec: number | null;
+    endsAtSec: number | null;
+    nextBatchAtSec: number | null;
+    stalled: boolean;
+}
+
+export interface MiningStatusResult extends ProcessStatusView {
+    targetResourceId: number | null;
+    yieldPerCycle: number | null;
     claimable: string;
     depositRemaining: string;
-    stalled: boolean;
-    // The mined resource's warehouse; null when uncapped or storage is not reported.
     warehouseUsed: string | null;
     warehouseCap: string | null;
 }
 
 export interface MiningClaimResult {
     tokenId: string;
+    claimedBatches: number | null;
     resourceId: number | null;
     claimedAmount: string;
     txHash: Hash;
@@ -290,13 +297,14 @@ export interface StartMiningInput {
     tokenId: string;
     /** Resource id to mine; null defaults to the extractor's sole minable resource. */
     targetResourceId: number | null;
+    batches: number;
 }
 
 export interface StartMiningResult {
     tokenId: string;
     targetResourceId: number;
-    /** Cycle length and per-cycle batch snapshot from the on-chain MiningStarted event; null if not decodable. */
-    batch: number | null;
+    yieldPerCycle: number | null;
+    batches: number | null;
     durationSec: number | null;
     txHash: Hash;
     status: TxStatus;
@@ -520,24 +528,15 @@ export interface CraftClaimResult {
     tokenId: string;
     recipeId: CraftRecipeId | null;
     batches: number;
+    claimedBatches: number | null;
     outputs: Array<CraftOutput>;
     txHash: Hash;
     status: TxStatus;
     blockNumber: string;
 }
 
-export interface CraftStatusResult {
-    tokenId: string;
-    active: boolean;
+export interface CraftStatusResult extends ProcessStatusView {
     recipeId: string | null;
-    batches: number;
-    claimedBatches: number;
-    maturedBatches: number;
-    claimableBatches: number;
-    startAt: number | null;
-    durationSec: number | null;
-    stalled: boolean;
-    // The recipe outputs whose warehouse is full — offload one of these to resume.
     blockedResourceIds: Array<number>;
 }
 
