@@ -1,6 +1,7 @@
+import { processOutputs } from './process.utils.js';
+import { isProcessStalled } from './storage.utils.js';
 import {
     type Cell,
-    CellProcessKind,
     type CellProcessView,
     type CellProjectionConfig,
     type CellResource,
@@ -27,35 +28,14 @@ function deriveStorage(storage: RawCellResourceStorage | null, multiplier: numbe
         return null;
     }
     if (storage.cap === null) {
-        return { ...storage, stalled: false };
+        return { ...storage, full: false };
     }
     const cap = BigInt(storage.cap) * BigInt(multiplier);
-    return { ...storage, cap: cap.toString(), stalled: BigInt(storage.used) >= cap };
+    return { ...storage, cap: cap.toString(), full: BigInt(storage.used) >= cap };
 }
 
 function deriveResource(resource: RawCellResource, multiplier: number): CellResource {
     return { ...resource, storage: deriveStorage(resource.storage, multiplier) };
-}
-
-function stalledResourceIds(resources: Array<CellResource>): Set<number> {
-    const ids = new Set<number>();
-    for (const resource of resources) {
-        if (resource.storage?.stalled === true) {
-            ids.add(resource.resourceId);
-        }
-    }
-    return ids;
-}
-
-function isProcessStalled(
-    process: RawCellProcessView,
-    stalled: ReadonlySet<number>,
-    craftOutputsByRecipe: Record<string, Array<number>>,
-): boolean {
-    if (process.kind === CellProcessKind.Mining) {
-        return stalled.has(process.resource);
-    }
-    return (craftOutputsByRecipe[process.recipeId] ?? []).some((resourceId) => stalled.has(resourceId));
 }
 
 function deriveProcess(
@@ -66,7 +46,7 @@ function deriveProcess(
     if (process === null) {
         return null;
     }
-    const stalled = isProcessStalled(process, stalledResourceIds(resources), config.craftOutputsByRecipe);
+    const stalled = isProcessStalled(processOutputs(process, config.craftOutputsByRecipe), resources);
     return { ...process, stalled };
 }
 

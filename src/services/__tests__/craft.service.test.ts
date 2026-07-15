@@ -135,7 +135,7 @@ describe('CraftService.getStatus', () => {
 
         expect(status.active).toBe(true);
         expect(status.recipeId).toBe(CraftRecipeId.SmeltSteel);
-        expect(status.maturedBatches).toBe(2);
+        expect(status.completedBatches).toBe(2);
         expect(status.claimableBatches).toBe(2);
     });
 
@@ -179,7 +179,7 @@ describe('CraftService.getStatus', () => {
         expect(status.blockedResourceIds).toEqual([102]);
         // The single output box is full, so no matured batch fits — claimable is clamped to 0.
         expect(status.claimableBatches).toBe(0);
-        expect(status.maturedBatches).toBe(2);
+        expect(status.completedBatches).toBe(2);
     });
 });
 

@@ -1,32 +1,57 @@
 import { describe, expect, it } from 'vitest';
 
-import { computeMaturation } from '../process.utils.js';
+import { computeBatchProgress } from '../process.utils.js';
 
-describe('computeMaturation', () => {
-    it('counts whole matured cycles and the time into the current one', () => {
-        // 2 full 180s cycles + 30s into the third.
-        const m = computeMaturation({ startAt: 1000, durationSec: 180, now: 1000 + 2 * 180 + 30 });
-        expect(m.elapsed).toBe(390);
-        expect(m.cycles).toBe(2);
-        expect(m.nextCycleInSec).toBe(150); // 180 − 30
+const BASE = { durationSec: 180, batches: 10, claimedBatches: 0, startAtSec: 1000 };
+
+const at = (nowSec: number, overrides: Partial<typeof BASE> = {}) =>
+    computeBatchProgress({ ...BASE, ...overrides, nowSec });
+
+describe('computeBatchProgress', () => {
+    it('counts only whole cycles, ignoring time into the current one', () => {
+        const p = at(1000 + 2 * 180 + 30);
+        expect(p.completedBatches).toBe(2);
+        expect(p.claimableBatches).toBe(2);
+        expect(p.nextBatchAtSec).toBe(1000 + 3 * 180);
+        expect(p.isFinished).toBe(false);
     });
 
-    it('reports a full cycle until the next batch exactly on a boundary', () => {
-        const m = computeMaturation({ startAt: 1000, durationSec: 180, now: 1000 + 3 * 180 });
-        expect(m.cycles).toBe(3);
-        expect(m.nextCycleInSec).toBe(180);
+    it('matures a cycle exactly on its boundary', () => {
+        expect(at(1000 + 3 * 180).claimableBatches).toBe(3);
     });
 
-    it('clamps a future startAt to zero elapsed', () => {
-        const m = computeMaturation({ startAt: 5000, durationSec: 180, now: 1000 });
-        expect(m.elapsed).toBe(0);
-        expect(m.cycles).toBe(0);
-        expect(m.nextCycleInSec).toBe(180);
+    it('clamps a future cursor to zero elapsed', () => {
+        const p = at(500);
+        expect(p.claimableBatches).toBe(0);
+        expect(p.nextBatchAtSec).toBe(1180);
     });
 
-    it('yields no cycles and no next-cycle when the duration is non-positive', () => {
-        const m = computeMaturation({ startAt: 1000, durationSec: 0, now: 9999 });
-        expect(m.cycles).toBe(0);
-        expect(m.nextCycleInSec).toBeNull();
+    it('measures cycles from the advanced cursor rather than subtracting claimedBatches twice', () => {
+        const p = at(1000 + 5 * 180, { claimedBatches: 3, startAtSec: 1000 + 3 * 180 });
+        expect(p.claimableBatches).toBe(2);
+        expect(p.completedBatches).toBe(5);
+        expect(p.endsAtSec).toBe(1000 + 3 * 180 + 7 * 180);
+    });
+
+    it('caps claimable at the batches left to run, however long it waits', () => {
+        const p = at(1000 + 999 * 180, { claimedBatches: 8, startAtSec: 1000 });
+        expect(p.claimableBatches).toBe(2);
+        expect(p.completedBatches).toBe(10);
+        expect(p.isFinished).toBe(true);
+        expect(p.nextBatchAtSec).toBeNull();
+    });
+
+    it('finishes exactly when the last scheduled cycle matures', () => {
+        expect(at(1000 + 9 * 180).isFinished).toBe(false);
+        expect(at(1000 + 10 * 180).isFinished).toBe(true);
+    });
+
+    it('reads a job predating bounded mining (zero batches) as finished with nothing to claim', () => {
+        const p = at(9999, { batches: 0 });
+        expect(p.claimableBatches).toBe(0);
+        expect(p.completedBatches).toBe(0);
+        expect(p.isFinished).toBe(true);
+        expect(p.endsAtSec).toBe(1000);
+        expect(p.nextBatchAtSec).toBeNull();
     });
 });

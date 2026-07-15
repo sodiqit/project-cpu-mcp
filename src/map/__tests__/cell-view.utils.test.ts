@@ -15,6 +15,8 @@ const HUB_MULTIPLIER = 10;
 const BASE_CAP = '100';
 const FINISH_AT = 1000;
 const RECIPE = 'alloy';
+const YIELD_PER_CYCLE = 77;
+const CRAFT_OUTPUT_PER_CYCLE = 40;
 
 const UPGRADED_HUB = BuildingType.Datacenter;
 
@@ -22,7 +24,13 @@ function config(overrides: Partial<CellProjectionConfig> = {}): CellProjectionCo
     return {
         hubStorageMultiplier: HUB_MULTIPLIER,
         hubBuildingTypes: new Set<string>([BuildingType.Hub]),
-        craftOutputsByRecipe: { [RECIPE]: [5, 6] },
+        craftOutputsByRecipe: {
+            [RECIPE]: [
+                { resourceId: 5, amount: CRAFT_OUTPUT_PER_CYCLE },
+                { resourceId: 6, amount: CRAFT_OUTPUT_PER_CYCLE },
+            ],
+        },
+        veinDrainPercentByBuilding: {},
         ...overrides,
     };
 }
@@ -36,7 +44,15 @@ function resource(overrides: Partial<RawCellResource> = {}): RawCellResource {
 }
 
 function mining(resourceId: number): RawCellProcessView {
-    return { kind: CellProcessKind.Mining, resource: resourceId, durationSec: 180, batch: 77, startAt: 0 };
+    return {
+        kind: CellProcessKind.Mining,
+        resource: resourceId,
+        durationSec: 180,
+        yieldPerCycle: YIELD_PER_CYCLE,
+        batches: 10,
+        claimedBatches: 0,
+        startAt: 0,
+    };
 }
 
 function craft(recipeId: string = RECIPE): RawCellProcessView {
@@ -131,27 +147,58 @@ describe('toCell storage cap', () => {
     });
 });
 
-describe('toCell stall', () => {
+describe('toCell full', () => {
     it.each([
-        ['stalls exactly at the cap', null, BASE_CAP, true],
-        ['does not stall one unit below the cap', null, '99', false],
-        ['does not stall at the base cap once the hub multiplies it', hub(), BASE_CAP, false],
-        ['stalls at the multiplied cap', hub(), '1000', true],
-        ['stalls above the multiplied cap', hub(), '1001', true],
+        ['is full exactly at the cap', null, BASE_CAP, true],
+        ['is not full one unit below the cap', null, '99', false],
+        ['is not full at the base cap once the hub multiplies it', hub(), BASE_CAP, false],
+        ['is full at the multiplied cap', hub(), '1000', true],
+        ['is full above the multiplied cap', hub(), '1001', true],
     ])('%s', (_name, building, used, expected) => {
         const cell = rawCell({ building, resources: [resource({ storage: storage({ used }) })] });
-        expect(toCell(cell, FINISH_AT, config()).resources[0]?.storage?.stalled).toBe(expected);
+        expect(toCell(cell, FINISH_AT, config()).resources[0]?.storage?.full).toBe(expected);
     });
 
-    it('never stalls an uncapped resource, however much it holds', () => {
+    it('never fills an uncapped resource, however much it holds', () => {
         const cell = rawCell({ resources: [resource({ storage: storage({ cap: null, used: '999999' }) })] });
-        expect(toCell(cell, FINISH_AT, config()).resources[0]?.storage?.stalled).toBe(false);
+        expect(toCell(cell, FINISH_AT, config()).resources[0]?.storage?.full).toBe(false);
     });
 });
 
 describe('toCell process stall', () => {
     it('stalls a mining process when its mined resource is full', () => {
         const cell = rawCell({ resources: [resource({ storage: storage({ used: BASE_CAP }) })], process: mining(1) });
+        expect(toCell(cell, FINISH_AT, config()).process?.stalled).toBe(true);
+    });
+
+    it('stalls a miner whose room holds less than one whole cycle, before the box reads full', () => {
+        const used = String(Number(BASE_CAP) - YIELD_PER_CYCLE + 1);
+        const cell = rawCell({ resources: [resource({ storage: storage({ used }) })], process: mining(1) });
+        const derived = toCell(cell, FINISH_AT, config());
+        expect(derived.resources[0]?.storage?.full).toBe(false);
+        expect(derived.process?.stalled).toBe(true);
+    });
+
+    it('keeps a miner running while the room still admits exactly one whole cycle', () => {
+        const used = String(Number(BASE_CAP) - YIELD_PER_CYCLE);
+        const cell = rawCell({ resources: [resource({ storage: storage({ used }) })], process: mining(1) });
+        expect(toCell(cell, FINISH_AT, config()).process?.stalled).toBe(false);
+    });
+
+    it('never stalls a miner on an uncapped resource', () => {
+        const cell = rawCell({
+            resources: [resource({ storage: storage({ cap: null, used: '999999' }) })],
+            process: mining(1),
+        });
+        expect(toCell(cell, FINISH_AT, config()).process?.stalled).toBe(false);
+    });
+
+    it('stalls a craft whose room holds less than one whole batch of an output', () => {
+        const used = String(Number(BASE_CAP) - CRAFT_OUTPUT_PER_CYCLE + 1);
+        const cell = rawCell({
+            resources: [resource({ resourceId: 5, storage: storage({ used }) }), resource({ resourceId: 6 })],
+            process: craft(),
+        });
         expect(toCell(cell, FINISH_AT, config()).process?.stalled).toBe(true);
     });
 
@@ -168,7 +215,7 @@ describe('toCell process stall', () => {
         expect(toCell(cell, FINISH_AT, config()).process?.stalled).toBe(false);
     });
 
-    it('stalls a craft when any one recipe output is full — a batch is atomic', () => {
+    it('stalls a craft when any one recipe output is full', () => {
         const cell = rawCell({
             resources: [resource({ resourceId: 5 }), resource({ resourceId: 6, storage: storage({ used: BASE_CAP }) })],
             process: craft(),

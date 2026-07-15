@@ -23,9 +23,36 @@ them.
 - **Effective cap** — what a cell's warehouse is actually measured against: the base cap, multiplied
   while the cell carries an active hub. This is the only cap ever surfaced to the agent — in
   `cpu_get_cell`, `cpu_get_map`, and everywhere else a resource's storage appears.
-- **Stall** — a warehouse at or over its effective cap. An extractor stalls on the resource it mines;
-  a crafter stalls the moment any one of its recipe's outputs is full, because a craft batch settles
-  as a single atomic unit.
+- **Full** — a warehouse at or over its effective cap. A storage fact, not a process state: a Full box
+  always Stalls whatever produces into it, but a Process Stalls well before Full — its room only has to
+  fall below one whole Cycle's output.
+  *Avoid*: stalled (that names the Process state).
+
+## Processes
+
+A cell runs one job at a time, and that job is bounded: its length is chosen when it starts and it never
+produces past it. Mining and crafting differ in what they consume, not in how they are scheduled.
+
+- **Process** — the single mining-or-craft job on a cell, bounded by its Batches. It ends itself once it
+  has run them; mining also ends early when its deposit empties. There is no cancel, and a claim does not
+  stop a running job. Until it ends it holds the cell's only process slot; claiming an ended one frees it.
+- **Cycle** — one production tick of a Process (`durationSec`). Mining draws Draw per cycle from the
+  deposit and credits Yield per cycle to the warehouse; a craft runs one recipe batch.
+- **Batches** — the number of Cycles a Process was scheduled for, chosen at start (both kinds) and capped
+  at 1000. `claimedBatches` counts those already banked, absolute rather than a delta.
+- **Yield per cycle** — output units one mining Cycle credits.
+  *Avoid*: batch (in this meaning).
+- **Draw per cycle** — deposit units one mining Cycle removes. Equal to Yield per cycle except on the
+  upgraded extractors, whose vein-drain effect takes less out of the ground than it credits — so those
+  deposits outlive what Yield per cycle alone suggests. Derived from the building's
+  `effects.veinDrainPercent` in `cpu_get_game_config`; it is not on the map.
+- **Stall** — a Process whose matured Cycles cannot settle because the room holds less than one whole
+  Cycle's output. Claims settle in whole Cycles, so a partial cycle's worth of room banks nothing. Stalled
+  time is discarded — the cursor resets to the moment of the settle and the remaining Batches start
+  producing from zero — but the schedule itself is never lost. Only time is.
+  *Avoid*: pause, idle.
+- **Cursor** — a Process's `startAt`: the point its next Cycle is measured from, not the moment it was
+  started. Every claim moves it forward past the Cycles it banked, and a Stalled one resets it to now.
 
 ## Fees
 

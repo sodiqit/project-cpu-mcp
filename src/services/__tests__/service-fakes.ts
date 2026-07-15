@@ -85,6 +85,7 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
                 demolishCost: { cpu: '2.5', inputs: [] },
                 minableResources: [5, 6],
                 recipes: [],
+                effects: { cycleTimePercent: 100, veinDrainPercent: 100, inputEfficiency: [] },
             },
             {
                 type: BuildingType.SteelMill,
@@ -98,6 +99,7 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
                 demolishCost: { cpu: '10', inputs: [{ resourceId: 101, amount: 2 }] },
                 minableResources: [],
                 recipes: [CraftRecipeId.SmeltSteel],
+                effects: { cycleTimePercent: 100, veinDrainPercent: 100, inputEfficiency: [] },
             },
             {
                 type: BuildingType.Hub,
@@ -111,6 +113,7 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
                 demolishCost: { cpu: '20', inputs: [] },
                 minableResources: [],
                 recipes: [],
+                effects: { cycleTimePercent: 100, veinDrainPercent: 100, inputEfficiency: [] },
             },
         ],
         reveal: { firstFree: true, reRevealCost: '0' },

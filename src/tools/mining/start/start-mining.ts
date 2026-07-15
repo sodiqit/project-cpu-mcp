@@ -13,6 +13,7 @@ export function registerStartMiningTool(server: McpServer, context: AppContext):
             const result = await context.mining.startMining({
                 tokenId: args.tokenId,
                 targetResourceId: args.targetResourceId,
+                batches: args.batches,
             });
             const { resources } = await context.appConfig.load();
 

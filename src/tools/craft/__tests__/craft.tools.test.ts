@@ -133,13 +133,17 @@ describe('get_craft_status tool', () => {
         const status: CraftStatusResult = {
             tokenId: '42',
             active: true,
+            serverTime: 1040,
             recipeId: CraftRecipeId.SmeltSteel,
             batches: 2,
             claimedBatches: 0,
-            maturedBatches: 1,
+            completedBatches: 1,
             claimableBatches: 1,
+            isFinished: false,
             startAt: 1000,
             durationSec: 30,
+            endsAtSec: 1060,
+            nextBatchAtSec: 1060,
             stalled: false,
             blockedResourceIds: [],
         };
@@ -149,7 +153,7 @@ describe('get_craft_status tool', () => {
 
         const result = await handler({ tokenId: '42' });
         const header = result.content[0]?.text ?? '';
-        expect(header).toMatch(/1\/2 batches matured/);
+        expect(header).toMatch(/1\/2 batches done/);
         expect(header).toMatch(/1 claimable now/);
     });
 
@@ -157,13 +161,17 @@ describe('get_craft_status tool', () => {
         const status: CraftStatusResult = {
             tokenId: '42',
             active: false,
+            serverTime: 1000,
             recipeId: null,
             batches: 0,
             claimedBatches: 0,
-            maturedBatches: 0,
+            completedBatches: 0,
             claimableBatches: 0,
+            isFinished: false,
             startAt: null,
             durationSec: null,
+            endsAtSec: null,
+            nextBatchAtSec: null,
             stalled: false,
             blockedResourceIds: [],
         };

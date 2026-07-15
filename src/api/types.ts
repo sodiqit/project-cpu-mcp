@@ -128,6 +128,12 @@ export interface DemolishCostView {
     inputs: Array<CraftStackView>;
 }
 
+export interface BuildingEffectsView {
+    cycleTimePercent: number;
+    veinDrainPercent: number;
+    inputEfficiency: Array<{ resourceId: number; percent: number }>;
+}
+
 /** Per-building catalog entry from `GET /api/v1/config`. */
 export interface BuildingView {
     type: BuildingType;
@@ -147,6 +153,7 @@ export interface BuildingView {
     minableResources: Array<number>;
     /** Recipe ids a crafter runs; empty for extractors/hub. */
     recipes: Array<CraftRecipeId>;
+    effects: BuildingEffectsView;
 }
 
 /** Reveal-cost params — the first reveal of a cell is free; re-revealing a depleted cell costs `reRevealCost`. */

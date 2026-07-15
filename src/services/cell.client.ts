@@ -88,12 +88,13 @@ export class CellClient implements ICellClient {
         const data = encodeFunctionData({
             abi: CELL_ABI,
             functionName: 'startMining',
-            args: [params.tokenId, params.target],
+            args: [params.tokenId, params.target, params.batches],
         });
         this.logger.info('submitting startMining', {
             cell: params.cell,
             tokenId: params.tokenId.toString(),
             target: params.target,
+            batches: params.batches,
         });
         return this.contracts.send({ to: params.cell, data, value: null }, CELL_ABI);
     }

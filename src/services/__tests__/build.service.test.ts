@@ -114,7 +114,9 @@ describe('BuildService', () => {
                 kind: CellProcessKind.Mining,
                 resource: 5,
                 durationSec: 180,
-                batch: 77,
+                yieldPerCycle: 77,
+                batches: 10,
+                claimedBatches: 0,
                 startAt: 1,
             },
         });
@@ -186,7 +188,9 @@ describe('BuildService', () => {
                 kind: CellProcessKind.Mining,
                 resource: 5,
                 durationSec: 180,
-                batch: 77,
+                yieldPerCycle: 77,
+                batches: 10,
+                claimedBatches: 0,
                 startAt: 1,
             },
         });
