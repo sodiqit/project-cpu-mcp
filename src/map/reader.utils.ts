@@ -1,3 +1,4 @@
+import type { SettleConfig } from './settle.utils.js';
 import type { CellProjectionConfig, ProcessOutput } from './types.js';
 import { BuildingKind } from '../api/types.js';
 import type { AppConfig } from '../services/types.js';
@@ -19,5 +20,12 @@ export function toProjectionConfig(config: AppConfig): CellProjectionConfig {
         hubStorageMultiplier: config.storage.hubStorageMultiplier,
         hubBuildingTypes: buildingTypesOfKind(config, BuildingKind.Hub),
         craftOutputsByRecipe: craftOutputsByRecipe(config),
+    };
+}
+
+export function toSettleConfig(config: AppConfig): SettleConfig {
+    return {
+        craftOutputsByRecipe: craftOutputsByRecipe(config),
+        veinDrainPercentByBuilding: veinDrainPercentByBuilding(config),
     };
 }

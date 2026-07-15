@@ -17,7 +17,8 @@ import { assertWarehouseHas } from './warehouse.utils.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
 import { computeBatchSchedule, toProcessProgress } from '../map/process.utils.js';
-import { settleCraft } from '../map/settle.utils.js';
+import { toSettleConfig } from '../map/reader.utils.js';
+import { settleCell } from '../map/settle.utils.js';
 import { blockedResourceIds } from '../map/storage.utils.js';
 import { CellProcessKind, type RevealCellReader } from '../map/types.js';
 import { cpuFromWei } from '../utils/format.utils.js';
@@ -155,11 +156,7 @@ export class CraftService {
         const outputs = config.recipes.find((r) => r.id === process.recipeId)?.outputs ?? [];
         // Matured batches only bank while every output fits; mirror the on-chain fitByRoom so a blocked
         // output box reports 0 claimable instead of a phantom count (same room shape as mining).
-        const settlement = settleCraft({
-            outputs,
-            maturedBatches: schedule.maturedBatches,
-            resources: state.resources,
-        });
+        const settlement = settleCell(state, schedule.maturedBatches, toSettleConfig(config));
         const progress = toProcessProgress({
             schedule,
             claimedBatches: process.claimedBatches,

@@ -13,9 +13,9 @@ import type {
 import { BuildingKind, type BuildingView } from '../api/types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
-import { FULL_VEIN_DRAIN_PERCENT } from '../map/constants.js';
 import { computeBatchSchedule, toProcessProgress } from '../map/process.utils.js';
-import { settleMining, veinDrawPerCycle } from '../map/settle.utils.js';
+import { toSettleConfig } from '../map/reader.utils.js';
+import { settleCell } from '../map/settle.utils.js';
 import { CellProcessKind, type Cell, type RevealCellReader } from '../map/types.js';
 import { formatUnixSeconds, resourceLabel } from '../utils/format.utils.js';
 import type { IContractClient, WalletProvider } from '../wallet/types.js';
@@ -83,15 +83,7 @@ export class MiningService {
         });
 
         const config = await this.appConfig.load();
-        const drainPercent = config.buildings.find((b) => b.type === state.building?.type)?.effects.veinDrainPercent;
-        const settlement = settleMining({
-            resourceId: process.resource,
-            yieldPerCycle: process.yieldPerCycle,
-            drawPerCycle: veinDrawPerCycle(process.yieldPerCycle, drainPercent ?? FULL_VEIN_DRAIN_PERCENT),
-            maturedBatches: schedule.maturedBatches,
-            depositRemaining: BigInt(deposit),
-            resources: state.resources,
-        });
+        const settlement = settleCell(state, schedule.maturedBatches, toSettleConfig(config));
         const progress = toProcessProgress({
             schedule,
             claimedBatches: process.claimedBatches,

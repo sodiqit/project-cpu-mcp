@@ -15,7 +15,7 @@ export interface Settlement {
     depleted: boolean;
 }
 
-export interface MiningSettleInput {
+interface MiningSettleInput {
     resourceId: number;
     yieldPerCycle: number;
     drawPerCycle: number;
@@ -24,7 +24,7 @@ export interface MiningSettleInput {
     resources: ReadonlyArray<CellResource>;
 }
 
-export function settleMining({
+function settleMining({
     resourceId,
     yieldPerCycle,
     drawPerCycle,
@@ -48,13 +48,13 @@ export function settleMining({
     };
 }
 
-export interface CraftSettleInput {
+interface CraftSettleInput {
     outputs: ReadonlyArray<ProcessOutput>;
     maturedBatches: number;
     resources: ReadonlyArray<CellResource>;
 }
 
-export function settleCraft({ outputs, maturedBatches, resources }: CraftSettleInput): Settlement {
+function settleCraft({ outputs, maturedBatches, resources }: CraftSettleInput): Settlement {
     const fitByRoom = fitBatchesByRoom(outputs, resources);
 
     return {

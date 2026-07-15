@@ -1,6 +1,6 @@
 import { demolishCooldownEnd, isDepleted } from './map.utils.js';
 import { computeBatchSchedule, processOutputs } from './process.utils.js';
-import { settleCell } from './settle.utils.js';
+import { settleCell, type SettleConfig } from './settle.utils.js';
 import { blockedResourceIds, needByResource } from './storage.utils.js';
 import {
     type AttentionItem,
@@ -10,7 +10,6 @@ import {
     type CellResource,
     type Cell,
     CellProcessKind,
-    type ProcessOutput,
 } from './types.js';
 
 const { Critical, Warning, Info } = AttentionSeverity;
@@ -30,14 +29,11 @@ const REASON_SEVERITY: Record<AttentionReason, AttentionSeverity> = {
 
 const SEVERITY_RANK: Record<AttentionSeverity, number> = { [Critical]: 0, [Warning]: 1, [Info]: 2 };
 
-export interface BuildAttentionInput {
+export interface BuildAttentionInput extends SettleConfig {
     ownedCells: Array<Cell> | null;
     version: number;
     serverTime: number;
     nearFullPct: number;
-    // recipeId → what one cycle outputs; lets craft signals stay precise without the map layer knowing recipes.
-    craftOutputsByRecipe: Record<string, Array<ProcessOutput>>;
-    veinDrainPercentByBuilding: Record<string, number>;
     // Building types whose kind is `extractor`; injected so the map layer stays config-agnostic.
     extractorBuildingTypes: Set<string>;
 }
