@@ -16,9 +16,9 @@ import type {
 import { assertWarehouseHas } from './warehouse.utils.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
-import { computeBatchSchedule, toProcessProgress } from '../map/process.utils.js';
+import { processOutputs } from '../map/process.utils.js';
 import { toSettleConfig } from '../map/reader.utils.js';
-import { settleCell } from '../map/settle.utils.js';
+import { cellProcessProgress } from '../map/settle.utils.js';
 import { blockedResourceIds } from '../map/storage.utils.js';
 import { CellProcessKind, type RevealCellReader } from '../map/types.js';
 import { cpuFromWei } from '../utils/format.utils.js';
@@ -109,6 +109,7 @@ export class CraftService {
             tokenId,
             recipeId: claimed !== null ? recipeNameFromUint64(claimed.recipeId) : null,
             batches: claimed?.batches ?? 0,
+            claimedBatches: claimed?.claimedBatches ?? null,
             outputs: claimed?.outputs ?? [],
             txHash: confirmed.txHash,
             status: confirmed.status,
@@ -145,25 +146,10 @@ export class CraftService {
         }
 
         const serverTime = this.mapReader.getServerTime();
-        const schedule = computeBatchSchedule({
-            durationSec: process.durationSec,
-            batches: process.batches,
-            claimedBatches: process.claimedBatches,
-            startAtSec: process.startAt,
-            nowSec: serverTime,
-        });
         const config = await this.appConfig.load();
-        const outputs = config.recipes.find((r) => r.id === process.recipeId)?.outputs ?? [];
-        // Matured batches only bank while every output fits; mirror the on-chain fitByRoom so a blocked
-        // output box reports 0 claimable instead of a phantom count (same room shape as mining).
-        const settlement = settleCell(state, schedule.maturedBatches, toSettleConfig(config));
-        const progress = toProcessProgress({
-            schedule,
-            claimedBatches: process.claimedBatches,
-            settledBatches: settlement.settledBatches,
-            depleted: settlement.depleted,
-            stalled: process.stalled,
-        });
+        const settleConfig = toSettleConfig(config);
+        const { progress } = cellProcessProgress(state, process, serverTime, settleConfig);
+        const outputs = processOutputs(process, settleConfig.craftOutputsByRecipe);
 
         return {
             tokenId,
@@ -183,7 +169,7 @@ export class CraftService {
     private decodeClaimed(
         logs: Array<Log>,
         cell: Address,
-    ): { recipeId: bigint; batches: number; outputs: Array<CraftOutput> } | null {
+    ): { recipeId: bigint; batches: number; claimedBatches: number; outputs: Array<CraftOutput> } | null {
         const events = parseEventLogs({ abi: CELL_ABI, eventName: 'CraftClaimed', logs });
         const event = events.find((e) => e.address.toLowerCase() === cell.toLowerCase());
         if (event === undefined) {
@@ -193,7 +179,12 @@ export class CraftService {
             resourceId,
             amount: (event.args.outputAmounts[i] ?? 0n).toString(),
         }));
-        return { recipeId: event.args.recipeId, batches: event.args.batches, outputs };
+        return {
+            recipeId: event.args.recipeId,
+            batches: event.args.batches,
+            claimedBatches: event.args.claimedBatches,
+            outputs,
+        };
     }
 
     private assertChain(config: AppConfig, wallet: WalletManager): void {

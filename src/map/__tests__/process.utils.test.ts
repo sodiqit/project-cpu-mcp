@@ -38,6 +38,12 @@ describe('computeBatchSchedule', () => {
         expect(s.nextBatchAtSec).toBeNull();
     });
 
+    it('accrues nothing on a row that lost its duration rather than answering Infinity', () => {
+        const s = at(9999, { durationSec: 0 });
+        expect(s.maturedBatches).toBe(0);
+        expect(s.endsAtSec).toBe(1000);
+    });
+
     it('leaves a job predating bounded mining (zero batches) nothing to run', () => {
         const s = at(9999, { batches: 0 });
         expect(s.maturedBatches).toBe(0);

@@ -125,6 +125,7 @@ describe('claim_mining tool', () => {
         const result = await claimHarness({
             tokenId: '42',
             resourceId: 3,
+            claimedBatches: 1,
             claimedAmount: '120',
             txHash: '0xmine',
             status: TxStatus.Success,
@@ -140,6 +141,7 @@ describe('claim_mining tool', () => {
         const result = await claimHarness({
             tokenId: '42',
             resourceId: null,
+            claimedBatches: null,
             claimedAmount: '0',
             txHash: '0xmine',
             status: TxStatus.Success,

@@ -34,7 +34,7 @@ export function computeBatchSchedule({
 }: BatchScheduleInput): BatchSchedule {
     const remainingBatches = Math.max(0, batches - claimedBatches);
     const elapsedSec = Math.max(0, nowSec - startAtSec);
-    const elapsedBatches = durationSec > 0 ? Math.floor(elapsedSec / durationSec) : remainingBatches;
+    const elapsedBatches = durationSec > 0 ? Math.floor(elapsedSec / durationSec) : 0;
     const maturedBatches = Math.min(elapsedBatches, remainingBatches);
 
     return {

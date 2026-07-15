@@ -249,6 +249,7 @@ describe('MiningService.claim', () => {
         expect(decodeFunctionData({ abi: CELL_ABI, data: tx.data as Hex }).functionName).toBe('claim');
         expect(result.resourceId).toBe(3);
         expect(result.claimedAmount).toBe('120');
+        expect(result.claimedBatches).toBe(1);
     });
 
     it('reports nothing claimed when no ResourceMined event is emitted', async () => {

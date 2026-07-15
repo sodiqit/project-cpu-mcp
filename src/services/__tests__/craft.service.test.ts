@@ -29,8 +29,15 @@ function makeService(opts: Parameters<typeof makeCellHarness>[1] = {}) {
 function claimedLog(recipeId: bigint, batches: number, outResources: Array<number>, outAmounts: Array<bigint>): Log {
     const topics = encodeEventTopics({ abi: CELL_ABI, eventName: 'CraftClaimed', args: { tokenId: 42n } });
     const data = encodeAbiParameters(
-        [{ type: 'uint64' }, { type: 'uint32' }, { type: 'uint16[]' }, { type: 'uint64[]' }],
-        [recipeId, batches, outResources, outAmounts],
+        [
+            { type: 'uint64' },
+            { type: 'uint32' },
+            { type: 'uint16[]' },
+            { type: 'uint64[]' },
+            { type: 'uint64' },
+            { type: 'uint32' },
+        ],
+        [recipeId, batches, outResources, outAmounts, 0n, batches],
     );
     return {
         address: CELL as Address,
@@ -228,6 +235,7 @@ describe('CraftService.claim', () => {
         expect(decodeFunctionData({ abi: CELL_ABI, data: contracts.sent[0]?.data as Hex }).functionName).toBe('claim');
         expect(result.recipeId).toBe(CraftRecipeId.SmeltSteel);
         expect(result.batches).toBe(2);
+        expect(result.claimedBatches).toBe(2);
         expect(result.outputs).toEqual([{ resourceId: 102, amount: '10' }]);
     });
 

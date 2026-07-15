@@ -1,6 +1,6 @@
 import { demolishCooldownEnd, isDepleted } from './map.utils.js';
-import { computeBatchSchedule, processOutputs } from './process.utils.js';
-import { settleCell, type SettleConfig } from './settle.utils.js';
+import { processOutputs } from './process.utils.js';
+import { cellProcessProgress, type SettleConfig } from './settle.utils.js';
 import { blockedResourceIds, needByResource } from './storage.utils.js';
 import {
     type AttentionItem,
@@ -87,15 +87,7 @@ function finishedProcess(cell: Cell, input: BuildAttentionInput): boolean {
     if (process === null) {
         return false;
     }
-    const schedule = computeBatchSchedule({
-        durationSec: process.durationSec,
-        batches: process.batches,
-        claimedBatches: process.claimedBatches,
-        startAtSec: process.startAt,
-        nowSec: input.serverTime,
-    });
-    const settlement = settleCell(cell, schedule.maturedBatches, input);
-    return settlement.settledBatches >= schedule.remainingBatches || settlement.depleted;
+    return cellProcessProgress(cell, process, input.serverTime, input).progress.isFinished;
 }
 
 function cellItems(cell: Cell, input: BuildAttentionInput): Array<AttentionItem> {

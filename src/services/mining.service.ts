@@ -13,9 +13,8 @@ import type {
 import { BuildingKind, type BuildingView } from '../api/types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
-import { computeBatchSchedule, toProcessProgress } from '../map/process.utils.js';
 import { toSettleConfig } from '../map/reader.utils.js';
-import { settleCell } from '../map/settle.utils.js';
+import { cellProcessProgress } from '../map/settle.utils.js';
 import { CellProcessKind, type Cell, type RevealCellReader } from '../map/types.js';
 import { formatUnixSeconds, resourceLabel } from '../utils/format.utils.js';
 import type { IContractClient, WalletProvider } from '../wallet/types.js';
@@ -74,23 +73,8 @@ export class MiningService {
         const storage = resource?.storage ?? null;
         const serverTime = this.mapReader.getServerTime();
 
-        const schedule = computeBatchSchedule({
-            durationSec: process.durationSec,
-            batches: process.batches,
-            claimedBatches: process.claimedBatches,
-            startAtSec: process.startAt,
-            nowSec: serverTime,
-        });
-
         const config = await this.appConfig.load();
-        const settlement = settleCell(state, schedule.maturedBatches, toSettleConfig(config));
-        const progress = toProcessProgress({
-            schedule,
-            claimedBatches: process.claimedBatches,
-            settledBatches: settlement.settledBatches,
-            depleted: settlement.depleted,
-            stalled: process.stalled,
-        });
+        const { progress, settlement } = cellProcessProgress(state, process, serverTime, toSettleConfig(config));
 
         return {
             tokenId,
@@ -132,6 +116,7 @@ export class MiningService {
 
         return {
             tokenId,
+            claimedBatches: mined?.claimedBatches ?? null,
             resourceId: mined?.resource ?? null,
             claimedAmount: (mined?.amount ?? 0n).toString(),
             txHash: confirmed.txHash,
@@ -248,13 +233,16 @@ export class MiningService {
         return requested;
     }
 
-    private decodeMined(logs: Array<Log>, cell: Address): { resource: number; amount: bigint } | null {
+    private decodeMined(
+        logs: Array<Log>,
+        cell: Address,
+    ): { resource: number; amount: bigint; claimedBatches: number } | null {
         const events = parseEventLogs({ abi: CELL_ABI, eventName: 'ResourceMined', logs });
         const event = events.find((e) => e.address.toLowerCase() === cell.toLowerCase());
         if (event === undefined) {
             return null;
         }
-        return { resource: event.args.resource, amount: event.args.amount };
+        return { resource: event.args.resource, amount: event.args.amount, claimedBatches: event.args.claimedBatches };
     }
 
     private decodeStarted(

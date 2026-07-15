@@ -160,6 +160,8 @@ export const CELL_ABI = [
             { name: 'batches', type: 'uint32', indexed: false, internalType: 'uint32' },
             { name: 'outputResources', type: 'uint16[]', indexed: false, internalType: 'uint16[]' },
             { name: 'outputAmounts', type: 'uint64[]', indexed: false, internalType: 'uint64[]' },
+            { name: 'startAt', type: 'uint64', indexed: false, internalType: 'uint64' },
+            { name: 'claimedBatches', type: 'uint32', indexed: false, internalType: 'uint32' },
         ],
         anonymous: false,
     },

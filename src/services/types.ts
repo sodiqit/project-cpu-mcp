@@ -285,6 +285,7 @@ export interface MiningStatusResult extends ProcessStatusView {
 
 export interface MiningClaimResult {
     tokenId: string;
+    claimedBatches: number | null;
     resourceId: number | null;
     claimedAmount: string;
     txHash: Hash;
@@ -527,6 +528,7 @@ export interface CraftClaimResult {
     tokenId: string;
     recipeId: CraftRecipeId | null;
     batches: number;
+    claimedBatches: number | null;
     outputs: Array<CraftOutput>;
     txHash: Hash;
     status: TxStatus;

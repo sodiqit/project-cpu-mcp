@@ -1,7 +1,7 @@
 import { FULL_VEIN_DRAIN_PERCENT } from './constants.js';
-import { processOutputs } from './process.utils.js';
+import { computeBatchSchedule, processOutputs, toProcessProgress, type ProcessProgress } from './process.utils.js';
 import { fitBatchesByRoom } from './storage.utils.js';
-import { CellProcessKind, type Cell, type CellResource, type ProcessOutput } from './types.js';
+import { CellProcessKind, type Cell, type CellProcessView, type CellResource, type ProcessOutput } from './types.js';
 
 export function veinDrawPerCycle(yieldPerCycle: number, veinDrainPercent: number): number {
     const scaled = Math.floor((yieldPerCycle * veinDrainPercent) / 100);
@@ -92,4 +92,36 @@ export function settleCell(cell: Cell, maturedBatches: number, config: SettleCon
         depositRemaining: BigInt(cell.resources.find((r) => r.resourceId === process.resource)?.deposit ?? '0'),
         resources: cell.resources,
     });
+}
+
+export interface CellProcessProgress {
+    progress: ProcessProgress;
+    settlement: Settlement;
+}
+
+export function cellProcessProgress(
+    cell: Cell,
+    process: CellProcessView,
+    serverTime: number,
+    config: SettleConfig,
+): CellProcessProgress {
+    const schedule = computeBatchSchedule({
+        durationSec: process.durationSec,
+        batches: process.batches,
+        claimedBatches: process.claimedBatches,
+        startAtSec: process.startAt,
+        nowSec: serverTime,
+    });
+    const settlement = settleCell(cell, schedule.maturedBatches, config);
+
+    return {
+        progress: toProcessProgress({
+            schedule,
+            claimedBatches: process.claimedBatches,
+            settledBatches: settlement.settledBatches,
+            depleted: settlement.depleted,
+            stalled: process.stalled,
+        }),
+        settlement,
+    };
 }
