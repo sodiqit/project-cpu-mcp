@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.0](https://github.com/sodiqit/project-cpu-mcp/compare/v0.6.1...v0.7.0) (2026-07-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* **mining:** startMining takes a required `batches` (1..1000); the map wire renames `batch` to `yieldPerCycle` and adds `batches`/`claimedBatches`; statuses share `completedBatches`/`claimableBatches`/`isFinished`; `storage.stalled` is now `storage.full`. `CraftClaimed` and `ResourceMined` carry the accrual cursor and an absolute `claimedBatches`. Requires the bounded-mining contract and API.
+* **trade:** cpu_route_network and cpu_next_hops now require a resourceId input; the always-zero tradeFeePct output field is removed from lot and market reads; the cell-state transit fee field changed from a scalar transitFeePerUnit to per-resource transitFeeOverrides / saleFeeOverrides records.
+
+### Features
+
+* **map:** derive readiness, storage caps, and hub eligibility in the reader ([#28](https://github.com/sodiqit/project-cpu-mcp/issues/28)) ([df950f0](https://github.com/sodiqit/project-cpu-mcp/commit/df950f0ea3a49c8f767e74024bfa52311f098962))
+* **mining:** bounded extraction jobs with an explicit cycle count ([f955152](https://github.com/sodiqit/project-cpu-mcp/commit/f95515270670c4a4f0f35664dda768b19bb024f1))
+* **trade:** hub sale fee + per-resource transit fees ([0da964d](https://github.com/sodiqit/project-cpu-mcp/commit/0da964d313a5b338e90dc2fd4445eb1a86bfbde7))
+
 ## [0.6.1](https://github.com/sodiqit/project-cpu-mcp/compare/v0.6.0...v0.6.1) (2026-07-10)
 
 
