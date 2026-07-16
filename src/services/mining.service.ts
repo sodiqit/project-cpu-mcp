@@ -154,8 +154,8 @@ export class MiningService {
         const { target, view } = this.resolveMiningTarget(config, state, input, wallet.getAddress());
 
         const tokenId = BigInt(input.tokenId);
-        const { mode, exact } = await this.readChainMode(cell, tokenId, state?.building?.modeResource ?? null);
-        const cost = modeCost(view, mode, target);
+        const priced = await this.priceContext(config, cell, tokenId, view, state?.building?.modeResource ?? null);
+        const cost = modeCost(priced.view, priced.mode, target);
         const approveTxHash = await this.approveFee(config, cell, cost);
 
         this.logger.info('starting mining', {
@@ -163,7 +163,7 @@ export class MiningService {
             target,
             batches: input.batches,
             switchCost: cost,
-            switchCostExact: exact,
+            switchCostExact: priced.exact,
         });
         const txHash = await this.cellClient.startMining({ cell, tokenId, target, batches: input.batches });
         const confirmed = await this.contracts.confirm(txHash, 'Start mining');
@@ -175,7 +175,7 @@ export class MiningService {
             yieldPerCycle: started?.yieldPerCycle ?? null,
             batches: started?.batches ?? null,
             durationSec: started?.durationSec ?? null,
-            modeSwitch: this.chargeOf(config, cost, exact, confirmed.logs),
+            modeSwitch: this.chargeOf(config, cost, priced.exact, confirmed.logs),
             approveTxHash,
             txHash: confirmed.txHash,
             status: confirmed.status,
@@ -183,23 +183,23 @@ export class MiningService {
         };
     }
 
-    // The mode is verified against the chain rather than the map: an unbounded allowance means an
-    // understated fee does not revert, it burns $CPU the agent never budgeted. A read that fails is a
-    // refinement lost, never a reason to refuse — the map's mode prices it and the start still goes.
-    private async readChainMode(
+    private async priceContext(
+        config: AppConfig,
         cell: Address,
         tokenId: bigint,
-        fallback: number | null,
-    ): Promise<{ mode: number | null; exact: boolean }> {
+        mapView: CatalogBuildingView,
+        mapMode: number | null,
+    ): Promise<{ mode: number | null; view: CatalogBuildingView | null; exact: boolean }> {
         try {
-            const view = await this.cellClient.readCellView(cell, tokenId);
-            return { mode: view.modeResource === 0 ? null : view.modeResource, exact: true };
+            const chain = await this.cellClient.readCellView(cell, tokenId);
+            const view = config.buildings.find((b) => b.onChainId === chain.buildingType) ?? null;
+            return { mode: chain.modeResource === 0 ? null : chain.modeResource, view, exact: true };
         } catch (error) {
             this.logger.warn('could not read the cell mode on-chain — pricing the switch off the map', {
                 tokenId: tokenId.toString(),
                 error,
             });
-            return { mode: fallback, exact: false };
+            return { mode: mapMode, view: mapView, exact: false };
         }
     }
 
@@ -211,7 +211,6 @@ export class MiningService {
         if (!isAddress(cpuToken, { strict: false })) {
             throw new Error(`$CPU token is not configured for network ${config.network}; cannot pay to switch.`);
         }
-        // An unknown price still needs an allowance: the chain says a fee applies, only its amount is unnamed.
         const needed = cost.kind === ModeCostKind.Paid ? feeWeiOf(cost) : MAX_APPROVE_AMOUNT;
         return this.allowance.ensureAllowance(cpuToken, cell, needed);
     }

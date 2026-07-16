@@ -5,6 +5,7 @@ import { decodeBurnedCpu, feeWeiOf } from './burn.utils.js';
 import { recipeNameFromUint64, recipeNameToUint64 } from './cell.utils.js';
 import {
     type AppConfig,
+    type CatalogBuildingView,
     type CraftClaimResult,
     type CraftInput,
     type CraftOutput,
@@ -71,9 +72,9 @@ export class CraftService {
         const recipeCostWei = parseEther(recipe.costCpu) * BigInt(input.batches);
         const tokenId = BigInt(input.tokenId);
         const targetRecipe = recipeNameToUint64(input.recipeId);
-        const view = config.buildings.find((b) => b.type === state?.building?.type) ?? null;
-        const { mode, exact } = await this.readChainMode(cell, tokenId, state?.building?.modeRecipeId ?? null);
-        const cost = modeCost(view, mode, targetRecipe);
+        const mapView = config.buildings.find((b) => b.type === state?.building?.type) ?? null;
+        const priced = await this.priceContext(config, cell, tokenId, mapView, state?.building?.modeRecipeId ?? null);
+        const cost = modeCost(priced.view, priced.mode, targetRecipe);
         const approveTxHash = await this.approve(config, cell, recipeCostWei, cost);
 
         this.logger.info('starting craft', {
@@ -82,7 +83,7 @@ export class CraftService {
             batches: input.batches,
             costCpu: cpuFromWei(recipeCostWei.toString()),
             switchCost: cost,
-            switchCostExact: exact,
+            switchCostExact: priced.exact,
         });
         const txHash = await this.cellClient.startCraft({
             cell,
@@ -97,7 +98,7 @@ export class CraftService {
             recipeId: input.recipeId,
             batches: input.batches,
             costCpu: cpuFromWei(recipeCostWei.toString()),
-            modeSwitch: this.chargeOf(config, cost, exact, confirmed.logs, recipeCostWei),
+            modeSwitch: this.chargeOf(config, cost, priced.exact, confirmed.logs, recipeCostWei),
             approveTxHash,
             txHash: confirmed.txHash,
             status: confirmed.status,
@@ -105,27 +106,27 @@ export class CraftService {
         };
     }
 
-    // Same reasoning as the mining start: the mode is verified on-chain because an understated fee cannot
-    // revert against an unbounded allowance, and a failed read never blocks the start.
-    private async readChainMode(
+    private async priceContext(
+        config: AppConfig,
         cell: Address,
         tokenId: bigint,
-        fallback: string | null,
-    ): Promise<{ mode: bigint | null; exact: boolean }> {
+        mapView: CatalogBuildingView | null,
+        mapMode: string | null,
+    ): Promise<{ mode: bigint | null; view: CatalogBuildingView | null; exact: boolean }> {
         try {
-            const view = await this.cellClient.readCellView(cell, tokenId);
-            return { mode: view.modeRecipeId === 0n ? null : view.modeRecipeId, exact: true };
+            const chain = await this.cellClient.readCellView(cell, tokenId);
+            const view = config.buildings.find((b) => b.onChainId === chain.buildingType) ?? null;
+            return { mode: chain.modeRecipeId === 0n ? null : chain.modeRecipeId, view, exact: true };
         } catch (error) {
             this.logger.warn('could not read the cell mode on-chain — pricing the switch off the map', {
                 tokenId: tokenId.toString(),
                 error,
             });
-            // Hashed rather than looked up by name, so a recipe this client does not know still compares.
-            return { mode: fallback === null ? null : recipeNameToUint64(fallback as CraftRecipeId), exact: false };
+            const mode = mapMode === null ? null : recipeNameToUint64(mapMode as CraftRecipeId);
+            return { mode, view: mapView, exact: false };
         }
     }
 
-    // The contract burns `recipe cost × batches + fee` in one call, so one allowance covers both.
     private async approve(
         config: AppConfig,
         cell: Address,

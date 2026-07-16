@@ -1,8 +1,18 @@
-import type { Abi, Address, Hash, Hex, Log } from 'viem';
+import {
+    encodeAbiParameters,
+    encodeEventTopics,
+    zeroAddress,
+    type Abi,
+    type Address,
+    type Hash,
+    type Hex,
+    type Log,
+} from 'viem';
 
 import type { ApiClient } from '../../api/client.js';
 import { BuildingKind, BuildingType, CraftRecipeId } from '../../api/types.js';
 import { Network } from '../../config/types.js';
+import { ERC20_ABI } from '../../contracts/erc20.abi.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import type { ILogger } from '../../logger/types.js';
 import { toCell } from '../../map/cell-view.utils.js';
@@ -337,6 +347,22 @@ export class FakeContractClient implements IContractClient {
 // The chain's `getCell`, whose mode fields use 0 for "no output picked yet".
 export function chainCellView(overrides: Partial<CellViewResult> = {}): CellViewResult {
     return { buildingType: 4, modeResource: 0, modeRecipeId: 0n, ...overrides };
+}
+
+export function cpuBurnLog(from: Address, amountWei: bigint): Log {
+    const topics = encodeEventTopics({ abi: ERC20_ABI, eventName: 'Transfer', args: { from, to: zeroAddress } });
+    const data = encodeAbiParameters([{ type: 'uint256' }], [amountWei]);
+    return {
+        address: CPU_TOKEN as Address,
+        topics,
+        data,
+        blockHash: `0x${'0'.repeat(64)}`,
+        blockNumber: 1n,
+        logIndex: 1,
+        transactionHash: `0x${'0'.repeat(64)}`,
+        transactionIndex: 0,
+        removed: false,
+    } as unknown as Log;
 }
 
 // A large default so `startAt: 1` fixtures mature far more cycles than any cap — tests that need an exact

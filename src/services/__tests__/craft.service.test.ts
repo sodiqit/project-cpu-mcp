@@ -3,7 +3,6 @@ import {
     encodeAbiParameters,
     encodeEventTopics,
     parseEther,
-    zeroAddress,
     type Address,
     type Hex,
     type Log,
@@ -12,7 +11,6 @@ import { describe, expect, it } from 'vitest';
 
 import { BuildingType, CraftRecipeId } from '../../api/types.js';
 import { CELL_ABI } from '../../contracts/cell.abi.js';
-import { ERC20_ABI } from '../../contracts/erc20.abi.js';
 import { makeCell, makeResource, makeStorage } from '../../map/__tests__/fixtures.js';
 import { CellProcessKind } from '../../map/types.js';
 import { TxStatus } from '../../wallet/types.js';
@@ -24,6 +22,7 @@ import {
     CELL,
     CPU_TOKEN,
     chainCellView,
+    cpuBurnLog,
     makeCellHarness,
     makeConfig,
     WALLET_ADDRESS,
@@ -257,22 +256,6 @@ describe('CraftService.claim', () => {
     });
 });
 
-function burnLog(from: Address, amountWei: bigint): Log {
-    const topics = encodeEventTopics({ abi: ERC20_ABI, eventName: 'Transfer', args: { from, to: zeroAddress } });
-    const data = encodeAbiParameters([{ type: 'uint256' }], [amountWei]);
-    return {
-        address: CPU_TOKEN as Address,
-        topics,
-        data,
-        blockHash: `0x${'0'.repeat(64)}`,
-        blockNumber: 1n,
-        logIndex: 1,
-        transactionHash: `0x${'0'.repeat(64)}`,
-        transactionIndex: 0,
-        removed: false,
-    } as unknown as Log;
-}
-
 function fabCell(modeRecipeId: string | null = null) {
     return makeCell({
         tokenId: '42',
@@ -286,9 +269,14 @@ describe('CraftService.craft mode switch cost', () => {
     it('folds the switch fee into the same allowance as the recipe cost', async () => {
         const { service, allowance, contracts } = makeService({
             cell: fabCell(CraftRecipeId.SmeltSteel),
-            reads: { getCell: chainCellView({ modeRecipeId: recipeNameToUint64(CraftRecipeId.SmeltSteel) }) },
+            reads: {
+                getCell: chainCellView({
+                    buildingType: 17,
+                    modeRecipeId: recipeNameToUint64(CraftRecipeId.SmeltSteel),
+                }),
+            },
             approve: APPROVE_HASH,
-            logs: [[burnLog(WALLET_ADDRESS, parseEther('122'))]],
+            logs: [[cpuBurnLog(WALLET_ADDRESS, parseEther('122'))]],
         });
 
         const result = await service.craft(FORGE);
@@ -303,8 +291,13 @@ describe('CraftService.craft mode switch cost', () => {
     it('reports the recipe cost and the switch cost separately', async () => {
         const { service } = makeService({
             cell: fabCell(CraftRecipeId.SmeltSteel),
-            reads: { getCell: chainCellView({ modeRecipeId: recipeNameToUint64(CraftRecipeId.SmeltSteel) }) },
-            logs: [[burnLog(WALLET_ADDRESS, parseEther('122'))]],
+            reads: {
+                getCell: chainCellView({
+                    buildingType: 17,
+                    modeRecipeId: recipeNameToUint64(CraftRecipeId.SmeltSteel),
+                }),
+            },
+            logs: [[cpuBurnLog(WALLET_ADDRESS, parseEther('122'))]],
         });
 
         const result = await service.craft(FORGE);
@@ -316,7 +309,12 @@ describe('CraftService.craft mode switch cost', () => {
     it('asks for no allowance when both the recipe and the switch are free', async () => {
         const { service, allowance } = makeService({
             cell: fabCell(CraftRecipeId.SmeltSteel),
-            reads: { getCell: chainCellView({ modeRecipeId: recipeNameToUint64(CraftRecipeId.SmeltSteel) }) },
+            reads: {
+                getCell: chainCellView({
+                    buildingType: 17,
+                    modeRecipeId: recipeNameToUint64(CraftRecipeId.SmeltSteel),
+                }),
+            },
         });
 
         const result = await service.craft(STEEL);
@@ -328,8 +326,13 @@ describe('CraftService.craft mode switch cost', () => {
     it('prices the switch against the chain’s recipe mode, not the map’s', async () => {
         const { service, allowance } = makeService({
             cell: fabCell(CraftRecipeId.ForgeWcpu),
-            reads: { getCell: chainCellView({ modeRecipeId: recipeNameToUint64(CraftRecipeId.SmeltSteel) }) },
-            logs: [[burnLog(WALLET_ADDRESS, parseEther('122'))]],
+            reads: {
+                getCell: chainCellView({
+                    buildingType: 17,
+                    modeRecipeId: recipeNameToUint64(CraftRecipeId.SmeltSteel),
+                }),
+            },
+            logs: [[cpuBurnLog(WALLET_ADDRESS, parseEther('122'))]],
         });
 
         const result = await service.craft(FORGE);
@@ -343,7 +346,7 @@ describe('CraftService.craft mode switch cost', () => {
         const { service, contracts } = makeService({
             cell: fabCell(CraftRecipeId.SmeltSteel),
             reads: { getCell: new Error('rpc is down') },
-            logs: [[burnLog(WALLET_ADDRESS, parseEther('122'))]],
+            logs: [[cpuBurnLog(WALLET_ADDRESS, parseEther('122'))]],
         });
 
         const result = await service.craft(FORGE);
@@ -357,8 +360,8 @@ describe('CraftService.craft mode switch cost', () => {
     it('reports the switch burn the receipt carries even when the estimate said free', async () => {
         const { service } = makeService({
             cell: fabCell(),
-            reads: { getCell: chainCellView({ modeRecipeId: 0n }) },
-            logs: [[burnLog(WALLET_ADDRESS, parseEther('122'))]],
+            reads: { getCell: chainCellView({ buildingType: 17, modeRecipeId: 0n }) },
+            logs: [[cpuBurnLog(WALLET_ADDRESS, parseEther('122'))]],
         });
 
         const result = await service.craft(FORGE);

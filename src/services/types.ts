@@ -46,7 +46,6 @@ export interface AppContracts {
     trade: string;
 }
 
-/** Chain + contract addresses for the configured network, loaded from the game API. */
 export enum ModeSwitchKind {
     Possible = 'possible',
     Impossible = 'impossible',
@@ -92,6 +91,7 @@ export interface BuildingMode {
     recipeId: CraftRecipeId | null;
 }
 
+/** Chain + contract addresses for the configured network, loaded from the game API. */
 export interface AppConfig {
     network: Network;
     chainId: number;
@@ -572,7 +572,7 @@ export interface CraftStartResult {
     tokenId: string;
     recipeId: CraftRecipeId;
     batches: number;
-    /** Total $CPU cost for all batches (decimal); "0" for a free recipe. Excludes any Switch cost. */
+    /** Total $CPU cost for all batches (decimal); "0" for a free recipe. */
     costCpu: string;
     modeSwitch: ModeSwitchCharge;
     approveTxHash: Hash | null;

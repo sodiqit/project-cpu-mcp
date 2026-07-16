@@ -3,7 +3,6 @@ import {
     encodeAbiParameters,
     encodeEventTopics,
     parseEther,
-    zeroAddress,
     type Address,
     type Hex,
     type Log,
@@ -12,7 +11,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BuildingType } from '../../api/types.js';
 import { CELL_ABI } from '../../contracts/cell.abi.js';
-import { ERC20_ABI } from '../../contracts/erc20.abi.js';
 import { makeCell, makeMiningProcess, makeResource, makeStorage } from '../../map/__tests__/fixtures.js';
 import type { RawCell, RawCellProcessMiningView } from '../../map/types.js';
 import { MAX_APPROVE_AMOUNT } from '../allowance.constants.js';
@@ -23,6 +21,7 @@ import {
     CPU_TOKEN,
     DEFAULT_SERVER_TIME,
     chainCellView,
+    cpuBurnLog,
     makeCellHarness,
     makeConfig,
     WALLET_ADDRESS,
@@ -408,16 +407,6 @@ describe('MiningService.startMining', () => {
     });
 });
 
-function burnLog(from: Address, amountWei: bigint): Log {
-    const topics = encodeEventTopics({
-        abi: ERC20_ABI,
-        eventName: 'Transfer',
-        args: { from, to: zeroAddress },
-    });
-    const data = encodeAbiParameters([{ type: 'uint256' }], [amountWei]);
-    return { address: CPU_TOKEN as Address, topics, data, ...LOG_META } as unknown as Log;
-}
-
 describe('MiningService.startMining mode switch cost', () => {
     it('prices the first pick on a fresh extractor as free and asks for no allowance', async () => {
         const { service, allowance } = makeService({
@@ -446,11 +435,39 @@ describe('MiningService.startMining mode switch cost', () => {
         expect(allowance.calls).toEqual([]);
     });
 
+    it('prices off the chain building type, not the map’s stale cheaper row after an upgrade', async () => {
+        const config = makeConfig();
+        const mine = config.buildings.find((b) => b.type === BuildingType.Mine);
+        if (mine === undefined) {
+            throw new Error('expected a Mine in the fake config');
+        }
+        config.buildings = [
+            ...config.buildings,
+            {
+                ...mine,
+                type: BuildingType.TungstenDrill,
+                onChainId: 35,
+                modeSwitch: { kind: ModeSwitchKind.Possible, costCpu: '9' },
+            },
+        ];
+        const { service } = makeService({
+            cell: mineCell(),
+            config,
+            reads: { getCell: chainCellView({ buildingType: 35, modeResource: 6 }) },
+            logs: [[startedLog(5, 180, 77n), cpuBurnLog(WALLET_ADDRESS, parseEther('9'))]],
+        });
+
+        const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
+
+        expect(result.modeSwitch.cost).toEqual({ kind: 'paid', costCpu: '9' });
+        expect(result.modeSwitch.burnedCpu).toBe('9');
+    });
+
     it('discloses the fee and covers it with an allowance when re-pointing the extractor', async () => {
         const { service, allowance } = makeService({
             cell: mineCell(),
             reads: { getCell: chainCellView({ modeResource: 6 }) },
-            logs: [[startedLog(5, 180, 77n), burnLog(WALLET_ADDRESS, parseEther('1'))]],
+            logs: [[startedLog(5, 180, 77n), cpuBurnLog(WALLET_ADDRESS, parseEther('1'))]],
         });
 
         const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
@@ -466,7 +483,7 @@ describe('MiningService.startMining mode switch cost', () => {
         const { service } = makeService({
             cell,
             reads: { getCell: chainCellView({ modeResource: 6 }) },
-            logs: [[startedLog(5, 180, 77n), burnLog(WALLET_ADDRESS, parseEther('1'))]],
+            logs: [[startedLog(5, 180, 77n), cpuBurnLog(WALLET_ADDRESS, parseEther('1'))]],
         });
 
         const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
@@ -482,7 +499,7 @@ describe('MiningService.startMining mode switch cost', () => {
         const { service, contracts } = makeService({
             cell,
             reads: { getCell: new Error('rpc is rate limited') },
-            logs: [[startedLog(5, 180, 77n), burnLog(WALLET_ADDRESS, parseEther('1'))]],
+            logs: [[startedLog(5, 180, 77n), cpuBurnLog(WALLET_ADDRESS, parseEther('1'))]],
         });
 
         const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
@@ -502,7 +519,7 @@ describe('MiningService.startMining mode switch cost', () => {
             cell: mineCell(),
             config,
             reads: { getCell: chainCellView({ modeResource: 6 }) },
-            logs: [[startedLog(5, 180, 77n), burnLog(WALLET_ADDRESS, parseEther('1'))]],
+            logs: [[startedLog(5, 180, 77n), cpuBurnLog(WALLET_ADDRESS, parseEther('1'))]],
         });
 
         const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
@@ -516,7 +533,7 @@ describe('MiningService.startMining mode switch cost', () => {
         const { service } = makeService({
             cell: mineCell(),
             reads: { getCell: chainCellView({ modeResource: 0 }) },
-            logs: [[startedLog(5, 180, 77n), burnLog(WALLET_ADDRESS, parseEther('3'))]],
+            logs: [[startedLog(5, 180, 77n), cpuBurnLog(WALLET_ADDRESS, parseEther('3'))]],
         });
 
         const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
@@ -542,7 +559,7 @@ describe('MiningService.startMining mode switch cost', () => {
         const { service } = makeService({
             cell: mineCell(),
             reads: { getCell: chainCellView({ modeResource: 5 }) },
-            logs: [[startedLog(5, 180, 77n), burnLog(other, parseEther('9'))]],
+            logs: [[startedLog(5, 180, 77n), cpuBurnLog(other, parseEther('9'))]],
         });
 
         const result = await service.startMining({ tokenId: '42', targetResourceId: 5, batches: 10 });
