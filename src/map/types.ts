@@ -32,6 +32,8 @@ export const rawCellResourceSchema = z.object({
 export const cellBuildingViewSchema = z.object({
     type: z.nativeEnum(BuildingType),
     buildFinishAt: z.number().nullable(),
+    modeResource: z.number().nullable().default(null),
+    modeRecipeId: z.string().nullable().default(null),
 });
 
 export const rawCellProcessMiningViewSchema = z.object({

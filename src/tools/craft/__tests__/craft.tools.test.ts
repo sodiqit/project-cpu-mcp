@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest';
 
 import { CraftRecipeId, type RecipeView } from '../../../api/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
-import type { CraftClaimResult, CraftStartResult, CraftStatusResult } from '../../../services/types.js';
+import {
+    type CraftClaimResult,
+    type CraftStartResult,
+    type CraftStatusResult,
+    ModeCostKind,
+    ModeFreeReason,
+} from '../../../services/types.js';
 import type { AppContext } from '../../../types.js';
 import { TxStatus } from '../../../wallet/types.js';
 import { registerClaimCraftTool } from '../claim/claim-craft.js';
@@ -70,6 +76,11 @@ describe('craft tool', () => {
             recipeId: CraftRecipeId.SmeltSteel,
             batches: 2,
             costCpu: '0',
+            modeSwitch: {
+                cost: { kind: ModeCostKind.Free, why: ModeFreeReason.FirstPick },
+                exact: true,
+                burnedCpu: '0',
+            },
             approveTxHash: null,
             txHash: `0x${'1'.repeat(64)}`,
             status: TxStatus.Success,
@@ -88,6 +99,11 @@ describe('craft tool', () => {
             recipeId: CraftRecipeId.ForgeWcpu,
             batches: 1,
             costCpu: '100',
+            modeSwitch: {
+                cost: { kind: ModeCostKind.Free, why: ModeFreeReason.FirstPick },
+                exact: true,
+                burnedCpu: '0',
+            },
             approveTxHash: `0x${'c'.repeat(64)}`,
             txHash: `0x${'1'.repeat(64)}`,
             status: TxStatus.Success,

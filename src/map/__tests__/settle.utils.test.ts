@@ -25,7 +25,7 @@ function config(overrides: Partial<SettleConfig> = {}): SettleConfig {
 function cell(overrides: Partial<RawCell> = {}, resources: Array<RawCellResource> = []): Cell {
     return toCell(
         makeCell({
-            building: { type: BuildingType.Mine, buildFinishAt: null },
+            building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: null, modeRecipeId: null },
             process: makeMiningProcess({ resource: RESOURCE, yieldPerCycle: 100 }),
             resources,
             ...overrides,
@@ -76,7 +76,10 @@ describe('settleCell mining', () => {
     });
 
     it('credits a vein-drain extractor more than it drains', () => {
-        const drill = cell({ building: { type: DRILL, buildFinishAt: null } }, uncapped('400'));
+        const drill = cell(
+            { building: { type: DRILL, buildFinishAt: null, modeResource: null, modeRecipeId: null } },
+            uncapped('400'),
+        );
         expect(settleCell(drill, 5, config({ veinDrainPercentByBuilding: { [DRILL]: 80 } }))).toEqual({
             settledBatches: 5,
             minedUnits: 500n,

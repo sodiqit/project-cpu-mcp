@@ -72,7 +72,7 @@ describe('BuildService', () => {
         const cell = makeCell({
             tokenId: '42',
             owner: WALLET_ADDRESS,
-            building: { type: BuildingType.Mine, buildFinishAt: null },
+            building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: null, modeRecipeId: null },
         });
         const { service, contracts, allowance } = makeService({ cell });
 
@@ -154,7 +154,7 @@ describe('BuildService', () => {
         const cell = makeCell({
             tokenId: '42',
             owner: WALLET_ADDRESS,
-            building: { type: BuildingType.Mine, buildFinishAt: null },
+            building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: null, modeRecipeId: null },
         });
         const { service, contracts, allowance } = makeService({ cell, approve: APPROVE_HASH });
 
@@ -183,7 +183,7 @@ describe('BuildService', () => {
         const cell = makeCell({
             tokenId: '42',
             owner: WALLET_ADDRESS,
-            building: { type: BuildingType.Mine, buildFinishAt: null },
+            building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: null, modeRecipeId: null },
             process: {
                 kind: CellProcessKind.Mining,
                 resource: 5,
@@ -203,7 +203,7 @@ describe('BuildService', () => {
         const cell = makeCell({
             tokenId: '42',
             owner: WALLET_ADDRESS,
-            building: { type: BuildingType.SteelMill, buildFinishAt: null },
+            building: { type: BuildingType.SteelMill, buildFinishAt: null, modeResource: null, modeRecipeId: null },
             resources: [makeResource({ resourceId: 101, balance: '1' })],
         });
         const { service, contracts } = makeService({ cell });
@@ -215,7 +215,7 @@ describe('BuildService', () => {
         const cell = makeCell({
             tokenId: '42',
             owner: WALLET_ADDRESS,
-            building: { type: BuildingType.Hub, buildFinishAt: null },
+            building: { type: BuildingType.Hub, buildFinishAt: null, modeResource: null, modeRecipeId: null },
             resources: [
                 makeResource({
                     resourceId: 5,

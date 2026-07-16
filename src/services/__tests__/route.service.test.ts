@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_SERVER_TIME, FakeAppConfig, makeConfig, WALLET_ADDRESS } from './service-fakes.js';
-import { type BuildingView, BuildingKind, BuildingType } from '../../api/types.js';
+import { BuildingKind, BuildingType } from '../../api/types.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import { makeCell } from '../../map/__tests__/fixtures.js';
 import { toCell } from '../../map/cell-view.utils.js';
@@ -10,6 +10,7 @@ import type { RawCell } from '../../map/types.js';
 import { formatUnixSeconds } from '../../utils/format.utils.js';
 import type { WalletProvider } from '../../wallet/types.js';
 import { RouteService } from '../route.service.js';
+import type { CatalogBuildingView } from '../types.js';
 
 const RIVAL = '0x000000000000000000000000000000000000beef';
 const RES = 3;
@@ -25,7 +26,7 @@ function hub(tokenId: string, owner: string, over: Partial<RawCell> = {}): RawCe
         tokenId,
         owner,
         revealCount: 1,
-        building: { type: BuildingType.Hub, buildFinishAt: null },
+        building: { type: BuildingType.Hub, buildFinishAt: null, modeResource: null, modeRecipeId: null },
         ...over,
     });
 }
@@ -34,8 +35,8 @@ function foreignHub(tokenId: string, feePerUnit: string, over: Partial<RawCell> 
     return hub(tokenId, RIVAL, { transitFeeOverrides: { [RES]: feePerUnit }, ...over });
 }
 
-function upgradedHubCatalogEntry(base: Array<BuildingView>): BuildingView {
-    const entry = base.find((b) => b.kind === BuildingKind.Hub) as BuildingView;
+function upgradedHubCatalogEntry(base: Array<CatalogBuildingView>): CatalogBuildingView {
+    const entry = base.find((b) => b.kind === BuildingKind.Hub) as CatalogBuildingView;
     return { ...entry, type: UPGRADED_HUB, onChainId: 99, name: 'Mega Hub', tier: 2 };
 }
 
@@ -122,7 +123,7 @@ describe('RouteService.nextHops', () => {
 
     it('skips a foreign hub that is still under construction — it is no waypoint yet', async () => {
         const unfinished = foreignHub('75', '0.5', {
-            building: { type: BuildingType.Hub, buildFinishAt: UNFINISHED_AT },
+            building: { type: BuildingType.Hub, buildFinishAt: UNFINISHED_AT, modeResource: null, modeRecipeId: null },
         });
 
         const result = await survey([own('72'), unfinished], 72);
@@ -131,7 +132,9 @@ describe('RouteService.nextHops', () => {
     });
 
     it('counts an upgraded finished hub the catalog names as a waypoint', async () => {
-        const upgraded = foreignHub('75', '0.5', { building: { type: UPGRADED_HUB, buildFinishAt: null } });
+        const upgraded = foreignHub('75', '0.5', {
+            building: { type: UPGRADED_HUB, buildFinishAt: null, modeResource: null, modeRecipeId: null },
+        });
 
         const result = await survey([own('72'), upgraded], 72);
 
@@ -146,7 +149,12 @@ describe('RouteService.nextHops', () => {
     });
 
     it('keeps an owned cell whose hub is still going up as an origin, with normal reach and no hub bonus', async () => {
-        const building = { type: BuildingType.Hub, buildFinishAt: UNFINISHED_AT };
+        const building = {
+            type: BuildingType.Hub,
+            buildFinishAt: UNFINISHED_AT,
+            modeResource: null,
+            modeRecipeId: null,
+        };
         const cells = [own('72', { building, transitFeeOverrides: { [RES]: '0.5' } }), own('73'), own('75')];
 
         const result = await survey(cells, 72);
@@ -165,7 +173,7 @@ describe('RouteService.nextHops', () => {
 
     it('rejects routing from a hub still under construction, naming when it will be ready', async () => {
         const unfinished = foreignHub('75', '0.5', {
-            building: { type: BuildingType.Hub, buildFinishAt: UNFINISHED_AT },
+            building: { type: BuildingType.Hub, buildFinishAt: UNFINISHED_AT, modeResource: null, modeRecipeId: null },
         });
 
         await expect(survey([own('72'), unfinished], 75)).rejects.toThrow(
@@ -244,7 +252,7 @@ describe('RouteService.network', () => {
 
     it('drops a foreign hub that is still under construction from the network', async () => {
         const unfinished = foreignHub('75', '0.5', {
-            building: { type: BuildingType.Hub, buildFinishAt: UNFINISHED_AT },
+            building: { type: BuildingType.Hub, buildFinishAt: UNFINISHED_AT, modeResource: null, modeRecipeId: null },
         });
 
         const result = await makeService([own('72'), unfinished]).network({
@@ -258,7 +266,9 @@ describe('RouteService.network', () => {
 
     it('an upgraded finished hub is a node and bridges a wall', async () => {
         const rival = makeCell({ tokenId: '73', owner: RIVAL, revealCount: 1 });
-        const upgraded = own('72', { building: { type: UPGRADED_HUB, buildFinishAt: null } });
+        const upgraded = own('72', {
+            building: { type: UPGRADED_HUB, buildFinishAt: null, modeResource: null, modeRecipeId: null },
+        });
 
         const result = await makeService([upgraded, rival, own('74')]).network({
             from: null,
@@ -272,7 +282,12 @@ describe('RouteService.network', () => {
 
     it('an owned cell whose hub is unfinished stays a node with normal reach and no transit fee', async () => {
         const rival = makeCell({ tokenId: '73', owner: RIVAL, revealCount: 1 });
-        const building = { type: BuildingType.Hub, buildFinishAt: UNFINISHED_AT };
+        const building = {
+            type: BuildingType.Hub,
+            buildFinishAt: UNFINISHED_AT,
+            modeResource: null,
+            modeRecipeId: null,
+        };
         const goingUp = own('72', { building, transitFeeOverrides: { [RES]: '0.5' } });
 
         const result = await makeService([goingUp, rival, own('74')]).network({

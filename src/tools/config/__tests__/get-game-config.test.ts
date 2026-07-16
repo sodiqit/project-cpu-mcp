@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { BuildingKind, BuildingType, CraftRecipeId } from '../../../api/types.js';
 import { Network } from '../../../config/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
-import type { AppConfig } from '../../../services/types.js';
+import { type AppConfig, ModeSwitchKind } from '../../../services/types.js';
 import type { AppContext } from '../../../types.js';
 import { registerGetGameConfigTool } from '../get-game-config/get-game-config.js';
 
@@ -47,6 +47,8 @@ const CONFIG: AppConfig = {
             buildTimeSec: 120,
             buildInputs: [],
             demolishCost: { cpu: '2.5', inputs: [] },
+            modeSwitchCost: '1',
+            modeSwitch: { kind: ModeSwitchKind.Possible, costCpu: '1' },
             minableResources: [5, 6],
             recipes: [],
             effects: { cycleTimePercent: 100, veinDrainPercent: 100, inputEfficiency: [] },

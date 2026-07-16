@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseCell } from '../map.utils.js';
+import { parseCell, parseSnapshot } from '../map.utils.js';
 
 function rawCell(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     return { tokenId: '1', owner: '0xowner', revealCount: 1, resources: [], updated: 1, ...overrides };
@@ -36,6 +36,50 @@ describe('rawCellSchema fee fields', () => {
 
     it('still drops a structurally invalid cell rather than the whole snapshot', () => {
         expect(parseCell(rawCell({ building: { type: 'not_a_real_building', buildFinishAt: null } }))).toBeNull();
+    });
+});
+
+describe('rawCellSchema building mode fields', () => {
+    it('keeps every cell that has a building when the payload predates the mode fields, reading the mode as null', () => {
+        const raw = {
+            serverTime: 1000,
+            version: 5,
+            cells: [
+                rawCell({ tokenId: '1', building: { type: 'mine', buildFinishAt: null } }),
+                rawCell({ tokenId: '2', building: { type: 'hub', buildFinishAt: 10 } }),
+            ],
+        };
+
+        const { snapshot, dropped } = parseSnapshot(raw);
+
+        expect(dropped).toBe(0);
+        expect(snapshot.cells.map((c) => c.tokenId)).toEqual(['1', '2']);
+        expect(snapshot.cells[0]?.building?.modeResource).toBeNull();
+        expect(snapshot.cells[0]?.building?.modeRecipeId).toBeNull();
+    });
+
+    it('parses both mode fields through when the payload carries them', () => {
+        const mine = parseCell(
+            rawCell({ building: { type: 'mine', buildFinishAt: null, modeResource: 5, modeRecipeId: null } }),
+        );
+        const fab = parseCell(
+            rawCell({
+                building: { type: 'wafer_fab', buildFinishAt: null, modeResource: null, modeRecipeId: 'make_chips' },
+            }),
+        );
+
+        expect(mine?.building?.modeResource).toBe(5);
+        expect(fab?.building?.modeRecipeId).toBe('make_chips');
+    });
+
+    it('keeps a cell whose mode names a recipe this client does not know yet', () => {
+        const cell = parseCell(
+            rawCell({
+                building: { type: 'wafer_fab', buildFinishAt: null, modeResource: null, modeRecipeId: 'brand_new' },
+            }),
+        );
+
+        expect(cell?.building?.modeRecipeId).toBe('brand_new');
     });
 });
 

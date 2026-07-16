@@ -135,7 +135,12 @@ const market: MarketResourceSummary = {
 
 function hubCell(
     saleFeeOverrides: Record<number, number> | null,
-    building: Cell['building'] | null = { type: BuildingType.Hub, buildFinishAt: 0 },
+    building: Cell['building'] | null = {
+        type: BuildingType.Hub,
+        buildFinishAt: 0,
+        modeResource: null,
+        modeRecipeId: null,
+    },
 ): Cell {
     return projectCell(makeCell({ tokenId: '5', building, saleFeeOverrides }));
 }
@@ -298,7 +303,11 @@ describe('discovery read tools', () => {
         const handler = capture(registerGetMarketsTool, {
             trade: { getMarkets: async () => [market] },
             mapReader: {
-                readRevealCell: async () => hubCell({ 3: 2.5 }, { type: BuildingType.Hub, buildFinishAt: 100 }),
+                readRevealCell: async () =>
+                    hubCell(
+                        { 3: 2.5 },
+                        { type: BuildingType.Hub, buildFinishAt: 100, modeResource: null, modeRecipeId: null },
+                    ),
             },
         });
         const result = await handler({} as never);

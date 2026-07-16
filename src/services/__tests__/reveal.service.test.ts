@@ -12,7 +12,7 @@ import {
     type WalletProvider,
 } from '../../wallet/types.js';
 import { RevealService } from '../reveal.service.js';
-import type { AppConfig, ICellClient, IAppConfig, RequestRevealParams } from '../types.js';
+import type { AppConfig, CellViewResult, ICellClient, IAppConfig, RequestRevealParams } from '../types.js';
 import {
     APPROVE_HASH,
     CELL,
@@ -42,6 +42,9 @@ class FakeCellClient implements ICellClient {
         private readonly fee: bigint = 1_000n,
         private readonly quoteError: Error | null = null,
     ) {}
+    async readCellView(): Promise<CellViewResult> {
+        return { buildingType: 0, modeResource: 0, modeRecipeId: 0n };
+    }
     async quoteRevealFee(): Promise<bigint> {
         if (this.quoteError !== null) {
             throw this.quoteError;

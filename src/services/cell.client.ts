@@ -3,6 +3,7 @@ import { encodeFunctionData, zeroAddress, type Address, type Hash } from 'viem';
 import { REVEAL_CALLBACK_GAS } from './cell.constants.js';
 import type {
     CellClientOptions,
+    CellViewResult,
     ClaimParams,
     DemolishParams,
     ICellClient,
@@ -44,6 +45,15 @@ export class CellClient implements ICellClient {
         });
         this.logger.info('quoted reveal fee', { cell, entropy, provider, feeWei: fee.toString() });
         return fee;
+    }
+
+    async readCellView(cell: Address, tokenId: bigint): Promise<CellViewResult> {
+        return this.contracts.read<CellViewResult>({
+            address: cell,
+            abi: CELL_ABI,
+            functionName: 'getCell',
+            args: [tokenId],
+        });
     }
 
     async requestReveal(params: RequestRevealParams): Promise<Hash> {

@@ -54,6 +54,42 @@ produces past it. Mining and crafting differ in what they consume, not in how th
 - **Cursor** — a Process's `startAt`: the point its next Cycle is measured from, not the moment it was
   started. Every claim moves it forward past the Cycles it banked, and a Stalled one resets it to now.
 
+## Mode
+
+What a building is pointed at, and what re-pointing it costs. A building remembers this across its
+Process and across an Upgrade; only a demolish clears it.
+
+- **Mode** — the output a building is pointed at: the resource an extractor is set to mine, or the recipe
+  a crafter is set to run. Free on the first pick after building; changed thereafter by paying the
+  building's Switch cost. Surfaced raw on a cell as `modeResource` / `modeRecipeId`, both `null` when
+  nothing has been picked yet.
+  *Avoid*: specialization.
+- **Switch cost** — the $CPU burned to point a building at a different output than its current Mode; 25% of
+  that building's own build cost, floored, so an upgraded building costs more to re-tool. Restarting the
+  same output stays free, and a drained deposit does not make switching away from it free. Absent — **not
+  zero** — for a building with one possible output or none: it can never switch. There is no cooldown; the
+  fee is the only thing between you and a different output.
+  *Avoid*: transit fee, sale fee, move fee.
+- **Outputs** — `cpu_get_cell`'s per-cell enumeration of everything the building can be pointed at, each
+  with what pointing it there costs right now: `free` (with `first_pick` or `same_output` as the reason),
+  `paid` (with the price), or `unknown`. Outputs the building cannot produce at all are left out entirely.
+  These prices are map-derived and **advisory** — the start tools re-price against the chain before they
+  send. The list is not a startability check: a priced output may still lack a deposit or the inputs.
+
+"Can never switch" is carried as its own fact, never as a price. A building catalog row reports
+`modeSwitch` as `{"kind": "possible", "costCpu": "2"}`, `{"kind": "impossible"}` — with no price field at
+all — or `{"kind": "unknown"}`, which means only that this client's loaded config predates the field. The
+three are three different claims and never collapse: `unknown` is not `impossible`, and neither is `0`. A
+price field never appears holding `null`, because `null` is exactly what a reader mistakes for free. This
+is the same null≠empty≠zero discipline the fee overrides above already state.
+
+A start (`cpu_start_mining`, `cpu_craft`) burns the Switch cost **inside the same transaction** as the
+start itself, on the same approval, with no separate confirmation. Both tools therefore read the Mode
+on-chain immediately before sending, disclose what they expect to burn, and — once the receipt lands —
+report what **actually** burned in `modeSwitch.burnedCpu`. When the chain could not be read the price is
+marked `exact: false` and the start still goes: a price this client cannot verify never blocks an action.
+The reported burn is the authority whenever it disagrees with the estimate.
+
 ## Fees
 
 All fee rates on the MCP surface are expressed in **percent**. The contracts and the game API express

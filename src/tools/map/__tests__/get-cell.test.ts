@@ -1,9 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it } from 'vitest';
 
-import { BuildingType } from '../../../api/types.js';
+import { BuildingType, CraftRecipeId } from '../../../api/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
 import { type CellInspection, CellProcessKind, NeighborRelation } from '../../../map/types.js';
+import { makeConfig } from '../../../services/__tests__/service-fakes.js';
+import type { AppConfig, CellOutputView } from '../../../services/types.js';
 import type { AppContext } from '../../../types.js';
 import { registerGetCellTool } from '../get-cell/get-cell.js';
 
@@ -20,7 +22,10 @@ function harness(inspection: CellInspection | null, serverTime = 0): Handler {
     };
     const wallet = { isReady: () => true, get: () => ({ getAddress: () => '0xMe' }) };
     const appConfig = {
-        load: async (): Promise<{ resources: Record<number, string> }> => ({ resources: { 3: 'Silica' } }),
+        load: async (): Promise<Pick<AppConfig, 'resources' | 'buildings'>> => ({
+            resources: { 3: 'Silica', 5: 'Iron', 6: 'Copper', 7: 'Water' },
+            buildings: makeConfig().buildings,
+        }),
     };
     const context = { mapReader: map, wallet, appConfig, logger: new NoopLogger() } as unknown as AppContext;
 
@@ -46,7 +51,7 @@ const inspection: CellInspection = {
         revealCount: 1,
         revealPending: false,
         resources: [{ resourceId: 3, deposit: '100', balance: '0', strength: 3, storage: null }],
-        building: { type: BuildingType.Mine, buildFinishAt: null },
+        building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: null, modeRecipeId: null },
         demolishFinishAt: null,
         transitFeeOverrides: { 3: '0.5' },
         saleFeeOverrides: { 3: 2.5 },
@@ -68,6 +73,14 @@ const inspection: CellInspection = {
     neighbors: [],
     distanceFromMine: 2,
 };
+
+async function outputsOf(target: CellInspection): Promise<Array<CellOutputView> | null> {
+    const result = await harness(target)({ tokenId: '7' });
+    const parsed = JSON.parse(result.content[1]?.text ?? '{}') as {
+        cell: { outputs: Array<CellOutputView> | null };
+    };
+    return parsed.cell.outputs;
+}
 
 describe('get_cell tool', () => {
     it('returns the inspection, with resource ids labeled from config', async () => {
@@ -96,6 +109,94 @@ describe('get_cell tool', () => {
     it('throws when the cell is not in the map', async () => {
         const handler = harness(null);
         await expect(handler({ tokenId: 'missing' })).rejects.toThrow(/not in the current map/i);
+    });
+
+    it('lists both of a switchable extractor’s resources — the one it is on free, the other priced', async () => {
+        const pointed: CellInspection = {
+            ...inspection,
+            cell: {
+                ...inspection.cell,
+                building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: 5, modeRecipeId: null },
+            },
+        };
+        const outputs = (await outputsOf(pointed)) ?? [];
+
+        expect(outputs).toEqual([
+            { resourceId: 5, resourceName: 'Iron', recipeId: null, cost: { kind: 'free', why: 'same_output' } },
+            { resourceId: 6, resourceName: 'Copper', recipeId: null, cost: { kind: 'paid', costCpu: '1' } },
+        ]);
+    });
+
+    it('lists a switchable crafter’s recipes, pricing against the recipe mode the map carries', async () => {
+        const fab: CellInspection = {
+            ...inspection,
+            cell: {
+                ...inspection.cell,
+                building: {
+                    type: BuildingType.WaferFab,
+                    buildFinishAt: null,
+                    modeResource: null,
+                    modeRecipeId: CraftRecipeId.SmeltSteel,
+                },
+            },
+        };
+        const outputs = (await outputsOf(fab)) ?? [];
+
+        expect(outputs).toEqual([
+            {
+                resourceId: null,
+                resourceName: null,
+                recipeId: CraftRecipeId.SmeltSteel,
+                cost: { kind: 'free', why: 'same_output' },
+            },
+            {
+                resourceId: null,
+                resourceName: null,
+                recipeId: CraftRecipeId.ForgeWcpu,
+                cost: { kind: 'paid', costCpu: '22' },
+            },
+        ]);
+    });
+
+    it('reports a fresh build’s first pick as free rather than as a price of zero', async () => {
+        const outputs = (await outputsOf(inspection)) ?? [];
+
+        expect(outputs.map((o) => o.cost)).toEqual([
+            { kind: 'free', why: 'first_pick' },
+            { kind: 'free', why: 'first_pick' },
+        ]);
+    });
+
+    it('carries no price field at all for a building that can never switch', async () => {
+        const pump: CellInspection = {
+            ...inspection,
+            cell: {
+                ...inspection.cell,
+                building: { type: BuildingType.PumpStation, buildFinishAt: null, modeResource: 7, modeRecipeId: null },
+            },
+        };
+        const outputs = (await outputsOf(pump)) ?? [];
+
+        expect(outputs).toEqual([
+            { resourceId: 7, resourceName: 'Water', recipeId: null, cost: { kind: 'free', why: 'same_output' } },
+        ]);
+        expect(JSON.stringify(outputs)).not.toMatch(/costCpu/);
+    });
+
+    it('offers a hub no outputs at all rather than an unpriceable one', async () => {
+        const hub: CellInspection = {
+            ...inspection,
+            cell: {
+                ...inspection.cell,
+                building: { type: BuildingType.Hub, buildFinishAt: null, modeResource: null, modeRecipeId: null },
+            },
+        };
+        expect(await outputsOf(hub)).toEqual([]);
+    });
+
+    it('offers no outputs on a bare cell', async () => {
+        const bare: CellInspection = { ...inspection, cell: { ...inspection.cell, building: null } };
+        expect(await outputsOf(bare)).toBeNull();
     });
 
     it('notes the demolition cooldown while the cell is still locked', async () => {

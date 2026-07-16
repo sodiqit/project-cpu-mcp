@@ -44,7 +44,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: '1',
                 revealCount: 1,
-                building: { type: BuildingType.Mine, buildFinishAt: null },
+                building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: null, modeRecipeId: null },
                 process: makeMiningProcess({ resource: 7 }),
                 resources: [
                     makeResource({
@@ -75,7 +75,7 @@ describe('buildAttentionReport', () => {
                 {
                     tokenId: '2',
                     revealCount: 1,
-                    building: { type: BuildingType.Mine, buildFinishAt: null },
+                    building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: null, modeRecipeId: null },
                     process: makeCraftProcess({ recipeId: 'refine' }),
                     resources: [
                         makeResource({
@@ -114,7 +114,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: '3',
                 revealCount: 1,
-                building: { type: BuildingType.Mine, buildFinishAt: null },
+                building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: null, modeRecipeId: null },
                 process: makeMiningProcess({ resource: 5, yieldPerCycle: 5 }),
                 resources: [
                     // Mined resource at 95%, still room for a whole cycle → warning, not a stall.
@@ -135,7 +135,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: '4',
                 revealCount: 1,
-                building: { type: BuildingType.Mine, buildFinishAt: null },
+                building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: null, modeRecipeId: null },
                 process: makeMiningProcess({ resource: 1 }),
                 resources: [
                     makeResource({
@@ -156,7 +156,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: '5',
                 revealCount: 1,
-                building: { type: BuildingType.Mine, buildFinishAt: 5 },
+                building: { type: BuildingType.Mine, buildFinishAt: 5, modeResource: null, modeRecipeId: null },
                 resources: [makeResource({ resourceId: 1, deposit: '0' })],
             },
         ]);
@@ -167,7 +167,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: '6',
                 revealCount: 1,
-                building: { type: BuildingType.Mine, buildFinishAt: 9_999_999 },
+                building: { type: BuildingType.Mine, buildFinishAt: 9_999_999, modeResource: null, modeRecipeId: null },
                 resources: [makeResource({ resourceId: 1, deposit: '0' })],
             },
         ]);
@@ -179,7 +179,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: '7',
                 revealCount: 1,
-                building: { type: BuildingType.Mine, buildFinishAt: 5 },
+                building: { type: BuildingType.Mine, buildFinishAt: 5, modeResource: null, modeRecipeId: null },
                 process: makeMiningProcess({ resource: 1, durationSec: 10, batches: 1, startAt: 0 }),
                 resources: [makeResource({ resourceId: 1, deposit: '1000' })],
             },
@@ -192,7 +192,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: '8',
                 revealCount: 1,
-                building: { type: BuildingType.Mine, buildFinishAt: 5 },
+                building: { type: BuildingType.Mine, buildFinishAt: 5, modeResource: null, modeRecipeId: null },
                 process: makeMiningProcess({ resource: 1, durationSec: 10, batches: 5, startAt: 0 }),
                 resources: [makeResource({ resourceId: 1, deposit: '1000' })],
             },
@@ -205,7 +205,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: '9',
                 revealCount: 1,
-                building: { type: BuildingType.Mine, buildFinishAt: 5 },
+                building: { type: BuildingType.Mine, buildFinishAt: 5, modeResource: null, modeRecipeId: null },
                 process: makeMiningProcess({ resource: 1, batches: 0, startAt: 0 }),
                 resources: [makeResource({ resourceId: 1, deposit: '1000' })],
             },
@@ -219,7 +219,7 @@ describe('buildAttentionReport', () => {
                 {
                     tokenId: '10',
                     revealCount: 1,
-                    building: { type: BuildingType.Mine, buildFinishAt: 5 },
+                    building: { type: BuildingType.Mine, buildFinishAt: 5, modeResource: null, modeRecipeId: null },
                     process: makeCraftProcess({ recipeId: 'refine', durationSec: 10, batches: 1, startAt: 0 }),
                     resources: [makeResource({ resourceId: 10, deposit: '1000' })],
                 },
@@ -259,7 +259,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: '9',
                 revealCount: 1,
-                building: { type: BuildingType.Hub, buildFinishAt: null },
+                building: { type: BuildingType.Hub, buildFinishAt: null, modeResource: null, modeRecipeId: null },
                 resources: [makeResource({ resourceId: 1, storage: makeStorage({ used: '500', cap: '500' }) })],
             },
         ]);
@@ -272,7 +272,7 @@ describe('buildAttentionReport', () => {
             {
                 tokenId: 'a',
                 revealCount: 1,
-                building: { type: BuildingType.Mine, buildFinishAt: null },
+                building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: null, modeRecipeId: null },
                 process: makeMiningProcess({ resource: 1 }),
                 resources: [
                     makeResource({

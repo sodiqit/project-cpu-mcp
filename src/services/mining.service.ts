@@ -1,27 +1,36 @@
-import { isAddress, parseEventLogs, type Address, type Log } from 'viem';
+import { isAddress, parseEventLogs, type Address, type Hash, type Log } from 'viem';
 
-import type {
-    AppConfig,
-    MiningClaimResult,
-    MiningServiceOptions,
-    MiningStatusResult,
-    StartMiningInput,
-    StartMiningResult,
-    IAppConfig,
-    ICellClient,
+import { MAX_APPROVE_AMOUNT } from './allowance.constants.js';
+import { decodeBurnedCpu, feeWeiOf } from './burn.utils.js';
+import {
+    type AppConfig,
+    type CatalogBuildingView,
+    type MiningClaimResult,
+    type MiningServiceOptions,
+    type MiningStatusResult,
+    type ModeCostView,
+    type ModeSwitchCharge,
+    type StartMiningInput,
+    type StartMiningResult,
+    type IAllowanceService,
+    type IAppConfig,
+    type ICellClient,
+    ModeCostKind,
 } from './types.js';
-import { BuildingKind, type BuildingView } from '../api/types.js';
+import { BuildingKind } from '../api/types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
+import { modeCost } from '../map/mode.utils.js';
 import { toSettleConfig } from '../map/reader.utils.js';
 import { cellProcessProgress } from '../map/settle.utils.js';
 import { CellProcessKind, type Cell, type RevealCellReader } from '../map/types.js';
-import { formatUnixSeconds, resourceLabel } from '../utils/format.utils.js';
+import { cpuFromWei, formatUnixSeconds, resourceLabel } from '../utils/format.utils.js';
 import type { IContractClient, WalletProvider } from '../wallet/types.js';
 
 export class MiningService {
     private readonly wallet: WalletProvider;
     private readonly appConfig: IAppConfig;
+    private readonly allowance: IAllowanceService;
     private readonly cellClient: ICellClient;
     private readonly contracts: IContractClient;
     private readonly mapReader: RevealCellReader;
@@ -30,6 +39,7 @@ export class MiningService {
     constructor(options: MiningServiceOptions) {
         this.wallet = options.wallet;
         this.appConfig = options.appConfig;
+        this.allowance = options.allowance;
         this.cellClient = options.cellClient;
         this.contracts = options.contracts;
         this.mapReader = options.mapReader;
@@ -141,15 +151,21 @@ export class MiningService {
 
         await this.mapReader.refresh();
         const state = await this.mapReader.readRevealCell(input.tokenId);
-        const target = this.resolveMiningTarget(config, state, input, wallet.getAddress());
+        const { target, view } = this.resolveMiningTarget(config, state, input, wallet.getAddress());
 
-        this.logger.info('starting mining', { tokenId: input.tokenId, target, batches: input.batches });
-        const txHash = await this.cellClient.startMining({
-            cell,
-            tokenId: BigInt(input.tokenId),
+        const tokenId = BigInt(input.tokenId);
+        const priced = await this.priceContext(config, cell, tokenId, view, state?.building?.modeResource ?? null);
+        const cost = modeCost(priced.view, priced.mode, target);
+        const approveTxHash = await this.approveFee(config, cell, cost);
+
+        this.logger.info('starting mining', {
+            tokenId: input.tokenId,
             target,
             batches: input.batches,
+            switchCost: cost,
+            switchCostExact: priced.exact,
         });
+        const txHash = await this.cellClient.startMining({ cell, tokenId, target, batches: input.batches });
         const confirmed = await this.contracts.confirm(txHash, 'Start mining');
         const started = this.decodeStarted(confirmed.logs, cell);
 
@@ -159,10 +175,53 @@ export class MiningService {
             yieldPerCycle: started?.yieldPerCycle ?? null,
             batches: started?.batches ?? null,
             durationSec: started?.durationSec ?? null,
+            modeSwitch: this.chargeOf(config, cost, priced.exact, confirmed.logs),
+            approveTxHash,
             txHash: confirmed.txHash,
             status: confirmed.status,
             blockNumber: confirmed.blockNumber,
         };
+    }
+
+    private async priceContext(
+        config: AppConfig,
+        cell: Address,
+        tokenId: bigint,
+        mapView: CatalogBuildingView,
+        mapMode: number | null,
+    ): Promise<{ mode: number | null; view: CatalogBuildingView | null; exact: boolean }> {
+        try {
+            const chain = await this.cellClient.readCellView(cell, tokenId);
+            const view = config.buildings.find((b) => b.onChainId === chain.buildingType) ?? null;
+            return { mode: chain.modeResource === 0 ? null : chain.modeResource, view, exact: true };
+        } catch (error) {
+            this.logger.warn('could not read the cell mode on-chain — pricing the switch off the map', {
+                tokenId: tokenId.toString(),
+                error,
+            });
+            return { mode: mapMode, view: mapView, exact: false };
+        }
+    }
+
+    private async approveFee(config: AppConfig, cell: Address, cost: ModeCostView): Promise<Hash | null> {
+        if (cost.kind === ModeCostKind.Free) {
+            return null;
+        }
+        const cpuToken = config.contracts.cpuToken;
+        if (!isAddress(cpuToken, { strict: false })) {
+            throw new Error(`$CPU token is not configured for network ${config.network}; cannot pay to switch.`);
+        }
+        const needed = cost.kind === ModeCostKind.Paid ? feeWeiOf(cost) : MAX_APPROVE_AMOUNT;
+        return this.allowance.ensureAllowance(cpuToken, cell, needed);
+    }
+
+    private chargeOf(config: AppConfig, cost: ModeCostView, exact: boolean, logs: Array<Log>): ModeSwitchCharge {
+        const cpuToken = config.contracts.cpuToken;
+        if (!isAddress(cpuToken, { strict: false })) {
+            return { cost, exact, burnedCpu: null };
+        }
+        const burned = decodeBurnedCpu(logs, cpuToken, this.wallet.get().getAddress());
+        return { cost, exact, burnedCpu: cpuFromWei(burned.toString()) };
     }
 
     private resolveMiningTarget(
@@ -170,7 +229,7 @@ export class MiningService {
         state: Cell | null,
         input: StartMiningInput,
         address: string,
-    ): number {
+    ): { target: number; view: CatalogBuildingView } {
         if (state === null) {
             throw new Error(`Cell ${input.tokenId} is not in the current map; reveal it or wait for the map to sync.`);
         }
@@ -209,10 +268,10 @@ export class MiningService {
                     `(it may be depleted or was never revealed here).`,
             );
         }
-        return target;
+        return { target, view };
     }
 
-    private pickTarget(view: BuildingView, requested: number | null, config: AppConfig): number {
+    private pickTarget(view: CatalogBuildingView, requested: number | null, config: AppConfig): number {
         const minable = view.minableResources;
         const mines = () => minable.map((id) => resourceLabel(config.resources, id)).join(', ');
 
