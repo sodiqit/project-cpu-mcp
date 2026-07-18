@@ -305,6 +305,8 @@ export enum AttentionReason {
     DeliveryReady = 'delivery_ready',
     Unbuilt = 'unbuilt',
     DemolishCooldown = 'demolish_cooldown',
+    LotFrozen = 'lot_frozen',
+    LotAtRisk = 'lot_at_risk',
 }
 
 export interface AttentionStorageBreakdown {
@@ -326,6 +328,8 @@ export interface AttentionItem {
     depositRemaining: string | null;
     deliveryId: string | null;
     arrivalAt: number | null;
+    lotId: string | null;
+    message: string | null;
 }
 
 export interface AttentionReport {

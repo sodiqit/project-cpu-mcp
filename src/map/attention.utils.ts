@@ -25,6 +25,8 @@ const REASON_SEVERITY: Record<AttentionReason, AttentionSeverity> = {
     [AttentionReason.DeliveryReady]: Warning,
     [AttentionReason.Unbuilt]: Info,
     [AttentionReason.DemolishCooldown]: Info,
+    [AttentionReason.LotFrozen]: Warning,
+    [AttentionReason.LotAtRisk]: Info,
 };
 
 const SEVERITY_RANK: Record<AttentionSeverity, number> = { [Critical]: 0, [Warning]: 1, [Info]: 2 };
@@ -56,6 +58,8 @@ export function attentionItem(
         depositRemaining: null,
         deliveryId: null,
         arrivalAt: null,
+        lotId: null,
+        message: null,
         ...extra,
     };
 }
