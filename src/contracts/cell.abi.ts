@@ -124,7 +124,7 @@ export const CELL_ABI = [
         name: 'withdrawCpu',
         inputs: [
             { name: 'tokenId', type: 'uint256', internalType: 'uint256' },
-            { name: 'amount', type: 'uint64', internalType: 'uint64' },
+            { name: 'amount', type: 'uint256', internalType: 'uint256' },
         ],
         outputs: [],
         stateMutability: 'nonpayable',
@@ -217,5 +217,15 @@ export const CELL_ABI = [
             { name: 'cpuMinted', type: 'uint256', indexed: false, internalType: 'uint256' },
         ],
         anonymous: false,
+    },
+    {
+        type: 'error',
+        name: 'MintClosed',
+        inputs: [],
+    },
+    {
+        type: 'error',
+        name: 'AmountNotWholeUnit',
+        inputs: [],
     },
 ] as const;

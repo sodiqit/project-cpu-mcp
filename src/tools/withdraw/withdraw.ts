@@ -11,9 +11,13 @@ export function registerWithdrawTool(server: McpServer, context: AppContext): vo
         async (args) => {
             const result = await context.withdraw.withdraw({ tokenId: args.tokenId, amount: args.amount });
 
-            const header =
-                `Withdrew from cell ${result.tokenId}: minted ${result.amount} $CPU to your wallet — withdraw tx ` +
-                `${result.txHash} confirmed in block ${result.blockNumber}. Check it with get_balance.`;
+            const remainder = (BigInt(result.requested) - BigInt(result.executed)).toString();
+            const header = result.partial
+                ? `Withdrew from cell ${result.tokenId}: requested ${result.requested} but the $CPU emission budget ` +
+                  `capped it — minted ${result.executed} $CPU to your wallet, ${remainder} wCPU stays in the cell. ` +
+                  `Withdraw tx ${result.txHash} confirmed in block ${result.blockNumber}. Check it with get_balance.`
+                : `Withdrew from cell ${result.tokenId}: minted ${result.executed} $CPU to your wallet — withdraw tx ` +
+                  `${result.txHash} confirmed in block ${result.blockNumber}. Check it with get_balance.`;
 
             return {
                 content: [

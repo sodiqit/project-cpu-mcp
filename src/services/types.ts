@@ -179,7 +179,6 @@ export interface ClaimParams {
 export interface WithdrawCpuParams {
     cell: Address;
     tokenId: bigint;
-    /** Whole wCPU units to convert to $CPU (on-chain `uint64`). */
     amount: bigint;
 }
 
@@ -294,8 +293,9 @@ export interface WithdrawInput {
 /** A confirmed withdraw — the on-chain mint of $CPU against a cell's debited wCPU (1:1). */
 export interface WithdrawResult {
     tokenId: string;
-    /** Whole wCPU units debited from the cell / $CPU units minted to the wallet, 1:1. */
-    amount: string;
+    requested: string;
+    executed: string;
+    partial: boolean;
     txHash: Hash;
     status: TxStatus;
     blockNumber: string;
