@@ -747,7 +747,7 @@ export interface CreateLotResult {
     resourceId: number;
     value: string;
     pricePerUnit: string;
-    saleFeePercent: number;
+    maxSaleFeePercent: number;
     deliveryId: string;
     arrivalAt: number;
     /** Transit fee quoted for the routing, in $CPU (decimal). */
@@ -816,6 +816,9 @@ export interface TradeQuote {
     total: string;
     totalDistance: number | null;
     arrivalAt: number | null;
+    frozen: boolean;
+    saleFeePercent: number;
+    maxSaleFeePercent: number;
 }
 
 // ---- Swap (Uniswap v4 ETH/$CPU pool) ----

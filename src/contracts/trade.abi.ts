@@ -68,7 +68,7 @@ export const TRADE_ABI = [
             { name: 'resource', type: 'uint16', indexed: false, internalType: 'uint16' },
             { name: 'value', type: 'uint128', indexed: false, internalType: 'uint128' },
             { name: 'pricePerUnit', type: 'uint128', indexed: false, internalType: 'uint128' },
-            { name: 'saleFeeBp', type: 'uint16', indexed: false, internalType: 'uint16' },
+            { name: 'maxSaleFeeBp', type: 'uint16', indexed: false, internalType: 'uint16' },
         ],
         anonymous: false,
     },

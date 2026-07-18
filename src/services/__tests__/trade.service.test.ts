@@ -118,7 +118,7 @@ function tradeLog(topics: unknown, data: unknown): Log {
     } as unknown as Log;
 }
 
-function createdLog(args: { lotId: bigint; hub: bigint; saleFeeBp: number }): Log {
+function createdLog(args: { lotId: bigint; hub: bigint; maxSaleFeeBp: number }): Log {
     const topics = encodeEventTopics({
         abi: TRADE_ABI,
         eventName: 'LotCreated',
@@ -129,9 +129,9 @@ function createdLog(args: { lotId: bigint; hub: bigint; saleFeeBp: number }): Lo
             { name: 'resource', type: 'uint16' },
             { name: 'value', type: 'uint128' },
             { name: 'pricePerUnit', type: 'uint128' },
-            { name: 'saleFeeBp', type: 'uint16' },
+            { name: 'maxSaleFeeBp', type: 'uint16' },
         ],
-        [3, 100n, parseEther('0.5'), args.saleFeeBp],
+        [3, 100n, parseEther('0.5'), args.maxSaleFeeBp],
     );
     return tradeLog(topics, data);
 }
@@ -240,6 +240,7 @@ class FakeTradeClient implements ITradeClient {
     constructor(
         private readonly liveSaleFeeBp: number = 0,
         private readonly createError: Error | null = null,
+        private readonly buyError: Error | null = null,
     ) {}
     async createLot(p: CreateLotParams): Promise<Hash> {
         this.creates.push(p);
@@ -250,6 +251,9 @@ class FakeTradeClient implements ITradeClient {
     }
     async buy(p: BuyLotParams): Promise<Hash> {
         this.buys.push(p);
+        if (this.buyError !== null) {
+            throw this.buyError;
+        }
         return BUY_HASH;
     }
     async cancel(p: CancelLotParams): Promise<Hash> {
@@ -298,6 +302,7 @@ type Options = Partial<{
     response: { status: number; data: unknown };
     liveSaleFeeBp: number;
     createError: Error | null;
+    buyError: Error | null;
 }>;
 
 function makeTrade(opts: Options = {}): {
@@ -313,7 +318,7 @@ function makeTrade(opts: Options = {}): {
     const wallet = new FakeWallet(opts.walletChainId ?? 1);
     const allowance = new FakeAllowance(opts.approve ?? null);
     const contracts = new FakeContractClient(opts.confirmLogs ?? [], opts.reverts ?? false);
-    const tradeClient = new FakeTradeClient(opts.liveSaleFeeBp ?? 0, opts.createError ?? null);
+    const tradeClient = new FakeTradeClient(opts.liveSaleFeeBp ?? 0, opts.createError ?? null, opts.buyError ?? null);
     const transportClient = new FakeTransportClient(
         opts.quote ?? { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
         opts.quoteError ?? null,
@@ -332,11 +337,11 @@ function makeTrade(opts: Options = {}): {
 }
 
 describe('TradeService.createLot', () => {
-    it('lists an own-cell route, freezes the live rate as tolerance, and decodes the frozen fee', async () => {
+    it('lists an own-cell route, locks the live rate in as tolerance, and decodes it back', async () => {
         const h = makeTrade({
             quote: { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
             liveSaleFeeBp: 250,
-            confirmLogs: [createdLog({ lotId: 7n, hub: 20n, saleFeeBp: 250 }), scheduledLog(123n, 1704n)],
+            confirmLogs: [createdLog({ lotId: 7n, hub: 20n, maxSaleFeeBp: 250 }), scheduledLog(123n, 1704n)],
         });
 
         const result = await h.service.createLot(CREATE_INPUT);
@@ -354,7 +359,7 @@ describe('TradeService.createLot', () => {
         });
         expect(result.lotId).toBe('7');
         expect(result.hubTokenId).toBe('20');
-        expect(result.saleFeePercent).toBe(2.5);
+        expect(result.maxSaleFeePercent).toBe(2.5);
         expect(result.deliveryId).toBe('123');
         expect(result.fee).toBe('0');
         expect(result.txHash).toBe(CREATE_HASH);
@@ -363,14 +368,14 @@ describe('TradeService.createLot', () => {
     it('passes an explicit tolerance through and does not read the live rate', async () => {
         const h = makeTrade({
             liveSaleFeeBp: 999,
-            confirmLogs: [createdLog({ lotId: 7n, hub: 20n, saleFeeBp: 100 }), scheduledLog(123n, 1704n)],
+            confirmLogs: [createdLog({ lotId: 7n, hub: 20n, maxSaleFeeBp: 500 }), scheduledLog(123n, 1704n)],
         });
 
         const result = await h.service.createLot({ ...CREATE_INPUT, maxSaleFeePercent: 5 });
 
         expect(h.tradeClient.saleFeeReads).toHaveLength(0);
         expect(h.tradeClient.creates[0]?.maxSaleFeeBp).toBe(500);
-        expect(result.saleFeePercent).toBe(1);
+        expect(result.maxSaleFeePercent).toBe(5);
     });
 
     it('rejects a sub-basis-point tolerance before sending', async () => {
@@ -394,7 +399,7 @@ describe('TradeService.createLot', () => {
         const h = makeTrade({
             quote: { totalFee: 1_000n, totalDistance: 4n, arrivalAt: 1704n },
             approve: APPROVE_HASH,
-            confirmLogs: [createdLog({ lotId: 7n, hub: 20n, saleFeeBp: 0 }), scheduledLog(123n, 1704n)],
+            confirmLogs: [createdLog({ lotId: 7n, hub: 20n, maxSaleFeeBp: 0 }), scheduledLog(123n, 1704n)],
         });
 
         const result = await h.service.createLot(CREATE_INPUT);
@@ -529,6 +534,20 @@ describe('TradeService.buyLot', () => {
         expect(result.approveTransitTxHash).toBeNull();
         expect(result.approveSaleTxHash).toBe(APPROVE_HASH);
     });
+
+    it('sends the buy on a frozen lot and enriches the SaleFeeExceedsMax revert with the next moves', async () => {
+        const h = makeTrade({
+            response: { status: 200, data: lotView({ id: '7', saleFeeBp: 600, maxSaleFeeBp: 500 }) },
+            quote: { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
+            approve: APPROVE_HASH,
+            buyError: new Error('Execution reverted: SaleFeeExceedsMax()'),
+        });
+
+        await expect(h.service.buyLot({ lotId: '7', chain: [20, 21], value: '10' })).rejects.toThrow(
+            /this lot is frozen.*seller can\s+cancel the lot fee-free/is,
+        );
+        expect(h.tradeClient.buys).toHaveLength(1);
+    });
 });
 
 describe('TradeService.cancelLot', () => {
@@ -612,6 +631,28 @@ describe('TradeService.quoteBuy', () => {
         expect(result.pricePerUnit).toBe('2');
         expect(result.sale).toBe('40');
         expect(result.total).toBe('40');
+    });
+
+    it('flags a frozen lot in the quote and still returns the estimate (warns, does not refuse)', async () => {
+        const h = makeTrade({
+            response: {
+                status: 200,
+                data: lotView({
+                    id: '7',
+                    pricePerUnit: parseEther('0.5').toString(),
+                    remaining: '100',
+                    saleFeeBp: 600,
+                    maxSaleFeeBp: 500,
+                }),
+            },
+        });
+
+        const result = await h.service.quoteBuy({ lotId: '7', value: '10', chain: null });
+
+        expect(result.frozen).toBe(true);
+        expect(result.saleFeePercent).toBe(6);
+        expect(result.maxSaleFeePercent).toBe(5);
+        expect(result.sale).toBe('5');
     });
 });
 
