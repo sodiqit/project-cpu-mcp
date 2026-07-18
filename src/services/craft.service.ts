@@ -8,6 +8,7 @@ import {
     type CatalogBuildingView,
     type CraftClaimResult,
     type CraftInput,
+    type CraftOpexCharge,
     type CraftOutput,
     type CraftServiceOptions,
     type CraftStartResult,
@@ -74,14 +75,18 @@ export class CraftService {
         const targetRecipe = recipeNameToUint64(input.recipeId);
         const mapView = config.buildings.find((b) => b.type === state?.building?.type) ?? null;
         const priced = await this.priceContext(config, cell, tokenId, mapView, state?.building?.modeRecipeId ?? null);
+        const opex = this.opexOf(priced.view, input.recipeId, input.batches);
+        const expectedBaseWei = recipeCostWei + opex.wei;
         const cost = modeCost(priced.view, priced.mode, targetRecipe);
-        const approveTxHash = await this.approve(config, cell, recipeCostWei, cost);
+        const approveTxHash = await this.approve(config, cell, expectedBaseWei, cost);
 
         this.logger.info('starting craft', {
             tokenId: input.tokenId,
             recipeId: input.recipeId,
             batches: input.batches,
             costCpu: cpuFromWei(recipeCostWei.toString()),
+            opexCpu: opex.charge.costCpu,
+            opexServed: opex.charge.served,
             switchCost: cost,
             switchCostExact: priced.exact,
         });
@@ -98,12 +103,27 @@ export class CraftService {
             recipeId: input.recipeId,
             batches: input.batches,
             costCpu: cpuFromWei(recipeCostWei.toString()),
-            modeSwitch: this.chargeOf(config, cost, priced.exact, confirmed.logs, recipeCostWei),
+            opex: opex.charge,
+            totalCpu: cpuFromWei(expectedBaseWei.toString()),
+            modeSwitch: this.chargeOf(config, cost, priced.exact, confirmed.logs, expectedBaseWei),
             approveTxHash,
             txHash: confirmed.txHash,
             status: confirmed.status,
             blockNumber: confirmed.blockNumber,
         };
+    }
+
+    private opexOf(
+        view: CatalogBuildingView | null,
+        recipeId: CraftRecipeId,
+        batches: number,
+    ): { wei: bigint; charge: CraftOpexCharge } {
+        const perBatch = view?.recipeOpexCpu?.[recipeId] ?? null;
+        if (perBatch === null) {
+            return { wei: 0n, charge: { served: false, costCpu: '0' } };
+        }
+        const wei = parseEther(perBatch) * BigInt(batches);
+        return { wei, charge: { served: true, costCpu: cpuFromWei(wei.toString()) } };
     }
 
     private async priceContext(
@@ -130,10 +150,10 @@ export class CraftService {
     private async approve(
         config: AppConfig,
         cell: Address,
-        recipeCostWei: bigint,
+        expectedBaseWei: bigint,
         cost: ModeCostView,
     ): Promise<Hash | null> {
-        const totalWei = recipeCostWei + feeWeiOf(cost);
+        const totalWei = expectedBaseWei + feeWeiOf(cost);
         if (totalWei === 0n && cost.kind !== ModeCostKind.Unknown) {
             return null;
         }
@@ -147,14 +167,14 @@ export class CraftService {
         cost: ModeCostView,
         exact: boolean,
         logs: Array<Log>,
-        recipeCostWei: bigint,
+        expectedBaseWei: bigint,
     ): ModeSwitchCharge {
         const cpuToken = config.contracts.cpuToken;
         if (!isAddress(cpuToken, { strict: false })) {
             return { cost, exact, burnedCpu: null };
         }
         const burned = decodeBurnedCpu(logs, cpuToken, this.wallet.get().getAddress());
-        return { cost, exact, burnedCpu: cpuFromWei((burned - recipeCostWei).toString()) };
+        return { cost, exact, burnedCpu: cpuFromWei((burned - expectedBaseWei).toString()) };
     }
 
     async claim(tokenId: string): Promise<CraftClaimResult> {

@@ -25,9 +25,20 @@ export function summarizeRecipes(recipes: Array<RecipeView>, resources: Resource
         .join('\n');
 }
 
+function describeCraftCost(r: CraftStartResult): string {
+    const base = r.costCpu === '0' ? 'free' : `${r.costCpu} $CPU`;
+    if (!r.opex.served) {
+        return `${base}, plus a per-recipe opex the chain adds on top (not priced here)`;
+    }
+    if (r.opex.costCpu === '0') {
+        return base;
+    }
+    return `${r.costCpu} $CPU base + ${r.opex.costCpu} $CPU opex = ${r.totalCpu} $CPU`;
+}
+
 export function summarizeCraftStart(r: CraftStartResult): string {
     const approve = r.approveTxHash !== null ? `approve tx ${r.approveTxHash}, ` : '';
-    const cost = r.costCpu === '0' ? 'free' : `${r.costCpu} $CPU`;
+    const cost = describeCraftCost(r);
     return (
         `Craft started on cell ${r.tokenId}: ${r.batches}× ${r.recipeId} (${cost}). ${approve}craft tx ${r.txHash} ` +
         `confirmed in block ${r.blockNumber}. Batches mature over time — check get_craft_status ${r.tokenId} and bank ` +

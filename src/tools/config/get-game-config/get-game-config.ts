@@ -16,7 +16,15 @@ export function registerGetGameConfigTool(server: McpServer, context: AppContext
                     .join(', ') || 'none';
             const buildings =
                 config.buildings
-                    .map((b) => `${b.name} (${b.kind}, build ${b.buildCost} $CPU, demolish ${b.demolishCost.cpu} $CPU)`)
+                    .map((b) => {
+                        const opex =
+                            b.recipeOpexCpu !== null
+                                ? `, opex ${Object.entries(b.recipeOpexCpu)
+                                      .map(([recipeId, costCpu]) => `${recipeId}:${costCpu}`)
+                                      .join('/')} $CPU/batch`
+                                : '';
+                        return `${b.name} (${b.kind}, build ${b.buildCost} $CPU, demolish ${b.demolishCost.cpu} $CPU${opex})`;
+                    })
                     .join(', ') || 'none';
             const reveal = config.reveal.firstFree
                 ? `first reveal free, re-reveal ${config.reveal.reRevealCost} $CPU`

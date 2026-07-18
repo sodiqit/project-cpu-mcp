@@ -54,6 +54,23 @@ const CONFIG: AppConfig = {
             effects: { cycleTimeBp: 10000, extractionShareBp: 10000, inputEfficiency: [] },
             recipeOpexCpu: null,
         },
+        {
+            type: BuildingType.SteelMill,
+            onChainId: 11,
+            name: 'Steel Mill',
+            kind: BuildingKind.Crafter,
+            tier: 2,
+            buildCost: '20',
+            buildTimeSec: 900,
+            buildInputs: [],
+            demolishCost: { cpu: '10', inputs: [] },
+            modeSwitchCost: null,
+            modeSwitch: { kind: ModeSwitchKind.Impossible },
+            minableResources: [],
+            recipes: [CraftRecipeId.SmeltSteel],
+            effects: { cycleTimeBp: 10000, extractionShareBp: 10000, inputEfficiency: [] },
+            recipeOpexCpu: { smelt_steel: '2' },
+        },
     ],
     reveal: { firstFree: true, reRevealCost: '1000' },
     transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2, defaultMoveFeePerUnit: '0.1' },
@@ -86,6 +103,9 @@ describe('get_game_config tool', () => {
         const header = result.content[0]?.text ?? '';
         expect(header).toMatch(/Network ethereum \(chainId 1\)/);
         expect(header).toMatch(/Mine \(extractor, build 5 \$CPU, demolish 2\.5 \$CPU\)/);
+        expect(header).toMatch(
+            /Steel Mill \(crafter, build 20 \$CPU, demolish 10 \$CPU, opex smelt_steel:2 \$CPU\/batch\)/,
+        );
         expect(header).toMatch(/first reveal free, re-reveal 1000 \$CPU/);
         expect(header).toMatch(/1 recipe\(s\)/);
         expect(header).toMatch(/5:Iron/);

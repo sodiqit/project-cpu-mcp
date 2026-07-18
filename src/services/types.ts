@@ -568,12 +568,19 @@ export interface CraftInput {
     batches: number;
 }
 
+export interface CraftOpexCharge {
+    served: boolean;
+    costCpu: string;
+}
+
 export interface CraftStartResult {
     tokenId: string;
     recipeId: CraftRecipeId;
     batches: number;
     /** Total $CPU cost for all batches (decimal); "0" for a free recipe. */
     costCpu: string;
+    opex: CraftOpexCharge;
+    totalCpu: string;
     modeSwitch: ModeSwitchCharge;
     approveTxHash: Hash | null;
     txHash: Hash;
