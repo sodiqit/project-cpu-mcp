@@ -90,9 +90,11 @@ describe('get_game_config tool', () => {
         expect(header).toMatch(/1 recipe\(s\)/);
         expect(header).toMatch(/5:Iron/);
         expect(header).toMatch(/cell 0x5555555555555555555555555555555555555555/);
-        expect(header).toMatch(
-            /1% sale burn, sale fee up to 50% \(structural bound — a hub owner can set any rate up to it\), default transit fee 0.1 \$CPU\/u/,
+        expect(header).toContain('1% sale burn');
+        expect(header).toContain(
+            'sale fee up to 100% (the structural bound — a hub owner can set any rate up to this maximum)',
         );
+        expect(header).toContain('default transit fee 0.1 $CPU/u');
         expect(header).toMatch(/an active hub multiplies a cell's storage cap by 10x/);
 
         const json = JSON.parse(result.content[1]?.text ?? '{}') as AppConfig;

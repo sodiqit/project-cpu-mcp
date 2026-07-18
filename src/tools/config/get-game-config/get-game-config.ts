@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { GET_GAME_CONFIG_DESCRIPTION } from './constants.js';
+import { GET_GAME_CONFIG_DESCRIPTION, SALE_FEE_STRUCTURAL_BOUND_PERCENT } from './constants.js';
 import type { AppContext } from '../../../types.js';
 
 export function registerGetGameConfigTool(server: McpServer, context: AppContext): void {
@@ -22,8 +22,8 @@ export function registerGetGameConfigTool(server: McpServer, context: AppContext
                 ? `first reveal free, re-reveal ${config.reveal.reRevealCost} $CPU`
                 : `reveal ${config.reveal.reRevealCost} $CPU`;
             const trade =
-                `${config.trade.saleBurnPercent}% sale burn, sale fee up to ${config.trade.maxSaleFeePercent}% ` +
-                `(structural bound — a hub owner can set any rate up to it), default transit fee ` +
+                `${config.trade.saleBurnPercent}% sale burn, sale fee up to ${SALE_FEE_STRUCTURAL_BOUND_PERCENT}% ` +
+                `(the structural bound — a hub owner can set any rate up to this maximum), default transit fee ` +
                 `${config.transport.defaultMoveFeePerUnit} $CPU/u`;
             const storage = `an active hub multiplies a cell's storage cap by ${config.storage.hubStorageMultiplier}x`;
             const header =
