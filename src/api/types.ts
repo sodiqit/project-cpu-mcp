@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import type { ILogger } from '../logger/types.js';
 import type { SessionManager } from '../session/manager.js';
 
@@ -129,8 +131,8 @@ export interface DemolishCostView {
 }
 
 export interface BuildingEffectsView {
-    cycleTimePercent: number;
-    veinDrainPercent: number;
+    cycleTimeBp: number;
+    extractionShareBp: number;
     inputEfficiency: Array<{ resourceId: number; percent: number }>;
 }
 
@@ -155,6 +157,7 @@ export interface BuildingView {
     /** Recipe ids a crafter runs; empty for extractors/hub. */
     recipes: Array<CraftRecipeId>;
     effects: BuildingEffectsView;
+    recipeOpexCpu: Record<string, string> | null;
 }
 
 /** Reveal-cost params — the first reveal of a cell is free; re-revealing a depleted cell costs `reRevealCost`. */
@@ -195,6 +198,35 @@ export interface AppConfigResponse {
     trade: TradeFeeView;
     storage: StorageConfigView;
 }
+
+export const buildingEffectsSchema = z
+    .object({
+        cycleTimeBp: z.number(),
+        extractionShareBp: z.number(),
+        inputEfficiency: z.array(z.object({ resourceId: z.number(), percent: z.number() })),
+    })
+    .passthrough();
+
+export const buildingConfigSchema = z
+    .object({
+        effects: buildingEffectsSchema,
+        recipeOpexCpu: z.record(z.string(), z.string()).nullable().optional(),
+    })
+    .passthrough();
+
+export const appConfigResponseSchema = z
+    .object({
+        chainId: z.number(),
+        contracts: z.object({}).passthrough(),
+        storage: z.object({ hubStorageMultiplier: z.number() }).passthrough(),
+        resources: z.record(z.string(), z.string()).optional(),
+        recipes: z.array(z.object({}).passthrough()).optional(),
+        buildings: z.array(buildingConfigSchema).optional(),
+        reveal: z.object({}).passthrough().optional(),
+        transport: z.object({}).passthrough().optional(),
+        trade: z.object({}).passthrough().optional(),
+    })
+    .passthrough();
 
 /** The building types a cell can hold — 6 tier-1 extractors, tier-2..5 crafters, and the Hub. */
 export enum BuildingType {

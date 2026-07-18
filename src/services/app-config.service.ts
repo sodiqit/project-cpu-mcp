@@ -1,7 +1,7 @@
 import { toModeSwitchView } from './app-config.utils.js';
 import type { AppConfig, AppConfigServiceOptions, IAppConfig } from './types.js';
 import type { ApiClient } from '../api/client.js';
-import { type AppConfigResponse, HttpStatus } from '../api/types.js';
+import { type AppConfigResponse, appConfigResponseSchema, HttpStatus } from '../api/types.js';
 import type { Network } from '../config/types.js';
 import type { ILogger } from '../logger/types.js';
 import { bpToPercent } from '../utils/format.utils.js';
@@ -30,6 +30,8 @@ export class AppConfigService implements IAppConfig {
             throw new Error(`Failed to load chain config (HTTP ${status}) for network ${this.network}.`);
         }
 
+        appConfigResponseSchema.parse(data);
+
         // Addresses ship empty until their contracts are deployed; each paid action validates the address it
         // needs (`isAddress`) before sending, so read-only tools keep working before a deployment lands.
         const config: AppConfig = {
@@ -52,6 +54,7 @@ export class AppConfigService implements IAppConfig {
                 ...b,
                 demolishCost: b.demolishCost ?? { cpu: '0', inputs: [] },
                 modeSwitch: toModeSwitchView(b.modeSwitchCost),
+                recipeOpexCpu: b.recipeOpexCpu ?? null,
             })),
             reveal: data.reveal ?? { firstFree: true, reRevealCost: '0' },
             transport: { ...data.transport, defaultMoveFeePerUnit: data.transport?.defaultMoveFeePerUnit ?? '0' },

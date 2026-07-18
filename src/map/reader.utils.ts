@@ -11,8 +11,8 @@ export function craftOutputsByRecipe(config: AppConfig): Record<string, Array<Pr
     return Object.fromEntries(config.recipes.map((r): [string, Array<ProcessOutput>] => [r.id, r.outputs]));
 }
 
-export function veinDrainPercentByBuilding(config: AppConfig): Record<string, number> {
-    return Object.fromEntries(config.buildings.map((b): [string, number] => [b.type, b.effects.veinDrainPercent]));
+export function extractionShareBpByBuilding(config: AppConfig): Record<string, number> {
+    return Object.fromEntries(config.buildings.map((b): [string, number] => [b.type, b.effects.extractionShareBp]));
 }
 
 export function toProjectionConfig(config: AppConfig): CellProjectionConfig {
@@ -26,6 +26,6 @@ export function toProjectionConfig(config: AppConfig): CellProjectionConfig {
 export function toSettleConfig(config: AppConfig): SettleConfig {
     return {
         craftOutputsByRecipe: craftOutputsByRecipe(config),
-        veinDrainPercentByBuilding: veinDrainPercentByBuilding(config),
+        extractionShareBpByBuilding: extractionShareBpByBuilding(config),
     };
 }

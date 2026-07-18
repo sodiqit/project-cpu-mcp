@@ -27,4 +27,4 @@ export const MAX_AROUND_RADIUS = 10;
 // A capped warehouse at or above this fill percentage is flagged as "about to stall" by get_attention.
 export const WAREHOUSE_NEAR_FULL_PCT = 90;
 
-export const FULL_VEIN_DRAIN_PERCENT = 100;
+export const BASIS_POINTS = 10_000;

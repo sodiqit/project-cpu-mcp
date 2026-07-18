@@ -57,7 +57,8 @@ function makeResponse(overrides: Partial<AppConfigResponse> = {}): AppConfigResp
                 modeSwitchCost: '1',
                 minableResources: [5, 6],
                 recipes: [],
-                effects: { cycleTimePercent: 100, veinDrainPercent: 100, inputEfficiency: [] },
+                effects: { cycleTimeBp: 10000, extractionShareBp: 10000, inputEfficiency: [] },
+                recipeOpexCpu: null,
             },
         ],
         reveal: { firstFree: true, reRevealCost: '1000' },
@@ -189,5 +190,29 @@ describe('AppConfigService', () => {
         const { storage: _storage, ...withoutStorage } = makeResponse();
         const api = new FakeApi({ status: 200, data: withoutStorage });
         await expect(makeService(api).load()).rejects.toThrow();
+    });
+
+    it('rejects a pre-rename config whose building effects lack the required extraction share', async () => {
+        const base = makeResponse();
+        const [mine] = base.buildings;
+        const { effects, ...rest } = mine as BuildingView;
+        const { extractionShareBp: _dropped, ...preRenameEffects } = effects;
+        const stale = { ...rest, effects: preRenameEffects };
+        const api = new FakeApi({ status: 200, data: { ...base, buildings: [stale] } });
+        await expect(makeService(api).load()).rejects.toThrow();
+    });
+
+    it('accepts recipeOpexCpu as a served map and normalises its absence to null', async () => {
+        const base = makeResponse();
+        const [mine] = base.buildings;
+        const served = { ...(mine as BuildingView), recipeOpexCpu: { smelt_steel: '0.5' } };
+        const withMap = await makeService(new FakeApi({ status: 200, data: { ...base, buildings: [served] } })).load();
+        expect(withMap.buildings[0]?.recipeOpexCpu).toEqual({ smelt_steel: '0.5' });
+
+        const { recipeOpexCpu: _drop, ...withoutOpex } = mine as BuildingView;
+        const withNull = await makeService(
+            new FakeApi({ status: 200, data: { ...base, buildings: [withoutOpex] } }),
+        ).load();
+        expect(withNull.buildings[0]?.recipeOpexCpu).toBeNull();
     });
 });
