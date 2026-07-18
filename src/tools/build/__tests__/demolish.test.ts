@@ -48,6 +48,7 @@ function result(overrides: Partial<DemolishResult> = {}): DemolishResult {
         buildingType: BuildingType.Mine,
         cpuBurned: '2.5',
         inputsConsumed: [],
+        rebuildUnlockAt: 1_700_000_000,
         rebuildCooldownSec: 120,
         approveTxHash: null,
         txHash: `0x${'d'.repeat(64)}`,
@@ -58,12 +59,18 @@ function result(overrides: Partial<DemolishResult> = {}): DemolishResult {
 }
 
 describe('demolish tool', () => {
-    it('reports the burned $CPU and rebuild cooldown', async () => {
+    it('reports the burned $CPU and the exact rebuild unlock time from the event', async () => {
         const header = (await harness(result())({ tokenId: '42' })).content[0]?.text ?? '';
         expect(header).toMatch(/Demolished the mine on cell 42/);
         expect(header).toMatch(/burned 2\.5 \$CPU/);
-        expect(header).toMatch(/locked from rebuilding for ~120s/);
+        expect(header).toMatch(/locked from rebuilding until .+ \(~120s\)/);
         expect(header).toMatch(/block 100/);
+    });
+
+    it('degrades to a soft note when the receipt carried no demolish finish time', async () => {
+        const outcome = result({ rebuildUnlockAt: null, rebuildCooldownSec: null });
+        const header = (await harness(outcome)({ tokenId: '42' })).content[0]?.text ?? '';
+        expect(header).toMatch(/locked from rebuilding; the exact demolishFinishAt settles on the map shortly/);
     });
 
     it('names the warehouse resources it consumed', async () => {

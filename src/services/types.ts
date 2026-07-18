@@ -267,8 +267,8 @@ export interface DemolishResult {
     cpuBurned: string;
     /** Warehouse resources consumed by the demolish (integer units); empty when none. */
     inputsConsumed: Array<CraftStackView>;
-    /** Seconds the plot stays locked from rebuilding after this demolish (the tier's build time). */
-    rebuildCooldownSec: number;
+    rebuildUnlockAt: number | null;
+    rebuildCooldownSec: number | null;
     approveTxHash: Hash | null;
     txHash: Hash;
     status: TxStatus;
