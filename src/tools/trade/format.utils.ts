@@ -28,8 +28,9 @@ export function summarizeSetSaleFee(result: SetSaleFeeResult, resources: Resourc
     const free = result.feePercent === 0 ? ' (listed free)' : '';
     return (
         `Set the sale fee for ${resourceLabel(resources, result.resourceId)} on Hub ${result.hubTokenId} to ` +
-        `${result.feePercent}%${free}. It settles on every future sale of this resource at the hub; open lots keep ` +
-        `their own frozen rate. tx ${result.txHash} in block ${result.blockNumber}.`
+        `${result.feePercent}%${free}. It is now the live rate every open lot of this resource settles at on its ` +
+        `next sale — a lot whose seller tolerance you exceed freezes until you lower the rate back down. ` +
+        `tx ${result.txHash} in block ${result.blockNumber}.`
     );
 }
 

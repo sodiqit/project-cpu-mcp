@@ -36,16 +36,21 @@ produces past it. Mining and crafting differ in what they consume, not in how th
 - **Process** — the single mining-or-craft job on a cell, bounded by its Batches. It ends itself once it
   has run them; mining also ends early when its deposit empties. There is no cancel, and a claim does not
   stop a running job. Until it ends it holds the cell's only process slot; claiming an ended one frees it.
-- **Cycle** — one production tick of a Process (`durationSec`). Mining draws Draw per cycle from the
-  deposit and credits Yield per cycle to the warehouse; a craft runs one recipe batch.
+- **Cycle** — one production tick of a Process (`durationSec`). Mining draws the Take from the deposit and
+  credits the Warehouse credit to the warehouse; a craft runs one recipe batch.
 - **Batches** — the number of Cycles a Process was scheduled for, chosen at start (both kinds) and capped
   at 1000. `claimedBatches` counts those already banked, absolute rather than a delta.
-- **Yield per cycle** — output units one mining Cycle credits.
+- **Warehouse credit** — a process's per-cycle yield: the output units one mining Cycle credits to the
+  warehouse — the credited output, not the draw (see Take). Surfaced as a mining Process's `yieldPerCycle`.
   *Avoid*: batch (in this meaning).
-- **Draw per cycle** — deposit units one mining Cycle removes. Equal to Yield per cycle except on the
-  upgraded extractors, whose vein-drain effect takes less out of the ground than it credits — so those
-  deposits outlive what Yield per cycle alone suggests. Derived from the building's
-  `effects.veinDrainPercent` in `cpu_get_game_config`; it is not on the map.
+- **Take** — the full per-cycle deposit draw of an extractor: everything one mining Cycle removes from the
+  deposit, before the Extraction share splits it. Equal to Warehouse credit on a base extractor; larger on
+  an upgraded one, whose Extraction share credits only part of what it takes — so those deposits drain
+  faster than Warehouse credit alone suggests. Not itself surfaced on the map; reconstructed from
+  Warehouse credit and Extraction share.
+- **Extraction share** — the basis-point fraction of the Take credited to the warehouse as Warehouse
+  credit; the rest returns to the reservoir rather than being lost. A building property
+  (`effects.extractionShareBp` in `cpu_get_game_config`), lower on an upgraded extractor than on a base one.
 - **Stall** — a Process whose matured Cycles cannot settle because the room holds less than one whole
   Cycle's output. Claims settle in whole Cycles, so a partial cycle's worth of room banks nothing. Stalled
   time is discarded — the cursor resets to the moment of the settle and the remaining Batches start
@@ -99,23 +104,25 @@ basis point.
 
 - **Sale fee** — a hub owner's per-resource share of every sale settled on their hub, carved out of the
   seller's proceeds (the buyer is unaffected — they still pay exactly `pricePerUnit × value`). Structural
-  cap: 50%. Set your own with `cpu_set_sale_fee` — including while your hub is still under construction,
+  cap: 100%. Set your own with `cpu_set_sale_fee` — including while your hub is still under construction,
   so the rate is already in force the moment it becomes Ready. Read another hub's live rate in
   `cpu_get_markets` (per row); `cpu_get_cell` shows the hub's full rate intent per resource regardless of
   readiness (see Readiness).
-- **Fee snapshot** — the hub's live sale-fee rate for a resource, *frozen into a lot at listing*. A lot
-  settles every future buy against its own snapshot; later rate changes or a change of hub ownership never
-  re-price an existing lot. Surfaced as `saleFeePercent` in lot reads and the create-lot result.
+- **Frozen lot** — an open lot whose hub's live rate has risen above the seller tolerance stored on it.
+  Buys revert on-chain until the hub owner lowers the rate back to the tolerance or below; the escrow stays
+  intact and untouched, and cancelling a frozen lot is always fee-free. Surfaced as `frozen` on a lot read
+  and in `cpu_get_markets`' per-row frozen counts.
 - **Seller tolerance** — the highest sale-fee rate a seller will accept at listing time
-  (`cpu_create_lot`'s `maxSaleFeePercent`). When omitted, the client reads the hub's live rate on-chain and
-  passes *that* as the tolerance, so a rate raised between the decision and the transaction landing reverts
-  the listing (`SaleFeeExceedsMax`) instead of silently freezing a worse rate in.
+  (`cpu_create_lot`'s `maxSaleFeePercent`), stored per lot. When omitted, the client reads the hub's live
+  rate on-chain and passes *that* as the tolerance, so a rate raised between the decision and the
+  transaction landing reverts the listing (`SaleFeeExceedsMax`) instead of silently locking a worse rate in
+  (see Frozen lot).
 - **Sale burn** — the protocol's share of every sale, removed from supply. Config: `trade.saleBurnPercent`.
   The buy result reports the actual `burn` and `hubFee` amounts carved out of the sale.
-- **Live rate** — a hub's *current* on-chain sale-fee rate, as opposed to the fee snapshot frozen into a
-  given lot. `cpu_get_markets`' `liveSaleFeePercent` is enriched locally from the world map and is advisory
-  (it may trail the chain by moments); the authoritative protections are the on-chain tolerance check at
-  listing and the frozen snapshot in lot reads.
+- **Live rate** — a hub's current on-chain sale-fee rate for a resource: the rate every buy on that hub
+  actually settles at, moment to moment — never a value fixed at listing time. Surfaced as `saleFeePercent`
+  in lot reads and as `liveSaleFeePercent` in `cpu_get_markets` (enriched locally from the world map and
+  advisory — it may trail the chain by moments; the on-chain rate at buy time is the authority).
 
 ## Transit fees
 
@@ -139,3 +146,12 @@ means a hub — Ready or not — charging the default for everything it doesn't 
 nor an empty map says whether a fee is actually being charged: a rate is only live on an active hub (see
 Readiness) and is otherwise **inactive**, not zero. A `0` entry in either map remains a real "free" rate
 an owner chose, distinct from having no override at all.
+
+## Withdraw
+
+Converts a cell's wCPU balance to on-chain $CPU, 1:1.
+
+- **Partial tranche** — a `cpu_withdraw` that executes for less than requested because the on-chain $CPU
+  emission budget cannot cover the full amount: only `min(requested, budget remaining)` mints, the rest
+  stays in the cell rather than the transaction reverting. The result reports the requested and executed
+  amounts separately whenever they differ.
