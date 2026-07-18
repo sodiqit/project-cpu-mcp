@@ -116,11 +116,15 @@ const lot: LotView = {
     remaining: '80',
     pricePerUnit: '0.5',
     saleFeePercent: 1.5,
+    maxSaleFeePercent: 50,
+    frozen: false,
     state: LotState.Open,
     distanceFromAnchor: 3,
     createdAt: 1700,
     updated: 1700,
 };
+
+const frozenLot: LotView = { ...lot, id: 'lot-frozen', saleFeePercent: 6, maxSaleFeePercent: 5, frozen: true };
 
 const market: MarketResourceSummary = {
     hubTokenId: '5',
@@ -130,6 +134,8 @@ const market: MarketResourceSummary = {
     minPricePerUnit: '0.4',
     incomingLots: 1,
     incomingRemaining: '50',
+    frozenLots: null,
+    frozenRemaining: null,
     distanceFromAnchor: 3,
 };
 
@@ -341,10 +347,38 @@ describe('discovery read tools', () => {
         expect(result.content[0]?.text).toMatch(/lot lot-1 \[open\]/);
     });
 
+    it('get_lot annotates and explains a frozen lot, without hiding it', async () => {
+        const handler = capture(registerGetLotTool, { trade: { getLot: async () => frozenLot } });
+        const result = await handler({ lotId: 'lot-frozen' } as never);
+        expect(result.content[0]?.text).toMatch(/lot lot-frozen/);
+        expect(result.content[0]?.text).toMatch(/FROZEN \(live 6% > tolerance 5%\)/);
+        expect(result.content[0]?.text).toMatch(/exceeds your tolerance/);
+        expect(result.content[0]?.text).toMatch(/cancel the lot \(fee-free/);
+        const json = JSON.parse(result.content[1]?.text ?? '{}') as LotView;
+        expect(json.frozen).toBe(true);
+        expect(json.maxSaleFeePercent).toBe(5);
+    });
+
     it('list_my_lots shows the count and state filter', async () => {
         const handler = capture(registerListMyLotsTool, { trade: { listMyLots: async () => [lot] } });
         const result = await handler({ state: LotState.Open } as never);
         expect(result.content[0]?.text).toMatch(/1 lot\(s\) · state=open/);
+    });
+
+    it('list_my_lots marks a frozen lot', async () => {
+        const handler = capture(registerListMyLotsTool, { trade: { listMyLots: async () => [frozenLot] } });
+        const result = await handler({ state: null } as never);
+        expect(result.content[0]?.text).toMatch(/FROZEN/);
+    });
+
+    it('get_markets surfaces the frozen aggregate when the server serves it', async () => {
+        const frozenMarket: MarketResourceSummary = { ...market, frozenLots: 1, frozenRemaining: '40' };
+        const handler = capture(registerGetMarketsTool, {
+            trade: { getMarkets: async () => [frozenMarket] },
+            mapReader: { readRevealCell: async () => hubCell({ 3: 2.5 }) },
+        });
+        const result = await handler({} as never);
+        expect(result.content[0]?.text).toMatch(/1 frozen \(40\)/);
     });
 });
 

@@ -293,6 +293,7 @@ export enum LotState {
 export enum LotAvailability {
     Open = 'open',
     Incoming = 'incoming',
+    Frozen = 'frozen',
     All = 'all',
 }
 
@@ -311,6 +312,7 @@ export interface ApiLotView {
     remaining: string;
     pricePerUnit: string;
     saleFeeBp: number;
+    maxSaleFeeBp: number;
     state: LotState;
     distanceFromAnchor: number | null;
     createdAt: number;
@@ -326,6 +328,8 @@ export interface LotView {
     remaining: string;
     pricePerUnit: string;
     saleFeePercent: number;
+    maxSaleFeePercent: number;
+    frozen: boolean;
     state: LotState;
     distanceFromAnchor: number | null;
     createdAt: number;
@@ -340,6 +344,8 @@ export interface ApiMarketResourceSummary {
     minPricePerUnit: string | null;
     incomingLots: number;
     incomingRemaining: string;
+    frozenLots: number | null;
+    frozenRemaining: string | null;
     distanceFromAnchor: number | null;
 }
 
@@ -351,5 +357,40 @@ export interface MarketResourceSummary {
     minPricePerUnit: string | null;
     incomingLots: number;
     incomingRemaining: string;
+    frozenLots: number | null;
+    frozenRemaining: string | null;
     distanceFromAnchor: number | null;
 }
+
+export const apiLotViewSchema = z
+    .object({
+        id: z.string(),
+        hubTokenId: z.string(),
+        sellerAddress: z.string(),
+        resourceId: z.number(),
+        listed: z.string(),
+        remaining: z.string(),
+        pricePerUnit: z.string(),
+        saleFeeBp: z.number(),
+        maxSaleFeeBp: z.number(),
+        state: z.string(),
+        distanceFromAnchor: z.number().nullable(),
+        createdAt: z.number(),
+        updated: z.number(),
+    })
+    .passthrough();
+
+export const apiMarketResourceSummarySchema = z
+    .object({
+        hubTokenId: z.string(),
+        resourceId: z.number(),
+        openLots: z.number(),
+        openRemaining: z.string(),
+        minPricePerUnit: z.string().nullable(),
+        incomingLots: z.number(),
+        incomingRemaining: z.string(),
+        frozenLots: z.number().nullable().optional(),
+        frozenRemaining: z.string().nullable().optional(),
+        distanceFromAnchor: z.number().nullable(),
+    })
+    .passthrough();

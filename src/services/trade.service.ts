@@ -1,4 +1,5 @@
 import { isAddress, parseEther, parseEventLogs, type Address, type Hash } from 'viem';
+import { z } from 'zod';
 
 import { decodeDeliveryScheduled } from './delivery.helpers.js';
 import { describeApiError } from './reveal.helpers.js';
@@ -28,8 +29,11 @@ import {
 import type { ApiClient } from '../api/client.js';
 import {
     type ApiLotView,
+    apiLotViewSchema,
     type ApiMarketResourceSummary,
+    apiMarketResourceSummarySchema,
     HttpStatus,
+    LotAvailability,
     type LotState,
     type LotView,
     type MarketResourceSummary,
@@ -353,6 +357,7 @@ export class TradeService {
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to load markets (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }
+        z.array(apiMarketResourceSummarySchema).parse(response.data);
         return response.data.map(withDecimalMinPrice);
     }
 
@@ -375,7 +380,10 @@ export class TradeService {
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to list lots (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }
-        return response.data.map(withDecimalPrice);
+        z.array(apiLotViewSchema).parse(response.data);
+        const lots = response.data.map(withDecimalPrice);
+        const hidesFrozen = query.availability === null || query.availability === LotAvailability.Open;
+        return hidesFrozen ? lots.filter((lot) => !lot.frozen) : lots;
     }
 
     /** Public single-lot read. */
@@ -384,6 +392,7 @@ export class TradeService {
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to get lot ${lotId} (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }
+        apiLotViewSchema.parse(response.data);
         return withDecimalPrice(response.data);
     }
 
@@ -394,6 +403,7 @@ export class TradeService {
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to list your lots (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }
+        z.array(apiLotViewSchema).parse(response.data);
         return response.data.map(withDecimalPrice);
     }
 

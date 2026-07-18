@@ -2,7 +2,7 @@ import { encodeAbiParameters, encodeEventTopics, formatEther, parseEther, type H
 import { describe, expect, it } from 'vitest';
 
 import type { ApiClient } from '../../api/client.js';
-import { type ApiLotView, LotState } from '../../api/types.js';
+import { type ApiLotView, type ApiMarketResourceSummary, LotAvailability, LotState } from '../../api/types.js';
 import { TRADE_ABI } from '../../contracts/trade.abi.js';
 import { TRANSPORT_ABI } from '../../contracts/transport.abi.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
@@ -63,6 +63,7 @@ function lotView(over: Partial<ApiLotView> = {}): ApiLotView {
         remaining: '100',
         pricePerUnit: parseEther('0.5').toString(),
         saleFeeBp: 250,
+        maxSaleFeeBp: 5000,
         state: LotState.Open,
         distanceFromAnchor: null,
         createdAt: 1700,
@@ -70,6 +71,38 @@ function lotView(over: Partial<ApiLotView> = {}): ApiLotView {
         ...over,
     };
 }
+
+function marketRow(over: Partial<ApiMarketResourceSummary> = {}): ApiMarketResourceSummary {
+    return {
+        hubTokenId: '20',
+        resourceId: 3,
+        openLots: 2,
+        openRemaining: '100',
+        minPricePerUnit: parseEther('0.5').toString(),
+        incomingLots: 0,
+        incomingRemaining: '0',
+        frozenLots: null,
+        frozenRemaining: null,
+        distanceFromAnchor: null,
+        ...over,
+    };
+}
+
+const LIST_QUERY = {
+    hub: null,
+    resourceId: null,
+    seller: null,
+    minPrice: null,
+    maxPrice: null,
+    availability: null,
+    sort: null,
+    limit: null,
+    offset: null,
+    aroundTokenId: null,
+    radius: null,
+};
+
+const MARKETS_QUERY = { hub: null, resourceId: null, aroundTokenId: null, radius: null };
 
 function tradeLog(topics: unknown, data: unknown): Log {
     return {
@@ -607,23 +640,113 @@ describe('TradeService reads', () => {
     it('listLots hits the public lots endpoint', async () => {
         const h = makeTrade({ response: { status: 200, data: [lotView()] } });
 
-        const result = await h.service.listLots({
-            hub: null,
-            resourceId: null,
-            seller: null,
-            minPrice: null,
-            maxPrice: null,
-            availability: null,
-            sort: null,
-            limit: null,
-            offset: null,
-            aroundTokenId: null,
-            radius: null,
-        });
+        const result = await h.service.listLots({ ...LIST_QUERY });
 
         expect(h.api.calls[0]?.path.startsWith('/api/v1/trade/lots')).toBe(true);
         expect(h.api.calls[0]?.authenticated).toBe(false);
         expect(result).toHaveLength(1);
         expect(result[0]?.pricePerUnit).toBe('0.5');
+    });
+
+    it('exposes the tolerance percent and flags a lot whose live rate exceeds it as frozen', async () => {
+        const h = makeTrade({ response: { status: 200, data: lotView({ saleFeeBp: 600, maxSaleFeeBp: 500 }) } });
+
+        const lot = await h.service.getLot('7');
+
+        expect(lot.saleFeePercent).toBe(6);
+        expect(lot.maxSaleFeePercent).toBe(5);
+        expect(lot.frozen).toBe(true);
+    });
+
+    it('does not flag a lot whose live rate equals the tolerance (equality is not frozen)', async () => {
+        const h = makeTrade({ response: { status: 200, data: lotView({ saleFeeBp: 500, maxSaleFeeBp: 500 }) } });
+
+        const lot = await h.service.getLot('7');
+
+        expect(lot.frozen).toBe(false);
+    });
+
+    it('getLot does not hide a frozen lot — it returns it flagged', async () => {
+        const h = makeTrade({
+            response: { status: 200, data: lotView({ id: '9', saleFeeBp: 600, maxSaleFeeBp: 500 }) },
+        });
+
+        const lot = await h.service.getLot('9');
+
+        expect(lot.id).toBe('9');
+        expect(lot.frozen).toBe(true);
+    });
+
+    it('listMyLots carries the frozen flag per lot', async () => {
+        const h = makeTrade({
+            response: { status: 200, data: [lotView({ id: '1', saleFeeBp: 600, maxSaleFeeBp: 500 })] },
+        });
+
+        const result = await h.service.listMyLots(null);
+
+        expect(result[0]?.frozen).toBe(true);
+    });
+
+    it('rejects a lot response missing the required maxSaleFeeBp — a missing tolerance is wire drift', async () => {
+        const { maxSaleFeeBp: _dropped, ...noTolerance } = lotView();
+        const h = makeTrade({ response: { status: 200, data: [noTolerance] } });
+
+        await expect(h.service.listLots({ ...LIST_QUERY })).rejects.toThrow();
+    });
+
+    it('getMarkets passes through the frozen aggregates when the server serves them', async () => {
+        const h = makeTrade({ response: { status: 200, data: [marketRow({ frozenLots: 1, frozenRemaining: '40' })] } });
+
+        const rows = await h.service.getMarkets({ ...MARKETS_QUERY });
+
+        expect(rows[0]?.frozenLots).toBe(1);
+        expect(rows[0]?.frozenRemaining).toBe('40');
+    });
+
+    it('getMarkets normalises absent frozen aggregates to null (server has not shipped them)', async () => {
+        const { frozenLots: _f, frozenRemaining: _r, ...noFrozen } = marketRow();
+        const h = makeTrade({ response: { status: 200, data: [noFrozen] } });
+
+        const rows = await h.service.getMarkets({ ...MARKETS_QUERY });
+
+        expect(rows[0]?.frozenLots).toBeNull();
+        expect(rows[0]?.frozenRemaining).toBeNull();
+    });
+});
+
+describe('TradeService.listLots availability', () => {
+    const frozenLot = (): ApiLotView => lotView({ id: 'f', saleFeeBp: 600, maxSaleFeeBp: 500 });
+    const openLot = (): ApiLotView => lotView({ id: 'o', saleFeeBp: 100, maxSaleFeeBp: 500 });
+
+    it('drops a frozen lot on the default path even if the server returns one', async () => {
+        const h = makeTrade({ response: { status: 200, data: [openLot(), frozenLot()] } });
+
+        const result = await h.service.listLots({ ...LIST_QUERY });
+
+        expect(result.map((l) => l.id)).toEqual(['o']);
+    });
+
+    it('drops a frozen lot on an explicit availability=open', async () => {
+        const h = makeTrade({ response: { status: 200, data: [openLot(), frozenLot()] } });
+
+        const result = await h.service.listLots({ ...LIST_QUERY, availability: LotAvailability.Open });
+
+        expect(result.map((l) => l.id)).toEqual(['o']);
+    });
+
+    it('returns frozen lots the server sends when availability=frozen', async () => {
+        const h = makeTrade({ response: { status: 200, data: [frozenLot()] } });
+
+        const result = await h.service.listLots({ ...LIST_QUERY, availability: LotAvailability.Frozen });
+
+        expect(result.map((l) => l.id)).toEqual(['f']);
+    });
+
+    it('does not filter when availability=all', async () => {
+        const h = makeTrade({ response: { status: 200, data: [openLot(), frozenLot()] } });
+
+        const result = await h.service.listLots({ ...LIST_QUERY, availability: LotAvailability.All });
+
+        expect(result.map((l) => l.id)).toEqual(['o', 'f']);
     });
 });

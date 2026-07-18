@@ -11,6 +11,8 @@ export function withDecimalPrice(lot: ApiLotView): LotView {
         remaining: lot.remaining,
         pricePerUnit: cpuFromWei(lot.pricePerUnit),
         saleFeePercent: bpToPercent(lot.saleFeeBp),
+        maxSaleFeePercent: bpToPercent(lot.maxSaleFeeBp),
+        frozen: lot.saleFeeBp > lot.maxSaleFeeBp,
         state: lot.state,
         distanceFromAnchor: lot.distanceFromAnchor,
         createdAt: lot.createdAt,
@@ -27,6 +29,8 @@ export function withDecimalMinPrice(row: ApiMarketResourceSummary): MarketResour
         minPricePerUnit: row.minPricePerUnit === null ? null : cpuFromWei(row.minPricePerUnit),
         incomingLots: row.incomingLots,
         incomingRemaining: row.incomingRemaining,
+        frozenLots: row.frozenLots ?? null,
+        frozenRemaining: row.frozenRemaining ?? null,
         distanceFromAnchor: row.distanceFromAnchor,
     };
 }

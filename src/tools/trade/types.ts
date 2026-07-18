@@ -98,7 +98,10 @@ export const listLotsInputSchema = {
         .nativeEnum(LotAvailability)
         .nullable()
         .default(null)
-        .describe('open (default) | incoming (paid & en route) | all.'),
+        .describe(
+            'open (default, buyable now — frozen lots hidden) | incoming (paid & en route) | ' +
+                'frozen (live rate exceeds the seller tolerance — not buyable until the hub lowers it) | all.',
+        ),
     sort: z
         .nativeEnum(LotSort)
         .nullable()
@@ -140,8 +143,5 @@ export const listMyLotsInputSchema = {
         .nativeEnum(LotState)
         .nullable()
         .default(null)
-        .describe(
-            'Optional lifecycle filter (draft, delivering, open, cancel_pending, cancelling, cancelled, reverted). ' +
-                'Omit for all.',
-        ),
+        .describe('Optional lifecycle filter (delivering, open, sold, cancelled). Omit for all.'),
 };

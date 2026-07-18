@@ -68,10 +68,12 @@ export function summarizeMarkets(markets: Array<EnrichedMarketSummary>, resource
             const price = m.minPricePerUnit !== null ? `from ${m.minPricePerUnit} $CPU/u` : 'no open lots';
             const fee = m.liveSaleFeePercent !== null ? `, sale fee ${m.liveSaleFeePercent}%` : '';
             const incoming = m.incomingLots > 0 ? `, ${m.incomingLots} incoming (${m.incomingRemaining})` : '';
+            const frozen =
+                m.frozenLots !== null && m.frozenLots > 0 ? `, ${m.frozenLots} frozen (${m.frozenRemaining})` : '';
             const where = m.distanceFromAnchor !== null ? `, ${m.distanceFromAnchor} grid steps away` : '';
             return (
                 `Hub ${m.hubTokenId} · ${resourceLabel(resources, m.resourceId)}: ` +
-                `${m.openLots} open (${m.openRemaining} units) ${price}${fee}${incoming}${where}`
+                `${m.openLots} open (${m.openRemaining} units) ${price}${fee}${incoming}${frozen}${where}`
             );
         })
         .join('\n');
@@ -85,14 +87,23 @@ export function summarizeLots(lots: Array<LotView>, resources: ResourceNames): s
 }
 
 export function summarizeLot(lot: LotView, resources: ResourceNames): string {
-    return summarizeLotLine(lot, resources);
+    const line = summarizeLotLine(lot, resources);
+    if (!lot.frozen) {
+        return line;
+    }
+    return (
+        `${line}\nFrozen: the hub's live sale fee (${lot.saleFeePercent}%) exceeds your tolerance ` +
+        `(${lot.maxSaleFeePercent}%), so every buy reverts until the hub owner lowers the rate to your tolerance ` +
+        `or below — or you cancel the lot (fee-free, the escrow returns to you).`
+    );
 }
 
 function summarizeLotLine(lot: LotView, resources: ResourceNames): string {
     const dist = lot.distanceFromAnchor !== null ? `, ${lot.distanceFromAnchor} grid steps away` : '';
+    const frozen = lot.frozen ? ` · FROZEN (live ${lot.saleFeePercent}% > tolerance ${lot.maxSaleFeePercent}%)` : '';
     return (
         `lot ${lot.id} [${lot.state}] · ${resourceLabel(resources, lot.resourceId)} · ${lot.remaining}/${lot.listed} ` +
-        `left @ ${lot.pricePerUnit} $CPU/u (sale fee ${lot.saleFeePercent}%) · Hub ${lot.hubTokenId}${dist} · ` +
+        `left @ ${lot.pricePerUnit} $CPU/u (sale fee ${lot.saleFeePercent}%)${frozen} · Hub ${lot.hubTokenId}${dist} · ` +
         `seller ${lot.sellerAddress}`
     );
 }
