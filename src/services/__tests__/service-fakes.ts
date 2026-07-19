@@ -177,7 +177,12 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
             },
         ],
         reveal: { firstFree: true, reRevealCost: '0' },
-        transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2, defaultMoveFeePerUnit: '0' },
+        transport: {
+            moveRadius: 1,
+            hubRadius: 3,
+            moveTimePerCellSec: 2,
+            moveFeeFloors: { 1: '0', 5: '0', 6: '0', 7: '0', 101: '0', 102: '0' },
+        },
         trade: { saleBurnPercent: 1, maxSaleFeePercent: 50 },
         storage: { hubStorageMultiplier: 10 },
     };

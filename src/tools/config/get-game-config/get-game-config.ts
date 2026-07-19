@@ -31,8 +31,7 @@ export function registerGetGameConfigTool(server: McpServer, context: AppContext
                 : `reveal ${config.reveal.reRevealCost} $CPU`;
             const trade =
                 `${config.trade.saleBurnPercent}% sale burn, sale fee up to ${SALE_FEE_STRUCTURAL_BOUND_PERCENT}% ` +
-                `(the structural bound — a hub owner can set any rate up to this maximum), default transit fee ` +
-                `${config.transport.defaultMoveFeePerUnit} $CPU/u`;
+                `(the structural bound — a hub owner can set any rate up to this maximum)`;
             const storage = `an active hub multiplies a cell's storage cap by ${config.storage.hubStorageMultiplier}x`;
             const header =
                 `Network ${config.network} (chainId ${config.chainId}). ${config.recipes.length} recipe(s) ` +
