@@ -17,6 +17,6 @@ export const DEMOLISH_DESCRIPTION = [
     'or craft process — a craft frees its slot once fully claimed, but a mining run only ends when its deposit is',
     'exhausted, so a mining extractor cannot be demolished mid-run; a `hub` can only be demolished when it is not mid-route or',
     'anchoring open trade lots. Deposits and other warehouse balances are preserved. Afterward the plot is locked',
-    "from rebuilding for the building's build time (its `demolishFinishAt`); `cpu_get_cell`/`cpu_get_attention`",
+    'from rebuilding until its demolish cooldown ends (its `demolishFinishAt`); `cpu_get_cell`/`cpu_get_attention`',
     'surface the cooldown.',
 ].join(' ');

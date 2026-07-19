@@ -1,11 +1,10 @@
-import { FULL_VEIN_DRAIN_PERCENT } from './constants.js';
+import { BASIS_POINTS } from './constants.js';
 import { computeBatchSchedule, processOutputs, toProcessProgress, type ProcessProgress } from './process.utils.js';
 import { fitBatchesByRoom } from './storage.utils.js';
 import { CellProcessKind, type Cell, type CellProcessView, type CellResource, type ProcessOutput } from './types.js';
 
-export function veinDrawPerCycle(yieldPerCycle: number, veinDrainPercent: number): number {
-    const scaled = Math.floor((yieldPerCycle * veinDrainPercent) / 100);
-    return scaled === 0 ? 1 : scaled;
+export function takePerCycle(creditPerCycle: number, extractionShareBp: number): number {
+    return Math.ceil((creditPerCycle * BASIS_POINTS) / extractionShareBp);
 }
 
 export interface Settlement {
@@ -18,7 +17,7 @@ export interface Settlement {
 interface MiningSettleInput {
     resourceId: number;
     yieldPerCycle: number;
-    drawPerCycle: number;
+    takePerCycle: number;
     maturedBatches: number;
     depositRemaining: bigint;
     resources: ReadonlyArray<CellResource>;
@@ -27,23 +26,23 @@ interface MiningSettleInput {
 function settleMining({
     resourceId,
     yieldPerCycle,
-    drawPerCycle,
+    takePerCycle,
     maturedBatches,
     depositRemaining,
     resources,
 }: MiningSettleInput): Settlement {
-    const draw = BigInt(drawPerCycle);
+    const take = BigInt(takePerCycle);
     const fitByRoom = fitBatchesByRoom([{ resourceId, amount: yieldPerCycle }], resources);
-    const fitByDeposit = Number((depositRemaining + draw - 1n) / draw);
+    const fitByDeposit = Number((depositRemaining + take - 1n) / take);
 
     const settledBatches = Math.min(maturedBatches, fitByRoom ?? maturedBatches, fitByDeposit);
-    const wouldDrain = BigInt(settledBatches) * draw;
+    const wouldDrain = BigInt(settledBatches) * take;
     const drainedUnits = wouldDrain > depositRemaining ? depositRemaining : wouldDrain;
 
     return {
         settledBatches,
         drainedUnits,
-        minedUnits: (drainedUnits * BigInt(yieldPerCycle)) / draw,
+        minedUnits: (drainedUnits * BigInt(yieldPerCycle)) / take,
         depleted: depositRemaining - drainedUnits === 0n,
     };
 }
@@ -67,7 +66,7 @@ function settleCraft({ outputs, maturedBatches, resources }: CraftSettleInput): 
 
 export interface SettleConfig {
     craftOutputsByRecipe: Record<string, Array<ProcessOutput>>;
-    veinDrainPercentByBuilding: Record<string, number>;
+    extractionShareBpByBuilding: Record<string, number>;
 }
 
 export function settleCell(cell: Cell, maturedBatches: number, config: SettleConfig): Settlement {
@@ -79,15 +78,21 @@ export function settleCell(cell: Cell, maturedBatches: number, config: SettleCon
     if (process.kind !== CellProcessKind.Mining) {
         return settleCraft({ outputs, maturedBatches, resources: cell.resources });
     }
-    const drainPercent =
-        cell.building === null
-            ? FULL_VEIN_DRAIN_PERCENT
-            : (config.veinDrainPercentByBuilding[cell.building.type] ?? FULL_VEIN_DRAIN_PERCENT);
+    if (cell.building === null) {
+        throw new Error(`Cell ${cell.tokenId} is mining with no building; cannot derive its extraction share.`);
+    }
+    const extractionShareBp = config.extractionShareBpByBuilding[cell.building.type];
+    if (extractionShareBp === undefined) {
+        throw new Error(
+            `Building type ${cell.building.type} has no extraction share in the config; cannot settle mining ` +
+                `on cell ${cell.tokenId}.`,
+        );
+    }
 
     return settleMining({
         resourceId: process.resource,
         yieldPerCycle: process.yieldPerCycle,
-        drawPerCycle: veinDrawPerCycle(process.yieldPerCycle, drainPercent),
+        takePerCycle: takePerCycle(process.yieldPerCycle, extractionShareBp),
         maturedBatches,
         depositRemaining: BigInt(cell.resources.find((r) => r.resourceId === process.resource)?.deposit ?? '0'),
         resources: cell.resources,

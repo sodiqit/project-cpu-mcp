@@ -40,7 +40,9 @@ function harness(outcome: WithdrawResult | Error): Handler {
 
 const result: WithdrawResult = {
     tokenId: '42',
-    amount: '100',
+    requested: '100',
+    executed: '100',
+    partial: false,
     txHash: '0xwithdraw',
     status: TxStatus.Success,
     blockNumber: '100',
@@ -50,10 +52,20 @@ describe('withdraw tool', () => {
     it('reports the withdraw with the minted $CPU amount', async () => {
         const out = await harness(result)({ tokenId: '42', amount: '100' });
         expect(out.content[0]?.text).toMatch(/Withdrew from cell 42/);
-        expect(out.content[0]?.text).toMatch(/100 \$CPU/);
+        expect(out.content[0]?.text).toMatch(/minted 100 \$CPU/);
         expect(out.content[0]?.text).toMatch(/0xwithdraw/);
         const parsed = JSON.parse(out.content[1]?.text ?? '{}') as WithdrawResult;
-        expect(parsed.amount).toBe('100');
+        expect(parsed.executed).toBe('100');
+        expect(parsed.partial).toBe(false);
+    });
+
+    it('reports a partial tranche and names the emission budget', async () => {
+        const partial: WithdrawResult = { ...result, requested: '100', executed: '40', partial: true };
+        const out = await harness(partial)({ tokenId: '42', amount: '100' });
+        expect(out.content[0]?.text).toMatch(/requested 100/);
+        expect(out.content[0]?.text).toMatch(/emission budget/i);
+        expect(out.content[0]?.text).toMatch(/minted 40 \$CPU/);
+        expect(out.content[0]?.text).toMatch(/60 wCPU stays/);
     });
 
     it('propagates service errors', async () => {

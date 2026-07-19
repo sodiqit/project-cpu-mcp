@@ -1,4 +1,12 @@
-import { decodeFunctionData, parseEther, type Hex } from 'viem';
+import {
+    decodeFunctionData,
+    encodeAbiParameters,
+    encodeEventTopics,
+    parseEther,
+    type Address,
+    type Hex,
+    type Log,
+} from 'viem';
 import { describe, expect, it } from 'vitest';
 
 import { BuildingType } from '../../api/types.js';
@@ -20,6 +28,24 @@ import {
 } from './service-fakes.js';
 
 const EXTRACTOR: BuildInput = { tokenId: '42', buildingType: BuildingType.Mine };
+
+const LOG_META = {
+    blockHash: `0x${'0'.repeat(64)}`,
+    blockNumber: 1n,
+    logIndex: 0,
+    transactionHash: `0x${'0'.repeat(64)}`,
+    transactionIndex: 0,
+    removed: false,
+} as const;
+
+function demolishedLog(finishAt: bigint, buildingTypeId = 4): Log {
+    const topics = encodeEventTopics({ abi: CELL_ABI, eventName: 'BuildingDemolished', args: { tokenId: 42n } });
+    const data = encodeAbiParameters(
+        [{ type: 'uint16' }, { type: 'uint64' }, { type: 'uint16[]' }, { type: 'uint64[]' }],
+        [buildingTypeId, finishAt, [], []],
+    );
+    return { address: CELL as Address, topics, data, ...LOG_META } as unknown as Log;
+}
 
 function makeService(opts: Parameters<typeof makeCellHarness>[1] = {}) {
     return makeCellHarness((deps) => new BuildService(deps), opts);
@@ -150,13 +176,18 @@ describe('BuildService', () => {
         expect(contracts.sent).toHaveLength(0);
     });
 
-    it('approves the burned $CPU and demolishes, reporting cost and cooldown', async () => {
+    it('approves the burned $CPU and demolishes, reporting the unlock time from the event', async () => {
+        const finishAt = BigInt(DEFAULT_SERVER_TIME + 200);
         const cell = makeCell({
             tokenId: '42',
             owner: WALLET_ADDRESS,
             building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: null, modeRecipeId: null },
         });
-        const { service, contracts, allowance } = makeService({ cell, approve: APPROVE_HASH });
+        const { service, contracts, allowance } = makeService({
+            cell,
+            approve: APPROVE_HASH,
+            logs: [[demolishedLog(finishAt)]],
+        });
 
         const result = await service.demolish({ tokenId: '42' });
 
@@ -166,9 +197,43 @@ describe('BuildService', () => {
         expect(result.approveTxHash).toBe(APPROVE_HASH);
         expect(result.buildingType).toBe(BuildingType.Mine);
         expect(result.cpuBurned).toBe('2.5');
-        expect(result.rebuildCooldownSec).toBe(120);
+        expect(result.rebuildUnlockAt).toBe(DEFAULT_SERVER_TIME + 200);
+        expect(result.rebuildCooldownSec).toBe(200);
         expect(result.status).toBe(TxStatus.Success);
         expect(result.blockNumber).toBe('100');
+    });
+
+    it('reports the event finish time even when it differs from the demolished type own build time', async () => {
+        const finishAt = BigInt(DEFAULT_SERVER_TIME + 500);
+        const cell = makeCell({
+            tokenId: '42',
+            owner: WALLET_ADDRESS,
+            building: { type: BuildingType.SteelMill, buildFinishAt: null, modeResource: null, modeRecipeId: null },
+            resources: [makeResource({ resourceId: 101, balance: '2' })],
+        });
+        const { service } = makeService({ cell, logs: [[demolishedLog(finishAt, 11)]] });
+
+        const result = await service.demolish({ tokenId: '42' });
+
+        expect(result.rebuildUnlockAt).toBe(DEFAULT_SERVER_TIME + 500);
+        expect(result.rebuildCooldownSec).toBe(500);
+        expect(result.rebuildCooldownSec).not.toBe(900);
+    });
+
+    it('degrades gracefully when the receipt is missing the demolish event', async () => {
+        const cell = makeCell({
+            tokenId: '42',
+            owner: WALLET_ADDRESS,
+            building: { type: BuildingType.Mine, buildFinishAt: null, modeResource: null, modeRecipeId: null },
+        });
+        const { service, contracts } = makeService({ cell });
+
+        const result = await service.demolish({ tokenId: '42' });
+
+        expect(contracts.sent).toHaveLength(1);
+        expect(result.rebuildUnlockAt).toBeNull();
+        expect(result.rebuildCooldownSec).toBeNull();
+        expect(result.status).toBe(TxStatus.Success);
     });
 
     it('refuses to demolish an empty cell (nothing to tear down)', async () => {

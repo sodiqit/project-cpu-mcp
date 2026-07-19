@@ -29,7 +29,14 @@ import {
 } from './service-fakes.js';
 
 const FORGE: CraftInput = { tokenId: '42', recipeId: CraftRecipeId.ForgeWcpu, batches: 1 };
+const FORGE_X2: CraftInput = { tokenId: '42', recipeId: CraftRecipeId.ForgeWcpu, batches: 2 };
 const STEEL: CraftInput = { tokenId: '42', recipeId: CraftRecipeId.SmeltSteel, batches: 2 };
+
+function opexConfig(opexByType: Partial<Record<BuildingType, Record<string, string>>>) {
+    const config = makeConfig();
+    config.buildings = config.buildings.map((b) => ({ ...b, recipeOpexCpu: opexByType[b.type] ?? b.recipeOpexCpu }));
+    return config;
+}
 
 function makeService(opts: Parameters<typeof makeCellHarness>[1] = {}) {
     return makeCellHarness((deps) => new CraftService(deps), opts);
@@ -368,5 +375,95 @@ describe('CraftService.craft mode switch cost', () => {
 
         expect(result.modeSwitch.cost).toEqual({ kind: 'free', why: 'first_pick' });
         expect(result.modeSwitch.burnedCpu).toBe('22');
+    });
+});
+
+describe('CraftService.craft opex', () => {
+    it('prices the served opex on top of the recipe cost, scaled by batches', async () => {
+        const { service, allowance } = makeService({
+            config: opexConfig({ [BuildingType.WaferFab]: { forge_wcpu: '10' } }),
+            cell: fabCell(CraftRecipeId.ForgeWcpu),
+            reads: {
+                getCell: chainCellView({ buildingType: 17, modeRecipeId: recipeNameToUint64(CraftRecipeId.ForgeWcpu) }),
+            },
+            approve: APPROVE_HASH,
+            logs: [[cpuBurnLog(WALLET_ADDRESS, parseEther('220'))]],
+        });
+
+        const result = await service.craft(FORGE_X2);
+
+        expect(result.costCpu).toBe('200');
+        expect(result.opex).toEqual({ served: true, costCpu: '20' });
+        expect(result.totalCpu).toBe('220');
+        expect(result.modeSwitch.cost).toEqual({ kind: 'free', why: 'same_output' });
+        expect(result.modeSwitch.burnedCpu).toBe('0');
+        expect(allowance.calls).toEqual([{ token: CPU_TOKEN, spender: CELL, needed: parseEther('220') }]);
+    });
+
+    it('falls back to the base cost with the disclaimer flag when opex is not served', async () => {
+        const { service, allowance } = makeService({
+            cell: fabCell(CraftRecipeId.ForgeWcpu),
+            reads: {
+                getCell: chainCellView({ buildingType: 17, modeRecipeId: recipeNameToUint64(CraftRecipeId.ForgeWcpu) }),
+            },
+            approve: APPROVE_HASH,
+            logs: [[cpuBurnLog(WALLET_ADDRESS, parseEther('100'))]],
+        });
+
+        const result = await service.craft(FORGE);
+
+        expect(result.costCpu).toBe('100');
+        expect(result.opex).toEqual({ served: false, costCpu: '0' });
+        expect(result.totalCpu).toBe('100');
+        expect(allowance.calls).toEqual([{ token: CPU_TOKEN, spender: CELL, needed: parseEther('100') }]);
+    });
+
+    it('keys the opex to the crafting building’s own type, not another crafter’s price', async () => {
+        const { service, allowance } = makeService({
+            config: opexConfig({
+                [BuildingType.WaferFab]: { smelt_steel: '3', forge_wcpu: '10' },
+                [BuildingType.SteelMill]: { smelt_steel: '99' },
+            }),
+            cell: fabCell(CraftRecipeId.SmeltSteel),
+            reads: {
+                getCell: chainCellView({
+                    buildingType: 17,
+                    modeRecipeId: recipeNameToUint64(CraftRecipeId.SmeltSteel),
+                }),
+            },
+            approve: APPROVE_HASH,
+            logs: [[cpuBurnLog(WALLET_ADDRESS, parseEther('6'))]],
+        });
+
+        const result = await service.craft(STEEL);
+
+        expect(result.costCpu).toBe('0');
+        expect(result.opex).toEqual({ served: true, costCpu: '6' });
+        expect(result.totalCpu).toBe('6');
+        expect(allowance.calls).toEqual([{ token: CPU_TOKEN, spender: CELL, needed: parseEther('6') }]);
+    });
+
+    it('attributes only the switch to the switch when a served-opex receipt burns base + opex + switch', async () => {
+        const { service, allowance } = makeService({
+            config: opexConfig({ [BuildingType.WaferFab]: { forge_wcpu: '10' } }),
+            cell: fabCell(CraftRecipeId.SmeltSteel),
+            reads: {
+                getCell: chainCellView({
+                    buildingType: 17,
+                    modeRecipeId: recipeNameToUint64(CraftRecipeId.SmeltSteel),
+                }),
+            },
+            approve: APPROVE_HASH,
+            logs: [[cpuBurnLog(WALLET_ADDRESS, parseEther('132'))]],
+        });
+
+        const result = await service.craft(FORGE);
+
+        expect(result.costCpu).toBe('100');
+        expect(result.opex).toEqual({ served: true, costCpu: '10' });
+        expect(result.totalCpu).toBe('110');
+        expect(result.modeSwitch.cost).toEqual({ kind: 'paid', costCpu: '22' });
+        expect(result.modeSwitch.burnedCpu).toBe('22');
+        expect(allowance.calls).toEqual([{ token: CPU_TOKEN, spender: CELL, needed: parseEther('132') }]);
     });
 });

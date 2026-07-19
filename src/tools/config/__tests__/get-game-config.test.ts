@@ -51,7 +51,25 @@ const CONFIG: AppConfig = {
             modeSwitch: { kind: ModeSwitchKind.Possible, costCpu: '1' },
             minableResources: [5, 6],
             recipes: [],
-            effects: { cycleTimePercent: 100, veinDrainPercent: 100, inputEfficiency: [] },
+            effects: { cycleTimeBp: 10000, extractionShareBp: 10000, inputEfficiency: [] },
+            recipeOpexCpu: null,
+        },
+        {
+            type: BuildingType.SteelMill,
+            onChainId: 11,
+            name: 'Steel Mill',
+            kind: BuildingKind.Crafter,
+            tier: 2,
+            buildCost: '20',
+            buildTimeSec: 900,
+            buildInputs: [],
+            demolishCost: { cpu: '10', inputs: [] },
+            modeSwitchCost: null,
+            modeSwitch: { kind: ModeSwitchKind.Impossible },
+            minableResources: [],
+            recipes: [CraftRecipeId.SmeltSteel],
+            effects: { cycleTimeBp: 10000, extractionShareBp: 10000, inputEfficiency: [] },
+            recipeOpexCpu: { smelt_steel: '2' },
         },
     ],
     reveal: { firstFree: true, reRevealCost: '1000' },
@@ -85,11 +103,18 @@ describe('get_game_config tool', () => {
         const header = result.content[0]?.text ?? '';
         expect(header).toMatch(/Network ethereum \(chainId 1\)/);
         expect(header).toMatch(/Mine \(extractor, build 5 \$CPU, demolish 2\.5 \$CPU\)/);
+        expect(header).toMatch(
+            /Steel Mill \(crafter, build 20 \$CPU, demolish 10 \$CPU, opex smelt_steel:2 \$CPU\/batch\)/,
+        );
         expect(header).toMatch(/first reveal free, re-reveal 1000 \$CPU/);
         expect(header).toMatch(/1 recipe\(s\)/);
         expect(header).toMatch(/5:Iron/);
         expect(header).toMatch(/cell 0x5555555555555555555555555555555555555555/);
-        expect(header).toMatch(/1% sale burn, sale-fee cap 50%, default transit fee 0.1 \$CPU\/u/);
+        expect(header).toContain('1% sale burn');
+        expect(header).toContain(
+            'sale fee up to 100% (the structural bound — a hub owner can set any rate up to this maximum)',
+        );
+        expect(header).toContain('default transit fee 0.1 $CPU/u');
         expect(header).toMatch(/an active hub multiplies a cell's storage cap by 10x/);
 
         const json = JSON.parse(result.content[1]?.text ?? '{}') as AppConfig;

@@ -30,13 +30,15 @@ export const createLotInputSchema = {
     maxSaleFeePercent: z
         .number()
         .min(0)
-        .max(50)
+        .max(100)
         .nullable()
         .default(null)
         .describe(
-            'Optional seller tolerance: the highest sale-fee percent (0–50) you accept the hub charging. Omit to ' +
-                "accept the hub's live rate at listing time — the listing then reverts if the owner raised the rate " +
-                'in the meantime, instead of freezing a worse rate into your lot.',
+            'Optional seller tolerance: the highest sale-fee percent (0–100) you accept the hub charging on each ' +
+                "sale. Omit to lock in the hub's live rate at listing time as the tolerance. The hub settles its " +
+                'live rate on every sale (never more than the tolerance); if the owner later raises it above the ' +
+                'tolerance the lot freezes — buys revert until the rate drops back to the tolerance or below — and ' +
+                'cpu_cancel_lot is always fee-free.',
         ),
 };
 
@@ -46,8 +48,10 @@ export const setSaleFeeInputSchema = {
     feePercent: z
         .number()
         .min(0)
-        .max(50)
-        .describe('New sale-fee rate as a percent, 0–50 (0.01 granularity, i.e. whole basis points). 0 = listed free.'),
+        .max(100)
+        .describe(
+            'New sale-fee rate as a percent, 0–100 (0.01 granularity, i.e. whole basis points). 0 = listed free.',
+        ),
 };
 
 export const buyLotInputSchema = {
@@ -98,7 +102,10 @@ export const listLotsInputSchema = {
         .nativeEnum(LotAvailability)
         .nullable()
         .default(null)
-        .describe('open (default) | incoming (paid & en route) | all.'),
+        .describe(
+            'open (default, buyable now — frozen lots hidden) | incoming (paid & en route) | ' +
+                'frozen (live rate exceeds the seller tolerance — not buyable until the hub lowers it) | all.',
+        ),
     sort: z
         .nativeEnum(LotSort)
         .nullable()
@@ -140,8 +147,5 @@ export const listMyLotsInputSchema = {
         .nativeEnum(LotState)
         .nullable()
         .default(null)
-        .describe(
-            'Optional lifecycle filter (draft, delivering, open, cancel_pending, cancelling, cancelled, reverted). ' +
-                'Omit for all.',
-        ),
+        .describe('Optional lifecycle filter (delivering, open, sold, cancelled). Omit for all.'),
 };

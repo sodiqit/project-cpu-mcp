@@ -1,4 +1,4 @@
-import { isAddress, parseEther, type Address, type Hash } from 'viem';
+import { isAddress, parseEther, parseEventLogs, type Address, type Hash, type Log } from 'viem';
 
 import type {
     AppConfig,
@@ -15,6 +15,7 @@ import type {
 import { assertWarehouseHas } from './warehouse.utils.js';
 import { BuildingKind } from '../api/types.js';
 import type { BuildingType, BuildingView } from '../api/types.js';
+import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
 import { demolishCooldownEnd } from '../map/map.utils.js';
 import type { Cell, RevealCellReader } from '../map/types.js';
@@ -108,17 +109,28 @@ export class BuildService {
         const txHash = await this.cellClient.demolish({ cell, tokenId });
         const confirmed = await this.contracts.confirm(txHash, 'Demolish transaction');
 
+        const rebuildUnlockAt = this.decodeDemolishFinish(confirmed.logs, cell);
+        const rebuildCooldownSec =
+            rebuildUnlockAt === null ? null : Math.max(0, rebuildUnlockAt - this.mapReader.getServerTime());
+
         return {
             tokenId: input.tokenId,
             buildingType: building.type,
             cpuBurned: view.demolishCost.cpu,
             inputsConsumed: view.demolishCost.inputs,
-            rebuildCooldownSec: view.buildTimeSec,
+            rebuildUnlockAt,
+            rebuildCooldownSec,
             approveTxHash,
             txHash: confirmed.txHash,
             status: confirmed.status,
             blockNumber: confirmed.blockNumber,
         };
+    }
+
+    private decodeDemolishFinish(logs: Array<Log>, cell: Address): number | null {
+        const events = parseEventLogs({ abi: CELL_ABI, eventName: 'BuildingDemolished', logs });
+        const event = events.find((e) => e.address.toLowerCase() === cell.toLowerCase());
+        return event === undefined ? null : Number(event.args.demolishFinishAt);
     }
 
     private assertBuildable(input: BuildInput, state: Cell | null, address: string): void {

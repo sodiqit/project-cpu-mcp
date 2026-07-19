@@ -130,21 +130,21 @@ describe('MiningService.getStatus', () => {
         expect(status.depositRemaining).toBe('100');
     });
 
-    it('takes less from the deposit than it yields on a vein-drain extractor', async () => {
-        const cell = miningCell({ durationSec: 10, yieldPerCycle: 100, batches: 1000, startAt: 1 }, uncapped('800'));
+    it('drains more from the deposit than it credits on a partial-share extractor', async () => {
+        const cell = miningCell({ durationSec: 10, yieldPerCycle: 100, batches: 1000, startAt: 1 }, uncapped('750'));
         const config = makeConfig();
         const mine = config.buildings.find((b) => b.type === BuildingType.Mine);
         if (mine === undefined) {
             throw new Error('expected a Mine in the fake config');
         }
-        mine.effects = { ...mine.effects, veinDrainPercent: 80 };
+        mine.effects = { ...mine.effects, extractionShareBp: 8000 };
         const { service } = makeService({ cell, config });
 
         const status = await service.getStatus('42');
 
-        expect(status.claimableBatches).toBe(10);
-        expect(status.claimable).toBe('1000');
-        expect(status.depositRemaining).toBe('800');
+        expect(status.claimableBatches).toBe(6);
+        expect(status.claimable).toBe('600');
+        expect(status.depositRemaining).toBe('750');
     });
 
     it('settles whole cycles only — a room that cannot take one banks nothing', async () => {

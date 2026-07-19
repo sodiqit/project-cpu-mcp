@@ -9,7 +9,7 @@ import {
     makeStorage,
 } from './fixtures.js';
 import { BuildingType } from '../../api/types.js';
-import { buildAttentionReport, withExtraItems } from '../attention.utils.js';
+import { attentionItem, buildAttentionReport, meetsSeverity, withExtraItems } from '../attention.utils.js';
 import { toCell } from '../cell-view.utils.js';
 import { AttentionReason, AttentionSeverity, type AttentionItem } from '../types.js';
 
@@ -18,7 +18,7 @@ const BASE = {
     serverTime: 10,
     nearFullPct: 90,
     craftOutputsByRecipe: {},
-    veinDrainPercentByBuilding: {},
+    extractionShareBpByBuilding: { [BuildingType.Mine]: 10000 },
     extractorBuildingTypes: new Set<string>([BuildingType.Mine]),
 };
 
@@ -288,6 +288,18 @@ describe('buildAttentionReport', () => {
     });
 });
 
+describe('lot attention reasons', () => {
+    it('grades a frozen lot as warning and an at-risk lot as info', () => {
+        expect(attentionItem({ tokenId: 'h' }, AttentionReason.LotFrozen).severity).toBe(AttentionSeverity.Warning);
+        expect(attentionItem({ tokenId: 'h' }, AttentionReason.LotAtRisk).severity).toBe(AttentionSeverity.Info);
+    });
+
+    it('lets the severity filter keep frozen but drop at-risk at a warning floor', () => {
+        expect(meetsSeverity(AttentionSeverity.Warning, AttentionSeverity.Warning)).toBe(true);
+        expect(meetsSeverity(AttentionSeverity.Info, AttentionSeverity.Warning)).toBe(false);
+    });
+});
+
 describe('withExtraItems', () => {
     it('merges extra items, re-sorts, re-counts, and sets the note', () => {
         const base = report([{ tokenId: 'z', revealCount: 1, building: null }]);
@@ -303,6 +315,8 @@ describe('withExtraItems', () => {
             depositRemaining: null,
             deliveryId: '77',
             arrivalAt: 1,
+            lotId: null,
+            message: null,
         };
         const merged = withExtraItems(base, [extra], 'deliveries offline');
         expect(merged.items[0]?.severity).toBe(AttentionSeverity.Warning);

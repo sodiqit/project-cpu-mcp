@@ -76,6 +76,8 @@ describe('craft tool', () => {
             recipeId: CraftRecipeId.SmeltSteel,
             batches: 2,
             costCpu: '0',
+            opex: { served: true, costCpu: '0' },
+            totalCpu: '0',
             modeSwitch: {
                 cost: { kind: ModeCostKind.Free, why: ModeFreeReason.FirstPick },
                 exact: true,
@@ -99,6 +101,8 @@ describe('craft tool', () => {
             recipeId: CraftRecipeId.ForgeWcpu,
             batches: 1,
             costCpu: '100',
+            opex: { served: true, costCpu: '0' },
+            totalCpu: '100',
             modeSwitch: {
                 cost: { kind: ModeCostKind.Free, why: ModeFreeReason.FirstPick },
                 exact: true,
@@ -114,6 +118,52 @@ describe('craft tool', () => {
         expect(header).toMatch(/100 \$CPU/);
         expect(header).toMatch(/approve tx/);
         expect(header).toMatch(/get_craft_status 42/);
+    });
+
+    it('reports the base and opex breakdown when the server serves opex', async () => {
+        const result = await craftHarness({
+            tokenId: '42',
+            recipeId: CraftRecipeId.ForgeWcpu,
+            batches: 2,
+            costCpu: '200',
+            opex: { served: true, costCpu: '20' },
+            totalCpu: '220',
+            modeSwitch: {
+                cost: { kind: ModeCostKind.Free, why: ModeFreeReason.FirstPick },
+                exact: true,
+                burnedCpu: '0',
+            },
+            approveTxHash: `0x${'c'.repeat(64)}`,
+            txHash: `0x${'1'.repeat(64)}`,
+            status: TxStatus.Success,
+            blockNumber: '100',
+        })({ tokenId: '42', recipeId: CraftRecipeId.ForgeWcpu, batches: 2 });
+
+        const header = result.content[0]?.text ?? '';
+        expect(header).toMatch(/200 \$CPU base \+ 20 \$CPU opex = 220 \$CPU/);
+    });
+
+    it('carries the explicit opex disclaimer when the server does not serve it', async () => {
+        const result = await craftHarness({
+            tokenId: '42',
+            recipeId: CraftRecipeId.ForgeWcpu,
+            batches: 1,
+            costCpu: '100',
+            opex: { served: false, costCpu: '0' },
+            totalCpu: '100',
+            modeSwitch: {
+                cost: { kind: ModeCostKind.Free, why: ModeFreeReason.FirstPick },
+                exact: true,
+                burnedCpu: '0',
+            },
+            approveTxHash: `0x${'c'.repeat(64)}`,
+            txHash: `0x${'1'.repeat(64)}`,
+            status: TxStatus.Success,
+            blockNumber: '100',
+        })({ tokenId: '42', recipeId: CraftRecipeId.ForgeWcpu, batches: 1 });
+
+        const header = result.content[0]?.text ?? '';
+        expect(header).toMatch(/100 \$CPU, plus a per-recipe opex the chain adds on top \(not priced here\)/);
     });
 
     it('propagates service errors', async () => {

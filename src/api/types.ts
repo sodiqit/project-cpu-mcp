@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import type { ILogger } from '../logger/types.js';
 import type { SessionManager } from '../session/manager.js';
 
@@ -129,8 +131,8 @@ export interface DemolishCostView {
 }
 
 export interface BuildingEffectsView {
-    cycleTimePercent: number;
-    veinDrainPercent: number;
+    cycleTimeBp: number;
+    extractionShareBp: number;
     inputEfficiency: Array<{ resourceId: number; percent: number }>;
 }
 
@@ -155,6 +157,7 @@ export interface BuildingView {
     /** Recipe ids a crafter runs; empty for extractors/hub. */
     recipes: Array<CraftRecipeId>;
     effects: BuildingEffectsView;
+    recipeOpexCpu: Record<string, string> | null;
 }
 
 /** Reveal-cost params — the first reveal of a cell is free; re-revealing a depleted cell costs `reRevealCost`. */
@@ -195,6 +198,35 @@ export interface AppConfigResponse {
     trade: TradeFeeView;
     storage: StorageConfigView;
 }
+
+export const buildingEffectsSchema = z
+    .object({
+        cycleTimeBp: z.number(),
+        extractionShareBp: z.number(),
+        inputEfficiency: z.array(z.object({ resourceId: z.number(), percent: z.number() })),
+    })
+    .passthrough();
+
+export const buildingConfigSchema = z
+    .object({
+        effects: buildingEffectsSchema,
+        recipeOpexCpu: z.record(z.string(), z.string()).nullable().optional(),
+    })
+    .passthrough();
+
+export const appConfigResponseSchema = z
+    .object({
+        chainId: z.number(),
+        contracts: z.object({}).passthrough(),
+        storage: z.object({ hubStorageMultiplier: z.number() }).passthrough(),
+        resources: z.record(z.string(), z.string()).optional(),
+        recipes: z.array(z.object({}).passthrough()).optional(),
+        buildings: z.array(buildingConfigSchema).optional(),
+        reveal: z.object({}).passthrough().optional(),
+        transport: z.object({}).passthrough().optional(),
+        trade: z.object({}).passthrough().optional(),
+    })
+    .passthrough();
 
 /** The building types a cell can hold — 6 tier-1 extractors, tier-2..5 crafters, and the Hub. */
 export enum BuildingType {
@@ -261,6 +293,7 @@ export enum LotState {
 export enum LotAvailability {
     Open = 'open',
     Incoming = 'incoming',
+    Frozen = 'frozen',
     All = 'all',
 }
 
@@ -279,6 +312,7 @@ export interface ApiLotView {
     remaining: string;
     pricePerUnit: string;
     saleFeeBp: number;
+    maxSaleFeeBp: number;
     state: LotState;
     distanceFromAnchor: number | null;
     createdAt: number;
@@ -294,6 +328,8 @@ export interface LotView {
     remaining: string;
     pricePerUnit: string;
     saleFeePercent: number;
+    maxSaleFeePercent: number;
+    frozen: boolean;
     state: LotState;
     distanceFromAnchor: number | null;
     createdAt: number;
@@ -308,6 +344,8 @@ export interface ApiMarketResourceSummary {
     minPricePerUnit: string | null;
     incomingLots: number;
     incomingRemaining: string;
+    frozenLots: number | null;
+    frozenRemaining: string | null;
     distanceFromAnchor: number | null;
 }
 
@@ -319,5 +357,40 @@ export interface MarketResourceSummary {
     minPricePerUnit: string | null;
     incomingLots: number;
     incomingRemaining: string;
+    frozenLots: number | null;
+    frozenRemaining: string | null;
     distanceFromAnchor: number | null;
 }
+
+export const apiLotViewSchema = z
+    .object({
+        id: z.string(),
+        hubTokenId: z.string(),
+        sellerAddress: z.string(),
+        resourceId: z.number(),
+        listed: z.string(),
+        remaining: z.string(),
+        pricePerUnit: z.string(),
+        saleFeeBp: z.number(),
+        maxSaleFeeBp: z.number(),
+        state: z.string(),
+        distanceFromAnchor: z.number().nullable(),
+        createdAt: z.number(),
+        updated: z.number(),
+    })
+    .passthrough();
+
+export const apiMarketResourceSummarySchema = z
+    .object({
+        hubTokenId: z.string(),
+        resourceId: z.number(),
+        openLots: z.number(),
+        openRemaining: z.string(),
+        minPricePerUnit: z.string().nullable(),
+        incomingLots: z.number(),
+        incomingRemaining: z.string(),
+        frozenLots: z.number().nullable().optional(),
+        frozenRemaining: z.string().nullable().optional(),
+        distanceFromAnchor: z.number().nullable(),
+    })
+    .passthrough();

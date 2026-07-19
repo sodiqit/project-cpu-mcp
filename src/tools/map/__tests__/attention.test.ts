@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { LotState, type LotView } from '../../../api/types.js';
 import { NoopLogger } from '../../../logger/noop.logger.js';
 import { AttentionReason, type AttentionReport, AttentionSeverity } from '../../../map/types.js';
 import type { DeliveryView } from '../../../services/types.js';
@@ -32,6 +33,8 @@ function mapReport(): AttentionReport {
                 depositRemaining: null,
                 deliveryId: null,
                 arrivalAt: null,
+                lotId: null,
+                message: null,
             },
             {
                 tokenId: '2',
@@ -45,6 +48,8 @@ function mapReport(): AttentionReport {
                 depositRemaining: null,
                 deliveryId: null,
                 arrivalAt: null,
+                lotId: null,
+                message: null,
             },
         ],
         note: null,
@@ -63,9 +68,30 @@ const READY_DELIVERY: DeliveryView = {
     readyToFinalize: true,
 };
 
+function makeLot(overrides: Partial<LotView> = {}): LotView {
+    return {
+        id: '500',
+        hubTokenId: '42',
+        sellerAddress: '0xMe',
+        resourceId: 3,
+        listed: '100',
+        remaining: '100',
+        pricePerUnit: '1',
+        saleFeePercent: 5,
+        maxSaleFeePercent: 10,
+        frozen: false,
+        state: LotState.Open,
+        distanceFromAnchor: null,
+        createdAt: 1,
+        updated: 1,
+        ...overrides,
+    };
+}
+
 interface HarnessOpts {
     walletReady: boolean | null;
     deliveries: (() => Promise<Array<DeliveryView>>) | null;
+    lots: (() => Promise<Array<LotView>>) | null;
 }
 
 function harness(opts: Partial<HarnessOpts> = {}): Handler {
@@ -90,7 +116,17 @@ function harness(opts: Partial<HarnessOpts> = {}): Handler {
     const transport = {
         listReadyToFinalizeForOwner: opts.deliveries ?? (async () => []),
     };
-    const context = { mapReader: map, wallet, appConfig, transport, logger: new NoopLogger() } as unknown as AppContext;
+    const trade = {
+        listMyLots: opts.lots ?? (async () => []),
+    };
+    const context = {
+        mapReader: map,
+        wallet,
+        appConfig,
+        transport,
+        trade,
+        logger: new NoopLogger(),
+    } as unknown as AppContext;
 
     let captured: Handler | null = null;
     const server = {
@@ -157,6 +193,92 @@ describe('get_attention tool', () => {
         const payload = JSON.parse(result.content[1]?.text ?? '{}');
         expect(payload.note).toMatch(/could not be loaded/i);
         // Map-derived items survive the delivery outage.
+        expect(payload.items.some((i: { reason: string }) => i.reason === AttentionReason.StalledMining)).toBe(true);
+    });
+
+    it('warns about a frozen own lot, naming the live rate, tolerance and fee-free cancel', async () => {
+        const handler = harness({
+            lots: async () => [
+                makeLot({ id: '900', hubTokenId: '77', saleFeePercent: 12, maxSaleFeePercent: 10, frozen: true }),
+            ],
+        });
+        const result = await handler({ minSeverity: null });
+        const payload = JSON.parse(result.content[1]?.text ?? '{}');
+        const frozen = payload.items.find((i: { reason: string }) => i.reason === AttentionReason.LotFrozen);
+        expect(frozen.severity).toBe(AttentionSeverity.Warning);
+        expect(frozen.lotId).toBe('900');
+        expect(frozen.tokenId).toBe('77');
+        expect(frozen.message).toMatch(/12%/);
+        expect(frozen.message).toMatch(/10%/);
+        expect(frozen.message).toMatch(/cancel is fee-free/i);
+    });
+
+    it('flags an own lot at exactly the tolerance as at-risk info', async () => {
+        const handler = harness({
+            lots: async () => [makeLot({ id: '901', hubTokenId: '77', saleFeePercent: 10, maxSaleFeePercent: 10 })],
+        });
+        const result = await handler({ minSeverity: null });
+        const payload = JSON.parse(result.content[1]?.text ?? '{}');
+        const atRisk = payload.items.find((i: { reason: string }) => i.reason === AttentionReason.LotAtRisk);
+        expect(atRisk.severity).toBe(AttentionSeverity.Info);
+        expect(atRisk.lotId).toBe('901');
+        expect(atRisk.tokenId).toBe('77');
+    });
+
+    it('leaves a healthy own lot (rate below tolerance) off the list', async () => {
+        const handler = harness({
+            lots: async () => [makeLot({ saleFeePercent: 5, maxSaleFeePercent: 10 })],
+        });
+        const result = await handler({ minSeverity: null });
+        const payload = JSON.parse(result.content[1]?.text ?? '{}');
+        expect(payload.items.some((i: { reason: string }) => i.reason === AttentionReason.LotFrozen)).toBe(false);
+        expect(payload.items.some((i: { reason: string }) => i.reason === AttentionReason.LotAtRisk)).toBe(false);
+    });
+
+    it('never flags lots in delivering, sold or cancelled states', async () => {
+        const handler = harness({
+            lots: async () => [
+                makeLot({
+                    id: '1',
+                    state: LotState.Delivering,
+                    saleFeePercent: 20,
+                    maxSaleFeePercent: 10,
+                    frozen: true,
+                }),
+                makeLot({ id: '2', state: LotState.Sold, saleFeePercent: 10, maxSaleFeePercent: 10 }),
+                makeLot({
+                    id: '3',
+                    state: LotState.Cancelled,
+                    saleFeePercent: 20,
+                    maxSaleFeePercent: 10,
+                    frozen: true,
+                }),
+            ],
+        });
+        const result = await handler({ minSeverity: null });
+        const payload = JSON.parse(result.content[1]?.text ?? '{}');
+        expect(payload.items.some((i: { reason: string }) => i.reason === AttentionReason.LotFrozen)).toBe(false);
+        expect(payload.items.some((i: { reason: string }) => i.reason === AttentionReason.LotAtRisk)).toBe(false);
+    });
+
+    it('does not fold the caller lots into a scouted owner report', async () => {
+        const lots = vi.fn(async () => [makeLot({ frozen: true, saleFeePercent: 20, maxSaleFeePercent: 10 })]);
+        const handler = harness({ lots });
+        const result = await handler({ minSeverity: null, owner: '0xNeighbor' });
+        const payload = JSON.parse(result.content[1]?.text ?? '{}');
+        expect(payload.items.some((i: { reason: string }) => i.reason === AttentionReason.LotFrozen)).toBe(false);
+        expect(lots).not.toHaveBeenCalled();
+    });
+
+    it('degrades gracefully when the lots fetch fails', async () => {
+        const handler = harness({
+            lots: async () => {
+                throw new Error('server down');
+            },
+        });
+        const result = await handler({ minSeverity: null });
+        const payload = JSON.parse(result.content[1]?.text ?? '{}');
+        expect(payload.note).toMatch(/lots could not be loaded/i);
         expect(payload.items.some((i: { reason: string }) => i.reason === AttentionReason.StalledMining)).toBe(true);
     });
 });

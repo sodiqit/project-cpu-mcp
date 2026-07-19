@@ -14,11 +14,12 @@ export function summarizeCreateLot(result: CreateLotResult, resources: ResourceN
     const approve = result.approveTxHash !== null ? `approve tx ${result.approveTxHash}, ` : '';
     return (
         `Listed lot ${result.lotId}: ${result.value} ${resourceLabel(resources, result.resourceId)} @ ` +
-        `${result.pricePerUnit} $CPU/u at Hub ${result.hubTokenId} (sale fee ${result.saleFeePercent}% frozen into ` +
-        `the lot). Escrow shipping to the Hub (delivery ${result.deliveryId}, ETA ` +
-        `${formatUnixSeconds(result.arrivalAt)}); the lot opens once it arrives — run finalize_delivery on ` +
-        `${result.deliveryId} after the ETA (or wait). Transit fee ${result.fee} $CPU. ${approve}create tx ` +
-        `${result.txHash} in block ${result.blockNumber}.`
+        `${result.pricePerUnit} $CPU/u at Hub ${result.hubTokenId} (sale-fee tolerance ${result.maxSaleFeePercent}% ` +
+        `locked in — the hub settles its live rate on each sale, but if it ever rises above your tolerance the lot ` +
+        `freezes and buys revert until the hub lowers it; cancel_lot is always fee-free and returns the escrow). ` +
+        `Escrow shipping to the Hub (delivery ${result.deliveryId}, ETA ${formatUnixSeconds(result.arrivalAt)}); the ` +
+        `lot opens once it arrives — run finalize_delivery on ${result.deliveryId} after the ETA (or wait). Transit ` +
+        `fee ${result.fee} $CPU. ${approve}create tx ${result.txHash} in block ${result.blockNumber}.`
     );
 }
 
@@ -27,8 +28,9 @@ export function summarizeSetSaleFee(result: SetSaleFeeResult, resources: Resourc
     const free = result.feePercent === 0 ? ' (listed free)' : '';
     return (
         `Set the sale fee for ${resourceLabel(resources, result.resourceId)} on Hub ${result.hubTokenId} to ` +
-        `${result.feePercent}%${free}. It settles on every future sale of this resource at the hub; open lots keep ` +
-        `their own frozen rate. tx ${result.txHash} in block ${result.blockNumber}.`
+        `${result.feePercent}%${free}. It is now the live rate every open lot of this resource settles at on its ` +
+        `next sale — a lot whose seller tolerance you exceed freezes until you lower the rate back down. ` +
+        `tx ${result.txHash} in block ${result.blockNumber}.`
     );
 }
 
@@ -68,10 +70,12 @@ export function summarizeMarkets(markets: Array<EnrichedMarketSummary>, resource
             const price = m.minPricePerUnit !== null ? `from ${m.minPricePerUnit} $CPU/u` : 'no open lots';
             const fee = m.liveSaleFeePercent !== null ? `, sale fee ${m.liveSaleFeePercent}%` : '';
             const incoming = m.incomingLots > 0 ? `, ${m.incomingLots} incoming (${m.incomingRemaining})` : '';
+            const frozen =
+                m.frozenLots !== null && m.frozenLots > 0 ? `, ${m.frozenLots} frozen (${m.frozenRemaining})` : '';
             const where = m.distanceFromAnchor !== null ? `, ${m.distanceFromAnchor} grid steps away` : '';
             return (
                 `Hub ${m.hubTokenId} · ${resourceLabel(resources, m.resourceId)}: ` +
-                `${m.openLots} open (${m.openRemaining} units) ${price}${fee}${incoming}${where}`
+                `${m.openLots} open (${m.openRemaining} units) ${price}${fee}${incoming}${frozen}${where}`
             );
         })
         .join('\n');
@@ -85,24 +89,38 @@ export function summarizeLots(lots: Array<LotView>, resources: ResourceNames): s
 }
 
 export function summarizeLot(lot: LotView, resources: ResourceNames): string {
-    return summarizeLotLine(lot, resources);
+    const line = summarizeLotLine(lot, resources);
+    if (!lot.frozen) {
+        return line;
+    }
+    return (
+        `${line}\nFrozen: the hub's live sale fee (${lot.saleFeePercent}%) exceeds your tolerance ` +
+        `(${lot.maxSaleFeePercent}%), so every buy reverts until the hub owner lowers the rate to your tolerance ` +
+        `or below — or you cancel the lot (fee-free, the escrow returns to you).`
+    );
 }
 
 function summarizeLotLine(lot: LotView, resources: ResourceNames): string {
     const dist = lot.distanceFromAnchor !== null ? `, ${lot.distanceFromAnchor} grid steps away` : '';
+    const frozen = lot.frozen ? ` · FROZEN (live ${lot.saleFeePercent}% > tolerance ${lot.maxSaleFeePercent}%)` : '';
     return (
         `lot ${lot.id} [${lot.state}] · ${resourceLabel(resources, lot.resourceId)} · ${lot.remaining}/${lot.listed} ` +
-        `left @ ${lot.pricePerUnit} $CPU/u (sale fee ${lot.saleFeePercent}%) · Hub ${lot.hubTokenId}${dist} · ` +
+        `left @ ${lot.pricePerUnit} $CPU/u (sale fee ${lot.saleFeePercent}%)${frozen} · Hub ${lot.hubTokenId}${dist} · ` +
         `seller ${lot.sellerAddress}`
     );
 }
 
 export function summarizeQuoteBuy(quote: TradeQuote, resources: ResourceNames): string {
     const goods = `${quote.value} ${resourceLabel(resources, quote.resourceId)} @ ${quote.pricePerUnit} $CPU/u`;
+    const frozen = quote.frozen
+        ? ` FROZEN: the hub's live sale fee (${quote.saleFeePercent}%) exceeds the seller tolerance ` +
+          `(${quote.maxSaleFeePercent}%), so buy_lot reverts on-chain until the hub lowers the rate — or the seller ` +
+          `cancels (fee-free). The estimate above is what you would pay if it clears.`
+        : '';
     if (!quote.routed) {
         return (
             `Seller-only estimate for lot ${quote.lotId}: ${goods} = ${quote.sale} $CPU (transit ` +
-            `excluded — pass a chain for the exact total). ${quote.remaining} units remain.`
+            `excluded — pass a chain for the exact total). ${quote.remaining} units remain.${frozen}`
         );
     }
     const hops = quote.totalDistance !== null ? `, ${quote.totalDistance} hops` : '';
@@ -110,6 +128,6 @@ export function summarizeQuoteBuy(quote: TradeQuote, resources: ResourceNames): 
     return (
         `Buy quote for lot ${quote.lotId}: ${goods} = ${quote.sale} $CPU + ` +
         `${quote.transitFee ?? '0'} transit = ${quote.total} $CPU total${hops}${eta}. ` +
-        `${quote.remaining} units remain. Commit with buy_lot.`
+        `${quote.remaining} units remain. Commit with buy_lot.${frozen}`
     );
 }

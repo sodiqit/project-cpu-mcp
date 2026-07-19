@@ -1,4 +1,4 @@
-import { isAddress, type Address } from 'viem';
+import { isAddress, parseEther, parseEventLogs, type Address, type Log } from 'viem';
 
 import type {
     AppConfig,
@@ -8,6 +8,7 @@ import type {
     WithdrawResult,
     WithdrawServiceOptions,
 } from './types.js';
+import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
 import type { Cell, RevealCellReader } from '../map/types.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
@@ -36,7 +37,8 @@ export class WithdrawService {
 
         const cell = this.requireCell(config);
         const tokenId = BigInt(input.tokenId);
-        const amount = BigInt(input.amount);
+        const requestedUnits = BigInt(input.amount);
+        const amount = parseEther(input.amount);
 
         const state = await this.mapReader.readRevealCell(input.tokenId);
         this.assertOwner(input.tokenId, state, wallet.getAddress());
@@ -48,19 +50,30 @@ export class WithdrawService {
         });
         const txHash = await this.cellClient.withdrawCpu({ cell, tokenId, amount });
         const confirmed = await this.contracts.confirm(txHash, 'Withdraw transaction');
+        const executedUnits = this.decodeWithdrawn(confirmed.logs, cell) ?? requestedUnits;
 
         this.logger.info('withdraw confirmed', {
             tokenId: input.tokenId,
+            requested: requestedUnits.toString(),
+            executed: executedUnits.toString(),
             txHash: confirmed.txHash,
             block: confirmed.blockNumber,
         });
         return {
             tokenId: input.tokenId,
-            amount: input.amount,
+            requested: requestedUnits.toString(),
+            executed: executedUnits.toString(),
+            partial: executedUnits < requestedUnits,
             txHash: confirmed.txHash,
             status: confirmed.status,
             blockNumber: confirmed.blockNumber,
         };
+    }
+
+    private decodeWithdrawn(logs: Array<Log>, cell: Address): bigint | null {
+        const events = parseEventLogs({ abi: CELL_ABI, eventName: 'CpuWithdrawn', logs });
+        const event = events.find((e) => e.address.toLowerCase() === cell.toLowerCase());
+        return event === undefined ? null : event.args.amount;
     }
 
     private assertChain(config: AppConfig, wallet: WalletManager): void {

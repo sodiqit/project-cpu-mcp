@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { GET_GAME_CONFIG_DESCRIPTION } from './constants.js';
+import { GET_GAME_CONFIG_DESCRIPTION, SALE_FEE_STRUCTURAL_BOUND_PERCENT } from './constants.js';
 import type { AppContext } from '../../../types.js';
 
 export function registerGetGameConfigTool(server: McpServer, context: AppContext): void {
@@ -16,14 +16,23 @@ export function registerGetGameConfigTool(server: McpServer, context: AppContext
                     .join(', ') || 'none';
             const buildings =
                 config.buildings
-                    .map((b) => `${b.name} (${b.kind}, build ${b.buildCost} $CPU, demolish ${b.demolishCost.cpu} $CPU)`)
+                    .map((b) => {
+                        const opex =
+                            b.recipeOpexCpu !== null
+                                ? `, opex ${Object.entries(b.recipeOpexCpu)
+                                      .map(([recipeId, costCpu]) => `${recipeId}:${costCpu}`)
+                                      .join('/')} $CPU/batch`
+                                : '';
+                        return `${b.name} (${b.kind}, build ${b.buildCost} $CPU, demolish ${b.demolishCost.cpu} $CPU${opex})`;
+                    })
                     .join(', ') || 'none';
             const reveal = config.reveal.firstFree
                 ? `first reveal free, re-reveal ${config.reveal.reRevealCost} $CPU`
                 : `reveal ${config.reveal.reRevealCost} $CPU`;
             const trade =
-                `${config.trade.saleBurnPercent}% sale burn, sale-fee cap ${config.trade.maxSaleFeePercent}%, ` +
-                `default transit fee ${config.transport.defaultMoveFeePerUnit} $CPU/u`;
+                `${config.trade.saleBurnPercent}% sale burn, sale fee up to ${SALE_FEE_STRUCTURAL_BOUND_PERCENT}% ` +
+                `(the structural bound — a hub owner can set any rate up to this maximum), default transit fee ` +
+                `${config.transport.defaultMoveFeePerUnit} $CPU/u`;
             const storage = `an active hub multiplies a cell's storage cap by ${config.storage.hubStorageMultiplier}x`;
             const header =
                 `Network ${config.network} (chainId ${config.chainId}). ${config.recipes.length} recipe(s) ` +

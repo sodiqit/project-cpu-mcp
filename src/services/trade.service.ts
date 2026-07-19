@@ -1,8 +1,14 @@
 import { isAddress, parseEther, parseEventLogs, type Address, type Hash } from 'viem';
+import { z } from 'zod';
 
 import { decodeDeliveryScheduled } from './delivery.helpers.js';
 import { describeApiError } from './reveal.helpers.js';
-import { enrichSaleFeeToleranceError, withDecimalMinPrice, withDecimalPrice } from './trade.helpers.js';
+import {
+    enrichFrozenBuyError,
+    enrichSaleFeeToleranceError,
+    withDecimalMinPrice,
+    withDecimalPrice,
+} from './trade.helpers.js';
 import { TRANSPORT_MAX_FEE_BUFFER_PERCENT } from './transport.constants.js';
 import {
     type AppConfig,
@@ -28,8 +34,11 @@ import {
 import type { ApiClient } from '../api/client.js';
 import {
     type ApiLotView,
+    apiLotViewSchema,
     type ApiMarketResourceSummary,
+    apiMarketResourceSummarySchema,
     HttpStatus,
+    LotAvailability,
     type LotState,
     type LotView,
     type MarketResourceSummary,
@@ -139,7 +148,7 @@ export class TradeService {
             resourceId: input.resourceId,
             value: input.value,
             pricePerUnit: input.pricePerUnit,
-            saleFeePercent: bpToPercent(created.args.saleFeeBp),
+            maxSaleFeePercent: bpToPercent(created.args.maxSaleFeeBp),
             deliveryId: scheduled.deliveryId.toString(),
             arrivalAt: Number(scheduled.arrivalAt),
             fee: cpuFromWei(feeWei.toString()),
@@ -214,7 +223,12 @@ export class TradeService {
         const approveTransitTxHash =
             maxFee === 0n ? null : await this.allowance.ensureAllowance(cpuToken, transport, maxFee);
 
-        const txHash = await this.tradeClient.buy({ trade, lotId: BigInt(input.lotId), value, destTokenIds, maxFee });
+        let txHash: Hash;
+        try {
+            txHash = await this.tradeClient.buy({ trade, lotId: BigInt(input.lotId), value, destTokenIds, maxFee });
+        } catch (error) {
+            throw enrichFrozenBuyError(error);
+        }
         const confirmed = await this.contracts.confirm(txHash, `Buy lot ${input.lotId}`);
 
         const bought = this.firstFrom(
@@ -336,6 +350,9 @@ export class TradeService {
             total: cpuFromWei((saleWei + (transitFeeWei ?? 0n)).toString()),
             totalDistance,
             arrivalAt,
+            frozen: lot.frozen,
+            saleFeePercent: lot.saleFeePercent,
+            maxSaleFeePercent: lot.maxSaleFeePercent,
         };
     }
 
@@ -353,6 +370,7 @@ export class TradeService {
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to load markets (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }
+        z.array(apiMarketResourceSummarySchema).parse(response.data);
         return response.data.map(withDecimalMinPrice);
     }
 
@@ -375,7 +393,10 @@ export class TradeService {
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to list lots (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }
-        return response.data.map(withDecimalPrice);
+        z.array(apiLotViewSchema).parse(response.data);
+        const lots = response.data.map(withDecimalPrice);
+        const hidesFrozen = query.availability === null || query.availability === LotAvailability.Open;
+        return hidesFrozen ? lots.filter((lot) => !lot.frozen) : lots;
     }
 
     /** Public single-lot read. */
@@ -384,6 +405,7 @@ export class TradeService {
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to get lot ${lotId} (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }
+        apiLotViewSchema.parse(response.data);
         return withDecimalPrice(response.data);
     }
 
@@ -394,6 +416,7 @@ export class TradeService {
         if (response.status !== HttpStatus.Ok) {
             throw new Error(`Failed to list your lots (HTTP ${response.status}): ${describeApiError(response.data)}`);
         }
+        z.array(apiLotViewSchema).parse(response.data);
         return response.data.map(withDecimalPrice);
     }
 

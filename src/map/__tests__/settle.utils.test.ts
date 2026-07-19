@@ -10,7 +10,7 @@ import {
 } from './fixtures.js';
 import { BuildingType } from '../../api/types.js';
 import { toCell } from '../cell-view.utils.js';
-import { settleCell, veinDrawPerCycle, type SettleConfig } from '../settle.utils.js';
+import { settleCell, takePerCycle, type SettleConfig } from '../settle.utils.js';
 import type { Cell, RawCell, RawCellResource } from '../types.js';
 
 const RESOURCE = 3;
@@ -19,7 +19,11 @@ const DRILL = BuildingType.TungstenDrill;
 const OUTPUTS = { [RECIPE]: [{ resourceId: RESOURCE, amount: 100 }] };
 
 function config(overrides: Partial<SettleConfig> = {}): SettleConfig {
-    return { craftOutputsByRecipe: OUTPUTS, veinDrainPercentByBuilding: {}, ...overrides };
+    return {
+        craftOutputsByRecipe: OUTPUTS,
+        extractionShareBpByBuilding: { [BuildingType.Mine]: 10000 },
+        ...overrides,
+    };
 }
 
 function cell(overrides: Partial<RawCell> = {}, resources: Array<RawCellResource> = []): Cell {
@@ -37,22 +41,27 @@ function cell(overrides: Partial<RawCell> = {}, resources: Array<RawCellResource
 
 const uncapped = (deposit: string) => [makeResource({ resourceId: RESOURCE, deposit, storage: null })];
 
-describe('veinDrawPerCycle', () => {
-    it('draws exactly what it yields at 100 percent', () => {
-        expect(veinDrawPerCycle(3858, 100)).toBe(3858);
+const DRILL_CONFIG = config({ extractionShareBpByBuilding: { [DRILL]: 8000 } });
+function drillCell(resources: Array<RawCellResource>): Cell {
+    return cell({ building: { type: DRILL, buildFinishAt: null, modeResource: null, modeRecipeId: null } }, resources);
+}
+
+describe('takePerCycle', () => {
+    it('reconstructs the take as the credit when the whole take is credited (10000 bp)', () => {
+        expect(takePerCycle(3858, 10000)).toBe(3858);
     });
 
     it.each([
-        [80, 3858, 3086],
-        [65, 3858, 2507],
-        [80, 6429, 5143],
-        [65, 6429, 4178],
-    ])('draws %s percent of %s as %s', (percent, yieldPerCycle, expected) => {
-        expect(veinDrawPerCycle(yieldPerCycle, percent)).toBe(expected);
+        [8000, 100, 125],
+        [8000, 3858, 4823],
+        [6500, 100, 154],
+        [6500, 3858, 5936],
+    ])('at %s bp share, a %s credit reconstructs a take of %s', (shareBp, credit, expected) => {
+        expect(takePerCycle(credit, shareBp)).toBe(expected);
     });
 
-    it('never draws zero, so a deposit can always be drained', () => {
-        expect(veinDrawPerCycle(1, 1)).toBe(1);
+    it('rounds the take up, so a broken invariant over-drains rather than mints supply', () => {
+        expect(takePerCycle(100, 6500)).toBe(154);
     });
 });
 
@@ -66,7 +75,7 @@ describe('settleCell mining', () => {
         });
     });
 
-    it('stops at the deposit, draining its last partial cycle in full', () => {
+    it('takes the credit as the take at a full 10000 bp share', () => {
         expect(settleCell(cell({}, uncapped('250')), 5, config())).toEqual({
             settledBatches: 3,
             minedUnits: 250n,
@@ -75,23 +84,53 @@ describe('settleCell mining', () => {
         });
     });
 
-    it('credits a vein-drain extractor more than it drains', () => {
-        const drill = cell(
-            { building: { type: DRILL, buildFinishAt: null, modeResource: null, modeRecipeId: null } },
-            uncapped('400'),
-        );
-        expect(settleCell(drill, 5, config({ veinDrainPercentByBuilding: { [DRILL]: 80 } }))).toEqual({
-            settledBatches: 5,
-            minedUnits: 500n,
-            drainedUnits: 400n,
+    it('drains more from the deposit than it credits, dividing the share exactly', () => {
+        expect(settleCell(drillCell(uncapped('500')), 5, DRILL_CONFIG)).toEqual({
+            settledBatches: 4,
+            minedUnits: 400n,
+            drainedUnits: 500n,
             depleted: true,
         });
     });
 
-    it('assumes draw equals yield for a building the config does not name', () => {
-        const s = settleCell(cell({}, uncapped('400')), 5, config());
-        expect(s.drainedUnits).toBe(400n);
-        expect(s.settledBatches).toBe(4);
+    it('drains the deposit to exactly zero on a partial final cycle', () => {
+        expect(settleCell(drillCell(uncapped('300')), 5, DRILL_CONFIG)).toEqual({
+            settledBatches: 3,
+            minedUnits: 240n,
+            drainedUnits: 300n,
+            depleted: true,
+        });
+    });
+
+    it('binds warehouse room on the credit, not the take', () => {
+        const room = [
+            makeResource({ resourceId: RESOURCE, deposit: '100000', storage: makeStorage({ used: '0', cap: '350' }) }),
+        ];
+        expect(settleCell(drillCell(room), 5, DRILL_CONFIG)).toEqual({
+            settledBatches: 3,
+            minedUnits: 300n,
+            drainedUnits: 375n,
+            depleted: false,
+        });
+    });
+
+    it('binds the deposit on the take, not the credit', () => {
+        expect(settleCell(drillCell(uncapped('250')), 5, DRILL_CONFIG)).toEqual({
+            settledBatches: 2,
+            minedUnits: 200n,
+            drainedUnits: 250n,
+            depleted: true,
+        });
+    });
+
+    it('fails loudly for an extractor type missing from the config, instead of guessing a full share', () => {
+        expect(() => settleCell(cell({}, uncapped('400')), 5, config({ extractionShareBpByBuilding: {} }))).toThrow(
+            /extraction share/i,
+        );
+    });
+
+    it('fails loudly when a mining cell carries no building', () => {
+        expect(() => settleCell(cell({ building: null }, uncapped('400')), 5, config())).toThrow(/no building/i);
     });
 
     it('settles whole cycles only — room for a partial cycle banks nothing', () => {

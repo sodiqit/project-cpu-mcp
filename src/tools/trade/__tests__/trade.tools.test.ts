@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import { type LotView, type MarketResourceSummary, BuildingType, LotState } from '../../../api/types.js';
 import { Network } from '../../../config/types.js';
@@ -26,6 +27,7 @@ import { registerListMyLotsTool } from '../list-mine/list-my-lots.js';
 import { registerGetMarketsTool } from '../markets/get-markets.js';
 import { registerQuoteBuyTool } from '../quote-buy/quote-buy.js';
 import { registerSetSaleFeeTool } from '../set-sale-fee/set-sale-fee.js';
+import { createLotInputSchema, setSaleFeeInputSchema } from '../types.js';
 
 interface ToolResult {
     content: Array<{ type: string; text: string }>;
@@ -57,7 +59,7 @@ const createResult: CreateLotResult = {
     resourceId: 3,
     value: '100',
     pricePerUnit: '0.5',
-    saleFeePercent: 2.5,
+    maxSaleFeePercent: 2.5,
     deliveryId: '123',
     arrivalAt: 1704,
     fee: '0',
@@ -116,11 +118,15 @@ const lot: LotView = {
     remaining: '80',
     pricePerUnit: '0.5',
     saleFeePercent: 1.5,
+    maxSaleFeePercent: 50,
+    frozen: false,
     state: LotState.Open,
     distanceFromAnchor: 3,
     createdAt: 1700,
     updated: 1700,
 };
+
+const frozenLot: LotView = { ...lot, id: 'lot-frozen', saleFeePercent: 6, maxSaleFeePercent: 5, frozen: true };
 
 const market: MarketResourceSummary = {
     hubTokenId: '5',
@@ -130,6 +136,8 @@ const market: MarketResourceSummary = {
     minPricePerUnit: '0.4',
     incomingLots: 1,
     incomingRemaining: '50',
+    frozenLots: null,
+    frozenRemaining: null,
     distanceFromAnchor: 3,
 };
 
@@ -146,7 +154,7 @@ function hubCell(
 }
 
 describe('create_lot / cancel_lot tools', () => {
-    it('summarizes a create with the lot, frozen fee, delivery and finalize hint', async () => {
+    it('summarizes a create with the locked-in tolerance, delivery and finalize hint', async () => {
         const handler = capture(registerCreateLotTool, { trade: { createLot: async () => createResult } });
         const result = await handler({
             chain: [],
@@ -157,11 +165,12 @@ describe('create_lot / cancel_lot tools', () => {
         } as never);
         expect(result.content[0]?.text).toMatch(/Listed lot 7/);
         expect(result.content[0]?.text).toMatch(/Silica \(#3\)/);
-        expect(result.content[0]?.text).toMatch(/sale fee 2.5% frozen/);
+        expect(result.content[0]?.text).toMatch(/sale-fee tolerance 2.5% locked in/);
+        expect(result.content[0]?.text).toMatch(/cancel_lot is always fee-free/);
         expect(result.content[0]?.text).toMatch(/finalize_delivery on 123/);
         expect(result.content[0]?.text).toMatch(/create tx 0xcreate/);
         const json = JSON.parse(result.content[1]?.text ?? '{}') as CreateLotResult;
-        expect(json.saleFeePercent).toBe(2.5);
+        expect(json.maxSaleFeePercent).toBe(2.5);
     });
 
     it('summarizes a cancel with the returned units and finalize hint', async () => {
@@ -235,12 +244,16 @@ describe('quote_buy tool', () => {
             total: '55',
             totalDistance: 4,
             arrivalAt: 1704,
+            frozen: false,
+            saleFeePercent: 1.5,
+            maxSaleFeePercent: 50,
         };
         const handler = capture(registerQuoteBuyTool, { trade: { quoteBuy: async () => quote } });
         const result = await handler({ lotId: '7', value: '100', chain: [] } as never);
         expect(result.content[0]?.text).toMatch(/Buy quote for lot 7/);
         expect(result.content[0]?.text).toMatch(/Silica \(#3\)/);
         expect(result.content[0]?.text).toMatch(/55 \$CPU total/);
+        expect(result.content[0]?.text).not.toMatch(/FROZEN/);
     });
 
     it('summarizes a seller-only estimate', async () => {
@@ -256,11 +269,40 @@ describe('quote_buy tool', () => {
             total: '50',
             totalDistance: null,
             arrivalAt: null,
+            frozen: false,
+            saleFeePercent: 1.5,
+            maxSaleFeePercent: 50,
         };
         const handler = capture(registerQuoteBuyTool, { trade: { quoteBuy: async () => quote } });
         const result = await handler({ lotId: '7', value: '100', chain: null } as never);
         expect(result.content[0]?.text).toMatch(/Seller-only estimate for lot 7/);
         expect(result.content[0]?.text).toMatch(/50 \$CPU/);
+    });
+
+    it('appends a frozen warning to the quote without refusing', async () => {
+        const quote: TradeQuote = {
+            lotId: '7',
+            resourceId: 3,
+            pricePerUnit: '0.5',
+            value: '100',
+            remaining: '80',
+            routed: false,
+            sale: '50',
+            transitFee: null,
+            total: '50',
+            totalDistance: null,
+            arrivalAt: null,
+            frozen: true,
+            saleFeePercent: 6,
+            maxSaleFeePercent: 5,
+        };
+        const handler = capture(registerQuoteBuyTool, { trade: { quoteBuy: async () => quote } });
+        const result = await handler({ lotId: '7', value: '100', chain: null } as never);
+        expect(result.content[0]?.text).toMatch(/Seller-only estimate for lot 7/);
+        expect(result.content[0]?.text).toMatch(
+            /FROZEN: the hub's live sale fee \(6%\) exceeds the seller tolerance \(5%\)/,
+        );
+        expect(result.content[0]?.text).toMatch(/buy_lot reverts on-chain/);
     });
 });
 
@@ -341,10 +383,54 @@ describe('discovery read tools', () => {
         expect(result.content[0]?.text).toMatch(/lot lot-1 \[open\]/);
     });
 
+    it('get_lot annotates and explains a frozen lot, without hiding it', async () => {
+        const handler = capture(registerGetLotTool, { trade: { getLot: async () => frozenLot } });
+        const result = await handler({ lotId: 'lot-frozen' } as never);
+        expect(result.content[0]?.text).toMatch(/lot lot-frozen/);
+        expect(result.content[0]?.text).toMatch(/FROZEN \(live 6% > tolerance 5%\)/);
+        expect(result.content[0]?.text).toMatch(/exceeds your tolerance/);
+        expect(result.content[0]?.text).toMatch(/cancel the lot \(fee-free/);
+        const json = JSON.parse(result.content[1]?.text ?? '{}') as LotView;
+        expect(json.frozen).toBe(true);
+        expect(json.maxSaleFeePercent).toBe(5);
+    });
+
     it('list_my_lots shows the count and state filter', async () => {
         const handler = capture(registerListMyLotsTool, { trade: { listMyLots: async () => [lot] } });
         const result = await handler({ state: LotState.Open } as never);
         expect(result.content[0]?.text).toMatch(/1 lot\(s\) · state=open/);
+    });
+
+    it('list_my_lots marks a frozen lot', async () => {
+        const handler = capture(registerListMyLotsTool, { trade: { listMyLots: async () => [frozenLot] } });
+        const result = await handler({ state: null } as never);
+        expect(result.content[0]?.text).toMatch(/FROZEN/);
+    });
+
+    it('get_markets surfaces the frozen aggregate when the server serves it', async () => {
+        const frozenMarket: MarketResourceSummary = { ...market, frozenLots: 1, frozenRemaining: '40' };
+        const handler = capture(registerGetMarketsTool, {
+            trade: { getMarkets: async () => [frozenMarket] },
+            mapReader: { readRevealCell: async () => hubCell({ 3: 2.5 }) },
+        });
+        const result = await handler({} as never);
+        expect(result.content[0]?.text).toMatch(/1 frozen \(40\)/);
+    });
+});
+
+describe('trade percent input caps', () => {
+    it('create_lot maxSaleFeePercent accepts 0–100 and rejects above 100', () => {
+        const schema = z.object({ maxSaleFeePercent: createLotInputSchema.maxSaleFeePercent });
+        expect(schema.safeParse({ maxSaleFeePercent: 0 }).success).toBe(true);
+        expect(schema.safeParse({ maxSaleFeePercent: 100 }).success).toBe(true);
+        expect(schema.safeParse({ maxSaleFeePercent: 100.1 }).success).toBe(false);
+    });
+
+    it('set_sale_fee feePercent accepts 0–100 and rejects above 100', () => {
+        const schema = z.object({ feePercent: setSaleFeeInputSchema.feePercent });
+        expect(schema.safeParse({ feePercent: 0 }).success).toBe(true);
+        expect(schema.safeParse({ feePercent: 100 }).success).toBe(true);
+        expect(schema.safeParse({ feePercent: 101 }).success).toBe(false);
     });
 });
 

@@ -179,7 +179,6 @@ export interface ClaimParams {
 export interface WithdrawCpuParams {
     cell: Address;
     tokenId: bigint;
-    /** Whole wCPU units to convert to $CPU (on-chain `uint64`). */
     amount: bigint;
 }
 
@@ -268,8 +267,8 @@ export interface DemolishResult {
     cpuBurned: string;
     /** Warehouse resources consumed by the demolish (integer units); empty when none. */
     inputsConsumed: Array<CraftStackView>;
-    /** Seconds the plot stays locked from rebuilding after this demolish (the tier's build time). */
-    rebuildCooldownSec: number;
+    rebuildUnlockAt: number | null;
+    rebuildCooldownSec: number | null;
     approveTxHash: Hash | null;
     txHash: Hash;
     status: TxStatus;
@@ -294,8 +293,9 @@ export interface WithdrawInput {
 /** A confirmed withdraw — the on-chain mint of $CPU against a cell's debited wCPU (1:1). */
 export interface WithdrawResult {
     tokenId: string;
-    /** Whole wCPU units debited from the cell / $CPU units minted to the wallet, 1:1. */
-    amount: string;
+    requested: string;
+    executed: string;
+    partial: boolean;
     txHash: Hash;
     status: TxStatus;
     blockNumber: string;
@@ -568,12 +568,19 @@ export interface CraftInput {
     batches: number;
 }
 
+export interface CraftOpexCharge {
+    served: boolean;
+    costCpu: string;
+}
+
 export interface CraftStartResult {
     tokenId: string;
     recipeId: CraftRecipeId;
     batches: number;
     /** Total $CPU cost for all batches (decimal); "0" for a free recipe. */
     costCpu: string;
+    opex: CraftOpexCharge;
+    totalCpu: string;
     modeSwitch: ModeSwitchCharge;
     approveTxHash: Hash | null;
     txHash: Hash;
@@ -747,7 +754,7 @@ export interface CreateLotResult {
     resourceId: number;
     value: string;
     pricePerUnit: string;
-    saleFeePercent: number;
+    maxSaleFeePercent: number;
     deliveryId: string;
     arrivalAt: number;
     /** Transit fee quoted for the routing, in $CPU (decimal). */
@@ -816,6 +823,9 @@ export interface TradeQuote {
     total: string;
     totalDistance: number | null;
     arrivalAt: number | null;
+    frozen: boolean;
+    saleFeePercent: number;
+    maxSaleFeePercent: number;
 }
 
 // ---- Swap (Uniswap v4 ETH/$CPU pool) ----

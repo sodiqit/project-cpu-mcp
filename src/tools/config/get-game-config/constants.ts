@@ -1,3 +1,5 @@
+export const SALE_FEE_STRUCTURAL_BOUND_PERCENT = 100;
+
 export const GET_GAME_CONFIG_DESCRIPTION = [
     'Return the game rulebook for the active network: the resource catalog (id → name), the building catalog',
     '(name, kind — extractor/crafter/hub — and $CPU cost; the full JSON also carries each building’s mine/craft',
