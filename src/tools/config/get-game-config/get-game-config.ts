@@ -32,10 +32,18 @@ export function registerGetGameConfigTool(server: McpServer, context: AppContext
             const trade =
                 `${config.trade.saleBurnPercent}% sale burn, sale fee up to ${SALE_FEE_STRUCTURAL_BOUND_PERCENT}% ` +
                 `(the structural bound — a hub owner can set any rate up to this maximum)`;
+            const transitFeeFloors =
+                Object.entries(config.transport.moveFeeFloors)
+                    .map(([id, fee]) => `${id}:${fee}`)
+                    .join(', ') || 'none';
+            const transit =
+                `every resource carries a transit-fee floor ($CPU/u; a hub's non-zero override wins over it) — ` +
+                `${transitFeeFloors}`;
             const storage = `an active hub multiplies a cell's storage cap by ${config.storage.hubStorageMultiplier}x`;
             const header =
                 `Network ${config.network} (chainId ${config.chainId}). ${config.recipes.length} recipe(s) ` +
                 `(see list_recipes). Buildings: ${buildings}. Reveal: ${reveal}. Trade: ${trade}. ` +
+                `Transit: ${transit}. ` +
                 `Storage: ${storage}. ` +
                 `Resources: ${resourceList}. ` +
                 `Contracts — land ${config.contracts.land}, $CPU ${config.contracts.cpuToken}, ` +

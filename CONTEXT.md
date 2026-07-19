@@ -131,21 +131,29 @@ Charged by a foreign transit hub to route a shipment through it (distinct from t
 
 - **Transit fee override** — a hub's per-resource per-unit rate for one resource (`transitFeeOverrides` on
   a cell: `resourceId → decimal $CPU`).
-- **Transit fee default** — the config rate a transit cell charges for a resource it has no override for
-  (`transport.defaultMoveFeePerUnit`).
-- **Effective transit fee** — what a shipment of a given resource actually pays through a hub:
-  `override ?? default`. The route tools (`cpu_route_network`, `cpu_next_hops`) require a `resourceId` and
-  report this exact effective rate per foreign-hub waypoint; the on-chain transport quote remains the
-  authority for a routed total.
+- **Transit fee floor** — the config's per-resource minimum a foreign transit hub charges for a resource it
+  has no override for (`transport.moveFeeFloors`: `resourceId → decimal $CPU`). Every resource in the game
+  carries a floor — free transit no longer exists.
+- **Effective transit fee** — what a shipment of a given resource actually pays through a hub: a non-zero
+  override, else the resource's floor. An override set before its floor was later raised stays in force
+  even below the new floor — the chain charges the override as set, and this client mirrors that rather
+  than taking a maximum of the two. The route tools (`cpu_route_network`, `cpu_next_hops`) require a
+  `resourceId` and report this exact effective rate per foreign-hub waypoint; the on-chain transport quote
+  remains the authority for a routed total.
 
 On a cell, `transitFeeOverrides` and `saleFeeOverrides` each report an *intent*, not a live rate: the
 game API serves both maps for any hub-kind building, including one still under construction, so an
 owner can set rates ahead of time and have them take effect the moment the hub becomes Ready. `null` in
 either map means only **no hub-kind building at all** on the cell — nothing more. An *empty* map (`{}`)
-means a hub — Ready or not — charging the default for everything it doesn't override. Neither absence
-nor an empty map says whether a fee is actually being charged: a rate is only live on an active hub (see
-Readiness) and is otherwise **inactive**, not zero. A `0` entry in either map remains a real "free" rate
-an owner chose, distinct from having no override at all.
+means a hub — Ready or not — charging every resource's floor for transit, or no sale fee at all for sale
+(sale has no floor to fall back to). Neither absence nor an empty map says whether a fee is actually being
+charged: a rate is only live on an active hub (see Readiness) and is otherwise **inactive**, not zero.
+
+The two maps disagree on what a `0` entry means. In `saleFeeOverrides`, `0` remains a real "free" rate an
+owner chose, distinct from having no override at all — the sale model has no floor to fall back to. In
+`transitFeeOverrides`, `0` is a reset sentinel: it clears the override and falls back to the resource's
+floor rather than charging nothing, and such an entry never appears on the map wire — the game API strips
+a reset override instead of serving a literal `0`.
 
 ## Withdraw
 

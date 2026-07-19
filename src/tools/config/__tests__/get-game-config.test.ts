@@ -114,7 +114,8 @@ describe('get_game_config tool', () => {
         expect(header).toContain(
             'sale fee up to 100% (the structural bound — a hub owner can set any rate up to this maximum)',
         );
-        expect(header).not.toContain('default transit fee');
+        expect(header).toContain("every resource carries a transit-fee floor ($CPU/u; a hub's non-zero override");
+        expect(header).toContain('5:0.1');
         expect(header).toMatch(/an active hub multiplies a cell's storage cap by 10x/);
 
         const json = JSON.parse(result.content[1]?.text ?? '{}') as AppConfig;
