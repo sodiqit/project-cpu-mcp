@@ -1,4 +1,6 @@
 import type {
+    JoinSyndicateResult,
+    LeaveSyndicateResult,
     SyndicateCardView,
     SyndicateDetailView,
     SyndicateMembershipView,
@@ -37,6 +39,18 @@ export function summarizeSyndicateDetail(detail: SyndicateDetailView): string {
         .map((member) => `  ${member.address} · joined ${formatUnixSeconds(member.joinedAt)}`)
         .join('\n');
     return `${header}\nMembers (${members.length}):\n${lines}`;
+}
+
+export function summarizeJoin(result: JoinSyndicateResult): string {
+    return (
+        `Joined syndicate ${result.syndicateId} "${result.name}" · joined ${formatUnixSeconds(result.joinedAt)} · ` +
+        `${summarizeRates(result.rates)}. You may leave from ${formatUnixSeconds(result.leaveAvailableAt)} ` +
+        `(unix ${result.leaveAvailableAt}).`
+    );
+}
+
+export function summarizeLeave(result: LeaveSyndicateResult): string {
+    return `Left syndicate ${result.syndicateId}. You may join another syndicate immediately.`;
 }
 
 export function summarizeMembership(membership: SyndicateMembershipView): string {

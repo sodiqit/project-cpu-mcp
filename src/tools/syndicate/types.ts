@@ -40,3 +40,9 @@ export const getSyndicateMembershipInputSchema = {
         .default(null)
         .describe('Wallet address to look up; omit to check your own membership.'),
 };
+
+export const joinSyndicateInputSchema = {
+    id: z.string().describe('The syndicate id to join (from cpu_list_syndicates).'),
+};
+
+export const leaveSyndicateInputSchema = {};

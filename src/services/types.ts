@@ -19,7 +19,7 @@ import type { CellCoord } from '../geometry/types.js';
 import type { ILogger } from '../logger/types.js';
 import type { Cell, RevealCellReader } from '../map/types.js';
 import type { SessionManager } from '../session/manager.js';
-import type { IContractClient, TxStatus, WalletManager, WalletProvider } from '../wallet/types.js';
+import type { ConfirmedTx, IContractClient, TxStatus, WalletManager, WalletProvider } from '../wallet/types.js';
 
 export interface AuthServiceOptions {
     session: SessionManager;
@@ -1055,7 +1055,50 @@ export interface BalanceResult {
 export interface SyndicateServiceOptions {
     api: ApiClient;
     wallet: WalletProvider;
+    appConfig: IAppConfig;
+    registry: ISyndicateRegistryClient;
     logger: ILogger;
+}
+
+export interface SyndicateRegistryClientOptions {
+    contracts: IContractClient;
+    logger: ILogger;
+}
+
+export interface JoinRegistryParams {
+    registry: Address;
+    id: bigint;
+}
+
+export interface LeaveRegistryParams {
+    registry: Address;
+}
+
+export interface SyndicateRegistryConfig {
+    exitCooldownSec: number;
+}
+
+export interface ISyndicateRegistryClient {
+    join(params: JoinRegistryParams): Promise<ConfirmedTx>;
+    leave(params: LeaveRegistryParams): Promise<ConfirmedTx>;
+    getConfig(registry: Address): Promise<SyndicateRegistryConfig>;
+}
+
+export interface JoinSyndicateInput {
+    id: string;
+}
+
+export interface JoinSyndicateResult {
+    syndicateId: string;
+    joinedAt: number;
+    leaveAvailableAt: number;
+    name: string;
+    rates: SyndicateRatesView;
+}
+
+export interface LeaveSyndicateResult {
+    syndicateId: string;
+    rejoinAvailableImmediately: boolean;
 }
 
 export interface SyndicateRatesView {

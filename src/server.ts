@@ -24,6 +24,8 @@ import { registerRevealTool } from './tools/reveal/reveal.js';
 import { registerQuoteSwapTool } from './tools/swap/quote/quote-swap.js';
 import { registerSwapTool } from './tools/swap/swap.js';
 import { registerGetSyndicateTool } from './tools/syndicate/get/get-syndicate.js';
+import { registerJoinSyndicateTool } from './tools/syndicate/join/join-syndicate.js';
+import { registerLeaveSyndicateTool } from './tools/syndicate/leave/leave-syndicate.js';
 import { registerListSyndicatesTool } from './tools/syndicate/list/list-syndicates.js';
 import { registerGetSyndicateMembershipTool } from './tools/syndicate/membership/get-membership.js';
 import { registerBuyLotTool } from './tools/trade/buy-lot/buy-lot.js';
@@ -149,6 +151,8 @@ export async function createServer(context: AppContext): Promise<void> {
     registerListSyndicatesTool(server, context);
     registerGetSyndicateTool(server, context);
     registerGetSyndicateMembershipTool(server, context);
+    registerJoinSyndicateTool(server, context);
+    registerLeaveSyndicateTool(server, context);
     registerQuoteSwapTool(server, context);
     registerSwapTool(server, context);
     registerQuoteMintTool(server, context);

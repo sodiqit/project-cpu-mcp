@@ -1,5 +1,6 @@
 import {
     encodeAbiParameters,
+    encodeErrorResult,
     encodeEventTopics,
     zeroAddress,
     type Abi,
@@ -13,6 +14,7 @@ import type { ApiClient } from '../../api/client.js';
 import { BuildingKind, BuildingType, CraftRecipeId } from '../../api/types.js';
 import { Network } from '../../config/types.js';
 import { ERC20_ABI } from '../../contracts/erc20.abi.js';
+import { SYNDICATE_ABI } from '../../contracts/syndicate.abi.js';
 import { TRANSPORT_ABI } from '../../contracts/transport.abi.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import type { ILogger } from '../../logger/types.js';
@@ -36,6 +38,10 @@ import {
     type IAllowanceService,
     type IAppConfig,
     type ICellClient,
+    type ISyndicateRegistryClient,
+    type JoinRegistryParams,
+    type LeaveRegistryParams,
+    type SyndicateRegistryConfig,
     ModeSwitchKind,
 } from '../types.js';
 
@@ -430,6 +436,97 @@ export class FakeMapReader implements RevealCellReader {
     async refresh(): Promise<void> {
         this.refreshed += 1;
     }
+}
+
+export function memberJoinedLog(args: { player: Address; id: bigint; joinedAt: bigint; registry: Address }): Log {
+    const topics = encodeEventTopics({
+        abi: SYNDICATE_ABI,
+        eventName: 'MemberJoined',
+        args: { player: args.player, id: args.id },
+    });
+    const data = encodeAbiParameters([{ name: 'joinedAt', type: 'uint64' }], [args.joinedAt]);
+    return {
+        address: args.registry,
+        topics,
+        data,
+        blockNumber: 100n,
+        blockHash: `0x${'0'.repeat(64)}`,
+        logIndex: 0,
+        transactionHash: `0x${'0'.repeat(64)}`,
+        transactionIndex: 0,
+        removed: false,
+    } as unknown as Log;
+}
+
+export function memberLeftLog(args: { player: Address; id: bigint; registry: Address }): Log {
+    const topics = encodeEventTopics({
+        abi: SYNDICATE_ABI,
+        eventName: 'MemberLeft',
+        args: { player: args.player, id: args.id },
+    });
+    return {
+        address: args.registry,
+        topics,
+        data: '0x',
+        blockNumber: 100n,
+        blockHash: `0x${'0'.repeat(64)}`,
+        logIndex: 0,
+        transactionHash: `0x${'0'.repeat(64)}`,
+        transactionIndex: 0,
+        removed: false,
+    } as unknown as Log;
+}
+
+export function syndicateRevert(
+    errorName: 'SyndicateNotFound' | 'AlreadyInSyndicate' | 'NotInSyndicate' | 'CooldownActive',
+): Error {
+    const data = encodeErrorResult({ abi: SYNDICATE_ABI, errorName });
+    const error = new Error(`Execution reverted: ${errorName}()`) as Error & { data: Hex };
+    error.data = data;
+    return error;
+}
+
+export interface SyndicateRegistryOutcomes {
+    join: ConfirmedTx | Error;
+    leave: ConfirmedTx | Error;
+    config: SyndicateRegistryConfig;
+}
+
+export class FakeSyndicateRegistryClient implements ISyndicateRegistryClient {
+    public readonly joinCalls: Array<JoinRegistryParams> = [];
+    public readonly leaveCalls: Array<LeaveRegistryParams> = [];
+    public getConfigCalls = 0;
+
+    constructor(private readonly outcomes: Partial<SyndicateRegistryOutcomes> = {}) {}
+
+    async join(params: JoinRegistryParams): Promise<ConfirmedTx> {
+        this.joinCalls.push(params);
+        return resolveTx(this.outcomes.join, 'join');
+    }
+
+    async leave(params: LeaveRegistryParams): Promise<ConfirmedTx> {
+        this.leaveCalls.push(params);
+        return resolveTx(this.outcomes.leave, 'leave');
+    }
+
+    async getConfig(_registry: Address): Promise<SyndicateRegistryConfig> {
+        this.getConfigCalls += 1;
+        return this.outcomes.config ?? { exitCooldownSec: 0 };
+    }
+}
+
+function resolveTx(outcome: ConfirmedTx | Error | undefined, label: string): ConfirmedTx {
+    if (outcome === undefined) {
+        throw new Error(`FakeSyndicateRegistryClient.${label} was called with no configured outcome`);
+    }
+    if (outcome instanceof Error) {
+        throw outcome;
+    }
+    return outcome;
+}
+
+export function confirmedTx(logs: Array<Log>): ConfirmedTx {
+    return { txHash: `0x${'e'.repeat(64)}` as Hash, status: TxStatus.Success, blockNumber: '100', logs };
 }
 
 export interface CellServiceDeps {
