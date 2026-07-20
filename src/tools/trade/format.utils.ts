@@ -42,11 +42,13 @@ export function summarizeBuyLot(result: BuyLotResult, resources: ResourceNames):
     ].filter((v): v is string => v !== null);
     const approve = approvals.length > 0 ? `${approvals.join(', ')}, ` : '';
     return (
-        `Bought ${result.value} ${resourceLabel(resources, result.resourceId)} from lot ${result.lotId} for ` +
-        `${result.sale} $CPU (+ ${result.fee} transit) — of the sale, ${result.hubFee} went to the hub owner and ` +
-        `${result.burn} was burned. ${result.remaining} units remain on the lot. Goods shipping to your cell ` +
-        `(delivery ${result.deliveryId}, ETA ${formatUnixSeconds(result.arrivalAt)}) — run finalize_delivery on ` +
-        `${result.deliveryId} after the ETA. ${approve}buy tx ${result.txHash} in block ${result.blockNumber}.`
+        `Bought ${result.value} ${resourceLabel(resources, result.resourceId)} from lot ${result.lotId}: sale ` +
+        `${result.sale} $CPU − ${result.discount} syndicate discount = ${result.paid} charged (+ ${result.fee} ` +
+        `transit). Of the sale, ${result.hubFee} was the hub fee — ${result.tax} taxed to the hub's syndicate, ` +
+        `${result.ownerNet} net to the hub owner — and ${result.burn} was burned. ${result.remaining} units remain ` +
+        `on the lot. Goods shipping to your cell (delivery ${result.deliveryId}, ETA ` +
+        `${formatUnixSeconds(result.arrivalAt)}) — run finalize_delivery on ${result.deliveryId} after the ETA. ` +
+        `${approve}buy tx ${result.txHash} in block ${result.blockNumber}.`
     );
 }
 

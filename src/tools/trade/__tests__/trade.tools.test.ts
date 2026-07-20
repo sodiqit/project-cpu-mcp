@@ -87,7 +87,11 @@ const buyResult: BuyLotResult = {
     resourceId: 3,
     value: '10',
     sale: '5',
+    discount: '0.2',
+    paid: '4.8',
     hubFee: '0.125',
+    tax: '0.03',
+    ownerNet: '0.095',
     burn: '0.05',
     remaining: '90',
     fee: '0',
@@ -207,12 +211,15 @@ describe('set_sale_fee tool', () => {
 });
 
 describe('buy_lot tool', () => {
-    it('reports a buy with the hub fee, burn, sale approve and buy tx', async () => {
+    it('reports a buy with the clan economics, burn, sale approve and buy tx', async () => {
         const handler = capture(registerBuyLotTool, { trade: { buyLot: async () => buyResult } });
         const result = await handler({ lotId: '7', chain: [], value: '10' } as never);
         expect(result.content[0]?.text).toMatch(/Bought 10 Silica/);
-        expect(result.content[0]?.text).toMatch(/for 5 \$CPU/);
-        expect(result.content[0]?.text).toMatch(/0.125 went to the hub owner/);
+        expect(result.content[0]?.text).toMatch(/sale 5 \$CPU/);
+        expect(result.content[0]?.text).toMatch(/0.2 syndicate discount/);
+        expect(result.content[0]?.text).toMatch(/4.8 charged/);
+        expect(result.content[0]?.text).toMatch(/0.03 taxed to the hub's syndicate/);
+        expect(result.content[0]?.text).toMatch(/0.095 net to the hub owner/);
         expect(result.content[0]?.text).toMatch(/0.05 was burned/);
         expect(result.content[0]?.text).toMatch(/sale approve 0xapprove/);
         expect(result.content[0]?.text).toMatch(/buy tx 0xbuy/);

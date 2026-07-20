@@ -1,4 +1,13 @@
-import { encodeAbiParameters, encodeEventTopics, formatEther, parseEther, type Hash, type Log } from 'viem';
+import {
+    encodeAbiParameters,
+    encodeEventTopics,
+    formatEther,
+    parseEther,
+    zeroAddress,
+    type Address,
+    type Hash,
+    type Log,
+} from 'viem';
 import { describe, expect, it } from 'vitest';
 
 import type { ApiClient } from '../../api/client.js';
@@ -143,6 +152,13 @@ function boughtLog(args: {
     sale: bigint;
     hubFee: bigint;
     burn: bigint;
+    discount: bigint;
+    tax: bigint;
+    ownerNet: bigint;
+    buyerSyndicateId: bigint;
+    ownerSyndicateId: bigint;
+    taxTo: Address;
+    settledAt: bigint;
 }): Log {
     const topics = encodeEventTopics({
         abi: TRADE_ABI,
@@ -156,8 +172,28 @@ function boughtLog(args: {
             { name: 'sale', type: 'uint256' },
             { name: 'hubFee', type: 'uint256' },
             { name: 'burn', type: 'uint256' },
+            { name: 'discount', type: 'uint256' },
+            { name: 'tax', type: 'uint256' },
+            { name: 'ownerNet', type: 'uint256' },
+            { name: 'buyerSyndicateId', type: 'uint256' },
+            { name: 'ownerSyndicateId', type: 'uint256' },
+            { name: 'taxTo', type: 'address' },
+            { name: 'settledAt', type: 'uint64' },
         ],
-        [args.value, args.remaining, args.sale, args.hubFee, args.burn],
+        [
+            args.value,
+            args.remaining,
+            args.sale,
+            args.hubFee,
+            args.burn,
+            args.discount,
+            args.tax,
+            args.ownerNet,
+            args.buyerSyndicateId,
+            args.ownerSyndicateId,
+            args.taxTo,
+            args.settledAt,
+        ],
     );
     return tradeLog(topics, data);
 }
@@ -465,7 +501,7 @@ describe('TradeService.setSaleFee', () => {
 });
 
 describe('TradeService.buyLot', () => {
-    it('reads the lot, approves both the sale and the transit fee, and decodes hubFee/burn', async () => {
+    it('decodes the sale-leg clan economics on a nonzero syndicate split', async () => {
         const h = makeTrade({
             response: {
                 status: 200,
@@ -481,6 +517,13 @@ describe('TradeService.buyLot', () => {
                     sale: parseEther('5'),
                     hubFee: parseEther('0.125'),
                     burn: parseEther('0.05'),
+                    discount: parseEther('0.2'),
+                    tax: parseEther('0.03'),
+                    ownerNet: parseEther('0.095'),
+                    buyerSyndicateId: 42n,
+                    ownerSyndicateId: 42n,
+                    taxTo: WALLET_ADDRESS,
+                    settledAt: 1704n,
                 }),
                 scheduledLog(123n, 1704n),
             ],
@@ -500,7 +543,11 @@ describe('TradeService.buyLot', () => {
         ]);
         expect(h.tradeClient.buys[0]).toMatchObject({ trade: TRADE, lotId: 7n, value: 10n, maxFee: 1_100n });
         expect(result.sale).toBe('5');
+        expect(result.discount).toBe('0.2');
+        expect(result.paid).toBe('4.8');
         expect(result.hubFee).toBe('0.125');
+        expect(result.tax).toBe('0.03');
+        expect(result.ownerNet).toBe('0.095');
         expect(result.burn).toBe('0.05');
         expect(result.remaining).toBe('90');
         expect(result.fee).toBe(formatEther(1_000n));
@@ -508,6 +555,10 @@ describe('TradeService.buyLot', () => {
         expect(result.approveSaleTxHash).toBe(APPROVE_HASH);
         expect(result.approveTransitTxHash).toBe(APPROVE_HASH);
         expect(result.txHash).toBe(BUY_HASH);
+        expect(result).not.toHaveProperty('buyerSyndicateId');
+        expect(result).not.toHaveProperty('ownerSyndicateId');
+        expect(result).not.toHaveProperty('taxTo');
+        expect(result).not.toHaveProperty('settledAt');
     });
 
     it('skips the transit approve on a free route but still approves the sale', async () => {
@@ -519,7 +570,21 @@ describe('TradeService.buyLot', () => {
             quote: { totalFee: 0n, discount: 0n, totalDistance: 2n, arrivalAt: 1704n },
             approve: APPROVE_HASH,
             confirmLogs: [
-                boughtLog({ lotId: 7n, value: 10n, remaining: 90n, sale: parseEther('5'), hubFee: 0n, burn: 0n }),
+                boughtLog({
+                    lotId: 7n,
+                    value: 10n,
+                    remaining: 90n,
+                    sale: parseEther('5'),
+                    hubFee: parseEther('0.125'),
+                    burn: parseEther('0.05'),
+                    discount: 0n,
+                    tax: 0n,
+                    ownerNet: parseEther('0.075'),
+                    buyerSyndicateId: 0n,
+                    ownerSyndicateId: 0n,
+                    taxTo: zeroAddress,
+                    settledAt: 1704n,
+                }),
                 scheduledLog(123n, 1704n),
             ],
         });
@@ -533,6 +598,10 @@ describe('TradeService.buyLot', () => {
         expect(h.allowance.calls).toEqual([{ token: CPU_TOKEN, spender: TRADE, needed: parseEther('5') }]);
         expect(result.approveTransitTxHash).toBeNull();
         expect(result.approveSaleTxHash).toBe(APPROVE_HASH);
+        expect(result.discount).toBe('0');
+        expect(result.tax).toBe('0');
+        expect(result.paid).toBe(result.sale);
+        expect(result.paid).toBe('5');
     });
 
     it('sends the buy on a frozen lot and enriches the SaleFeeExceedsMax revert with the next moves', async () => {
