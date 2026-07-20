@@ -1,6 +1,24 @@
+import type { Address } from 'viem';
+
 import type { RegistryRates, SyndicateCardView, SyndicateRatesView } from './types.js';
 import type { ApiSyndicateCard } from '../api/types.js';
 import { bpToPercent, percentToBp } from '../utils/format.utils.js';
+
+export function toError(error: unknown): Error {
+    return error instanceof Error ? error : new Error(String(error));
+}
+
+export function requireRegistryEvent<T extends { address: string }>(
+    events: Array<T>,
+    registry: Address,
+    message: string,
+): T {
+    const event = events.find((e) => e.address.toLowerCase() === registry.toLowerCase());
+    if (event === undefined) {
+        throw new Error(message);
+    }
+    return event;
+}
 
 export function toSyndicateCardView(card: ApiSyndicateCard): SyndicateCardView {
     return {
@@ -33,14 +51,4 @@ function rateToBp(percent: number, label: string): number {
         throw new Error(`The ${label} rate must be between 0% and 100% (got ${percent}%).`);
     }
     return percentToBp(percent);
-}
-
-export function buildSyndicateQuery(params: Record<string, string | number | null>): string {
-    const pairs: Array<string> = [];
-    for (const [key, value] of Object.entries(params)) {
-        if (value !== null) {
-            pairs.push(`${key}=${encodeURIComponent(String(value))}`);
-        }
-    }
-    return pairs.length === 0 ? '' : `?${pairs.join('&')}`;
 }

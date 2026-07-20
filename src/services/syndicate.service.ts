@@ -2,7 +2,7 @@ import { isAddress, parseEventLogs, type Address, type Log } from 'viem';
 import { z } from 'zod';
 
 import { describeApiError } from './reveal.helpers.js';
-import { buildSyndicateQuery, ratesToRegistry, toSyndicateCardView } from './syndicate.helpers.js';
+import { ratesToRegistry, requireRegistryEvent, toError, toSyndicateCardView } from './syndicate.helpers.js';
 import type {
     AppConfig,
     CreateSyndicateInput,
@@ -39,6 +39,7 @@ import {
 import { SYNDICATE_ABI } from '../contracts/syndicate.abi.js';
 import type { ILogger } from '../logger/types.js';
 import { formatUnixSeconds } from '../utils/format.utils.js';
+import { buildQuery } from '../utils/query.utils.js';
 import { describeRevert } from '../wallet/revert.utils.js';
 import type { WalletManager, WalletProvider } from '../wallet/types.js';
 
@@ -59,9 +60,7 @@ export class SyndicateService {
     }
 
     async join(input: JoinSyndicateInput): Promise<JoinSyndicateResult> {
-        const config = await this.appConfig.load();
-        this.assertChain(config, this.wallet.get());
-        const registry = this.requireRegistry(config);
+        const { config, registry } = await this.resolveRegistry();
 
         const id = BigInt(input.id);
         const cooldownSec = await this.cooldownSec(registry);
@@ -93,9 +92,7 @@ export class SyndicateService {
     }
 
     async leave(): Promise<LeaveSyndicateResult> {
-        const config = await this.appConfig.load();
-        this.assertChain(config, this.wallet.get());
-        const registry = this.requireRegistry(config);
+        const { config, registry } = await this.resolveRegistry();
 
         this.logger.info('leaving syndicate', { network: config.network });
         const receipt = await this.sendLeave(registry);
@@ -103,9 +100,7 @@ export class SyndicateService {
     }
 
     async create(input: CreateSyndicateInput): Promise<CreateSyndicateResult> {
-        const config = await this.appConfig.load();
-        this.assertChain(config, this.wallet.get());
-        const registry = this.requireRegistry(config);
+        const { config, registry } = await this.resolveRegistry();
 
         const manager = (input.manager ?? this.wallet.get().getAddress()) as Address;
         const rates = ratesToRegistry(input.rates);
@@ -128,9 +123,7 @@ export class SyndicateService {
     }
 
     async setParams(input: SetSyndicateParamsInput): Promise<SetSyndicateParamsResult> {
-        const config = await this.appConfig.load();
-        this.assertChain(config, this.wallet.get());
-        const registry = this.requireRegistry(config);
+        const { config, registry } = await this.resolveRegistry();
 
         const id = BigInt(input.id);
         const rates = ratesToRegistry(input.rates);
@@ -142,9 +135,7 @@ export class SyndicateService {
     }
 
     async transferManager(input: TransferSyndicateManagerInput): Promise<TransferSyndicateManagerResult> {
-        const config = await this.appConfig.load();
-        this.assertChain(config, this.wallet.get());
-        const registry = this.requireRegistry(config);
+        const { config, registry } = await this.resolveRegistry();
 
         const id = BigInt(input.id);
         const previousManager = this.wallet.get().getAddress();
@@ -157,7 +148,7 @@ export class SyndicateService {
     }
 
     async listSyndicates(query: ListSyndicatesQuery): Promise<Array<SyndicateCardView>> {
-        const qs = buildSyndicateQuery({
+        const qs = buildQuery({
             name: query.name,
             minMembers: query.minMembers,
             maxMembers: query.maxMembers,
@@ -234,7 +225,7 @@ export class SyndicateService {
         limit: number | null,
         offset: number | null,
     ): Promise<Array<SyndicateMemberView>> {
-        const qs = buildSyndicateQuery({ limit, offset });
+        const qs = buildQuery({ limit, offset });
         const response = await this.api.request<Array<ApiSyndicateMemberView>>(
             `/api/v1/syndicates/${encodeURIComponent(id)}/members${qs}`,
         );
@@ -299,7 +290,7 @@ export class SyndicateService {
     private async explainCreateError(error: unknown): Promise<Error> {
         const revert = describeRevert(error, SYNDICATE_ABI);
         if (revert === null) {
-            return error instanceof Error ? error : new Error(String(error));
+            return toError(error);
         }
         if (revert.startsWith('AlreadyInSyndicate')) {
             return new Error(await this.alreadyInMessage());
@@ -311,7 +302,7 @@ export class SyndicateService {
     private explainManagerWriteError(error: unknown, zeroAddressMessage: string): Error {
         const revert = describeRevert(error, SYNDICATE_ABI);
         if (revert === null) {
-            return error instanceof Error ? error : new Error(String(error));
+            return toError(error);
         }
         const mapped = this.mapParamsRevert(revert, zeroAddressMessage);
         return mapped ?? new Error(`Execution reverted: ${revert}`);
@@ -342,7 +333,7 @@ export class SyndicateService {
     private async explainJoinError(error: unknown, id: bigint): Promise<Error> {
         const revert = describeRevert(error, SYNDICATE_ABI);
         if (revert === null) {
-            return error instanceof Error ? error : new Error(String(error));
+            return toError(error);
         }
         if (revert.startsWith('SyndicateNotFound')) {
             return new Error(`No syndicate with id ${id.toString()} — check the id from cpu_list_syndicates.`);
@@ -356,7 +347,7 @@ export class SyndicateService {
     private async explainLeaveError(error: unknown): Promise<Error> {
         const revert = describeRevert(error, SYNDICATE_ABI);
         if (revert === null) {
-            return error instanceof Error ? error : new Error(String(error));
+            return toError(error);
         }
         if (revert.startsWith('NotInSyndicate')) {
             return new Error('You are not a member of any syndicate; nothing to leave.');
@@ -408,36 +399,44 @@ export class SyndicateService {
 
     private decodeCreatedId(logs: Array<Log>, registry: Address): string {
         const events = parseEventLogs({ abi: SYNDICATE_ABI, eventName: 'SyndicateCreated', logs });
-        const event = events.find((e) => e.address.toLowerCase() === registry.toLowerCase());
-        if (event === undefined) {
-            throw new Error('Create confirmed on-chain but no SyndicateCreated event was found in the receipt.');
-        }
-        return event.args.id.toString();
+        return requireRegistryEvent(
+            events,
+            registry,
+            'Create confirmed on-chain but no SyndicateCreated event was found in the receipt.',
+        ).args.id.toString();
     }
 
     private decodeJoinedAt(logs: Array<Log>, registry: Address): number {
         const events = parseEventLogs({ abi: SYNDICATE_ABI, eventName: 'MemberJoined', logs });
-        const event = events.find((e) => e.address.toLowerCase() === registry.toLowerCase());
-        if (event === undefined) {
-            throw new Error('Join confirmed on-chain but no MemberJoined event was found in the receipt.');
-        }
-        return Number(event.args.joinedAt);
+        return Number(
+            requireRegistryEvent(
+                events,
+                registry,
+                'Join confirmed on-chain but no MemberJoined event was found in the receipt.',
+            ).args.joinedAt,
+        );
     }
 
     private decodeLeftId(logs: Array<Log>, registry: Address): string {
         const events = parseEventLogs({ abi: SYNDICATE_ABI, eventName: 'MemberLeft', logs });
-        const event = events.find((e) => e.address.toLowerCase() === registry.toLowerCase());
-        if (event === undefined) {
-            throw new Error('Leave confirmed on-chain but no MemberLeft event was found in the receipt.');
-        }
-        return event.args.id.toString();
+        return requireRegistryEvent(
+            events,
+            registry,
+            'Leave confirmed on-chain but no MemberLeft event was found in the receipt.',
+        ).args.id.toString();
+    }
+
+    private async resolveRegistry(): Promise<{ config: AppConfig; registry: Address }> {
+        const config = await this.appConfig.load();
+        this.assertChain(config, this.wallet.get());
+        return { config, registry: this.requireRegistry(config) };
     }
 
     private requireRegistry(config: AppConfig): Address {
         const registry = config.contracts.syndicate;
         if (registry === null || !isAddress(registry, { strict: false })) {
             throw new Error(
-                `The syndicate registry is not deployed on network ${config.network}; joining and leaving are unavailable here.`,
+                `The syndicate registry is not deployed on network ${config.network}, so syndicate actions are unavailable here.`,
             );
         }
         return registry;

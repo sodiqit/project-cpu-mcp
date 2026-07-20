@@ -1,5 +1,6 @@
-import { encodeFunctionData, type Abi, type Hash } from 'viem';
+import { encodeFunctionData, type Hash } from 'viem';
 
+import { namedQuoteRevert } from './trade.helpers.js';
 import type {
     BuyLotParams,
     BuyQuoteResult,
@@ -14,12 +15,8 @@ import type {
     TradeClientOptions,
 } from './types.js';
 import { TRADE_ABI } from '../contracts/trade.abi.js';
-import { TRANSPORT_ABI } from '../contracts/transport.abi.js';
 import type { ILogger } from '../logger/types.js';
-import { describeRevert } from '../wallet/revert.utils.js';
 import type { IContractClient } from '../wallet/types.js';
-
-const QUOTE_ERROR_ABI = [...TRADE_ABI, ...TRANSPORT_ABI] as unknown as Abi;
 
 export class TradeClient implements ITradeClient {
     private readonly contracts: IContractClient;
@@ -126,12 +123,4 @@ export class TradeClient implements ITradeClient {
             throw namedQuoteRevert(error);
         }
     }
-}
-
-function namedQuoteRevert(error: unknown): unknown {
-    const revert = describeRevert(error, QUOTE_ERROR_ABI);
-    if (revert === null) {
-        return error;
-    }
-    return new Error(`Quote reverted: ${revert}`, { cause: error });
 }

@@ -49,6 +49,7 @@ import {
 import { TRADE_ABI } from '../contracts/trade.abi.js';
 import type { ILogger } from '../logger/types.js';
 import { bpToPercent, cpuFromWei, percentToBp } from '../utils/format.utils.js';
+import { buildQuery } from '../utils/query.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
 
 /**
@@ -325,13 +326,6 @@ export class TradeService {
         };
     }
 
-    /**
-     * Non-destructive buy preview priced entirely by the Trade contract's views: without a route the
-     * sale leg via `quoteSale`, with a route the full preflight (sale leg + transit) via `quoteBuy`.
-     * Both revert with the same selectors as `buy`, so a failed quote is a truthful "this won't go
-     * through" preview. It does not check pause, $CPU balance, or allowance — a fill can still revert
-     * on those.
-     */
     async quoteBuy(input: QuoteBuyInput): Promise<TradeQuote> {
         const { config, wallet } = await this.ready();
         const trade = this.resolveTrade(config);
@@ -506,15 +500,4 @@ export class TradeService {
         }
         return { config, wallet };
     }
-}
-
-/** Serialise a query object to `?a=1&b=2`, dropping null fields and URL-encoding values. */
-function buildQuery(params: Record<string, string | number | null>): string {
-    const pairs: Array<string> = [];
-    for (const [key, value] of Object.entries(params)) {
-        if (value !== null) {
-            pairs.push(`${key}=${encodeURIComponent(String(value))}`);
-        }
-    }
-    return pairs.length === 0 ? '' : `?${pairs.join('&')}`;
 }

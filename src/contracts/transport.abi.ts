@@ -105,8 +105,4 @@ export const TRANSPORT_ABI = [
     { type: 'error', name: 'DeliveryNotFound', inputs: [] },
     { type: 'error', name: 'NotYetArrived', inputs: [] },
     { type: 'error', name: 'BurnPercentTooHigh', inputs: [] },
-    { type: 'error', name: 'FeeBelowFloor', inputs: [] },
-    { type: 'error', name: 'ZeroFloor', inputs: [] },
-    { type: 'error', name: 'IncompleteFloors', inputs: [] },
-    { type: 'error', name: 'ArrayLengthMismatch', inputs: [] },
 ] as const;

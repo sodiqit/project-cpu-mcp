@@ -1,5 +1,20 @@
+import { type Abi } from 'viem';
+
 import type { ApiLotView, ApiMarketResourceSummary, LotView, MarketResourceSummary } from '../api/types.js';
+import { TRADE_ABI } from '../contracts/trade.abi.js';
+import { TRANSPORT_ABI } from '../contracts/transport.abi.js';
 import { bpToPercent, cpuFromWei } from '../utils/format.utils.js';
+import { describeRevert } from '../wallet/revert.utils.js';
+
+const QUOTE_ERROR_ABI = [...TRADE_ABI, ...TRANSPORT_ABI] as unknown as Abi;
+
+export function namedQuoteRevert(error: unknown): unknown {
+    const revert = describeRevert(error, QUOTE_ERROR_ABI);
+    if (revert === null) {
+        return error;
+    }
+    return new Error(`Quote reverted: ${revert}`, { cause: error });
+}
 
 export function withDecimalPrice(lot: ApiLotView): LotView {
     return {
