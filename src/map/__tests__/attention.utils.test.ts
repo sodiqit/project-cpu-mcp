@@ -174,6 +174,26 @@ describe('buildAttentionReport', () => {
         expect(constructing.items).toEqual([]);
     });
 
+    it('flags an upgraded extractor on a depleted deposit, following the catalog set not a fixed enum', () => {
+        const cell = toCell(
+            makeCell({
+                tokenId: '11',
+                revealCount: 1,
+                building: { type: 'mine_l2a', buildFinishAt: 5, modeResource: null, modeRecipeId: null },
+                resources: [makeResource({ resourceId: 1, deposit: '0' })],
+            }),
+            BASE.serverTime,
+            makeProjectionConfig(),
+        );
+        const r = buildAttentionReport({
+            ...BASE,
+            extractionShareBpByBuilding: { mine_l2a: 10000 },
+            extractorBuildingTypes: new Set<string>(['mine_l2a']),
+            ownedCells: [cell],
+        });
+        expect(r.items.map((i) => i.reason)).toContain(AttentionReason.DepositDepleted);
+    });
+
     it('flags a job that has run its scheduled cycles, but not one still running', () => {
         const finished = report([
             {

@@ -18,7 +18,7 @@ const RECIPE = 'alloy';
 const YIELD_PER_CYCLE = 77;
 const CRAFT_OUTPUT_PER_CYCLE = 40;
 
-const UPGRADED_HUB = BuildingType.Datacenter;
+const UPGRADED_HUB = 'hub_l2a';
 
 function config(overrides: Partial<CellProjectionConfig> = {}): CellProjectionConfig {
     return {

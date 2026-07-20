@@ -36,6 +36,16 @@ describe('parseSnapshot', () => {
     it('throws on a malformed envelope (a real protocol error, not a stray cell)', () => {
         expect(() => parseSnapshot({ version: 1 })).toThrow();
     });
+
+    it('keeps a cell carrying an upgraded building type instead of dropping it', () => {
+        const upgraded = makeCell({
+            tokenId: '9',
+            building: { type: 'hub_l2a', buildFinishAt: null, modeResource: null, modeRecipeId: null },
+        });
+        const { snapshot, dropped } = parseSnapshot({ serverTime: 1, version: 1, cells: [upgraded] });
+        expect(snapshot.cells.map((c) => c.tokenId)).toEqual(['9']);
+        expect(dropped).toBe(0);
+    });
 });
 
 describe('isNewer', () => {
@@ -59,6 +69,14 @@ describe('parseCell', () => {
     it('returns null for invalid payloads', () => {
         expect(parseCell({})).toBeNull();
         expect(parseCell(makeCell({ updated: 'soon' as unknown as number }))).toBeNull();
+    });
+
+    it('keeps a cell whose building is an upgraded type the client never enumerates', () => {
+        const upgraded = makeCell({
+            tokenId: '9',
+            building: { type: 'oil_power_plant_l2a', buildFinishAt: null, modeResource: null, modeRecipeId: null },
+        });
+        expect(parseCell(upgraded)).not.toBeNull();
     });
 });
 

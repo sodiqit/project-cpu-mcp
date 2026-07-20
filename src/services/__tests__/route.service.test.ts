@@ -14,7 +14,8 @@ import type { CatalogBuildingView } from '../types.js';
 
 const RIVAL = '0x000000000000000000000000000000000000beef';
 const RES = 3;
-const UPGRADED_HUB = BuildingType.Datacenter;
+const DEFAULT_FLOORS: Record<number, string> = { 3: '0', 9: '0' };
+const UPGRADED_HUB = 'hub_l2a';
 const UNFINISHED_AT = DEFAULT_SERVER_TIME + 1000;
 
 function own(tokenId: string, over: Partial<RawCell> = {}): RawCell {
@@ -37,15 +38,15 @@ function foreignHub(tokenId: string, feePerUnit: string, over: Partial<RawCell> 
 
 function upgradedHubCatalogEntry(base: Array<CatalogBuildingView>): CatalogBuildingView {
     const entry = base.find((b) => b.kind === BuildingKind.Hub) as CatalogBuildingView;
-    return { ...entry, type: UPGRADED_HUB, onChainId: 99, name: 'Mega Hub', tier: 2 };
+    return { ...entry, type: UPGRADED_HUB as CatalogBuildingView['type'], onChainId: 99, name: 'Mega Hub', tier: 2 };
 }
 
-function makeService(cells: Array<RawCell>, defaultMoveFeePerUnit = '0'): RouteService {
+function makeService(cells: Array<RawCell>, moveFeeFloors: Record<number, string> = DEFAULT_FLOORS): RouteService {
     const wallet = { get: () => ({ getAddress: () => WALLET_ADDRESS }) } as unknown as WalletProvider;
     const base = makeConfig();
     const config = {
         ...base,
-        transport: { ...base.transport, defaultMoveFeePerUnit },
+        transport: { ...base.transport, moveFeeFloors },
         buildings: [...base.buildings, upgradedHubCatalogEntry(base.buildings)],
     };
     const projection = toProjectionConfig(config);
@@ -82,14 +83,24 @@ describe('RouteService.nextHops', () => {
         expect(result.hops[1]?.pos).toEqual({ face: 0, i: 1, j: 5 });
     });
 
-    it('resolves the transit fee for the requested resource: override for it, config default otherwise', async () => {
+    it('resolves the transit fee for the requested resource: override for it, its floor otherwise', async () => {
         const cells = [own('72'), foreignHub('75', '0.5')];
 
         const forRes3 = await survey(cells, 72, null, 3);
         expect(forRes3.hops.find((h) => h.tokenId === '75')?.transitFeePerUnit).toBe('0.5');
 
-        const forRes9 = await makeService(cells, '0.2').nextHops({ from: 72, towards: null, resourceId: 9 });
+        const forRes9 = await makeService(cells, { 3: '0', 9: '0.2' }).nextHops({
+            from: 72,
+            towards: null,
+            resourceId: 9,
+        });
         expect(forRes9.hops.find((h) => h.tokenId === '75')?.transitFeePerUnit).toBe('0.2');
+    });
+
+    it('rejects a resource id that has no floor row in the config before any route work', async () => {
+        await expect(survey([own('72'), foreignHub('75', '0.5')], 72, null, 999)).rejects.toThrow(
+            /does not exist or is not transportable/,
+        );
     });
 
     it('adds a compass when towards is given and sorts by remaining distance', async () => {
@@ -302,6 +313,12 @@ describe('RouteService.network', () => {
             transitFeePerUnit: null,
         });
         expect(result.edges).toEqual([]);
+    });
+
+    it('rejects a resource id with no floor row before surveying the network', async () => {
+        await expect(
+            makeService([own('72'), foreignHub('75', '0.5')]).network({ from: null, towards: null, resourceId: 999 }),
+        ).rejects.toThrow(/does not exist or is not transportable/);
     });
 
     it('shows a disconnected target as a separate component', async () => {

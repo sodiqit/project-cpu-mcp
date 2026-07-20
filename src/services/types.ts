@@ -262,7 +262,7 @@ export interface DemolishInput {
 
 export interface DemolishResult {
     tokenId: string;
-    buildingType: BuildingType;
+    buildingType: string;
     /** $CPU burned to tear it down (decimal). */
     cpuBurned: string;
     /** Warehouse resources consumed by the demolish (integer units); empty when none. */

@@ -15,7 +15,7 @@ import { makeCell, makeResource, makeStorage } from '../../map/__tests__/fixture
 import { CellProcessKind } from '../../map/types.js';
 import { TxStatus } from '../../wallet/types.js';
 import { BuildService } from '../build.service.js';
-import type { BuildInput } from '../types.js';
+import type { BuildInput, CatalogBuildingView } from '../types.js';
 import {
     APPROVE_HASH,
     CELL,
@@ -201,6 +201,35 @@ describe('BuildService', () => {
         expect(result.rebuildCooldownSec).toBe(200);
         expect(result.status).toBe(TxStatus.Success);
         expect(result.blockNumber).toBe('100');
+    });
+
+    it('demolishes an upgraded building by pricing its type off the catalog', async () => {
+        const base = makeConfig();
+        const mine = base.buildings.find((b) => b.type === BuildingType.Mine) as CatalogBuildingView;
+        const config = {
+            ...base,
+            buildings: [
+                ...base.buildings,
+                { ...mine, type: 'mine_l2a' as CatalogBuildingView['type'], onChainId: 46, name: 'Mine L2A' },
+            ],
+        };
+        const cell = makeCell({
+            tokenId: '42',
+            owner: WALLET_ADDRESS,
+            building: { type: 'mine_l2a', buildFinishAt: null, modeResource: null, modeRecipeId: null },
+        });
+        const { service, contracts } = makeService({
+            cell,
+            config,
+            approve: APPROVE_HASH,
+            logs: [[demolishedLog(BigInt(DEFAULT_SERVER_TIME + 100))]],
+        });
+
+        const result = await service.demolish({ tokenId: '42' });
+
+        expect(decodeSent(contracts, 0).functionName).toBe('demolish');
+        expect(result.buildingType).toBe('mine_l2a');
+        expect(result.cpuBurned).toBe('2.5');
     });
 
     it('reports the event finish time even when it differs from the demolished type own build time', async () => {

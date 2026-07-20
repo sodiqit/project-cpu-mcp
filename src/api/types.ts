@@ -170,7 +170,7 @@ export interface TransportRoutingView {
     moveRadius: number;
     hubRadius: number;
     moveTimePerCellSec: number;
-    defaultMoveFeePerUnit: string;
+    moveFeeFloors: Record<number, string>;
 }
 
 export interface TradeFeeView {
@@ -214,6 +214,16 @@ export const buildingConfigSchema = z
     })
     .passthrough();
 
+export const transportRoutingSchema = z
+    .object({
+        moveFeeFloors: z.record(z.string(), z.string()).refine((floors) => Object.keys(floors).length > 0, {
+            message:
+                'transport.moveFeeFloors must carry a per-resource transit-fee floor for every resource; the ' +
+                'removed scalar default is no longer accepted.',
+        }),
+    })
+    .passthrough();
+
 export const appConfigResponseSchema = z
     .object({
         chainId: z.number(),
@@ -223,7 +233,7 @@ export const appConfigResponseSchema = z
         recipes: z.array(z.object({}).passthrough()).optional(),
         buildings: z.array(buildingConfigSchema).optional(),
         reveal: z.object({}).passthrough().optional(),
-        transport: z.object({}).passthrough().optional(),
+        transport: transportRoutingSchema,
         trade: z.object({}).passthrough().optional(),
     })
     .passthrough();

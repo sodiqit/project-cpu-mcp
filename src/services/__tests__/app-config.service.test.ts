@@ -62,7 +62,7 @@ function makeResponse(overrides: Partial<AppConfigResponse> = {}): AppConfigResp
             },
         ],
         reveal: { firstFree: true, reRevealCost: '1000' },
-        transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2, defaultMoveFeePerUnit: '0.1' },
+        transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2, moveFeeFloors: { 5: '0.1' } },
         trade: { saleBurnPercent: 1, maxSaleFeeBp: 5000 },
         storage: { hubStorageMultiplier: 10 },
         ...overrides,
@@ -125,13 +125,13 @@ describe('AppConfigService', () => {
         expect(first.contracts.cell).toBe(CELL);
         expect(first.contracts.cpuHook).toBe(CPU_HOOK);
         expect(first.resources[5]).toBe('Iron');
-        expect(first.transport.defaultMoveFeePerUnit).toBe('0.1');
+        expect(first.transport.moveFeeFloors).toEqual({ 5: '0.1' });
         expect(first.trade).toEqual({ saleBurnPercent: 1, maxSaleFeePercent: 50 });
         expect(first.storage).toEqual({ hubStorageMultiplier: 10 });
         expect(second).toBe(first);
     });
 
-    it('defaults the trade block and default move fee when an older API omits them', async () => {
+    it('defaults the trade block when an older API omits it', async () => {
         const without = await makeService(
             new FakeApi({
                 status: 200,
@@ -140,12 +140,38 @@ describe('AppConfigService', () => {
                     chainId: 1,
                     contracts: { land: '', cpuToken: '', cpuHook: '', cell: '' },
                     resources: {},
+                    transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2, moveFeeFloors: { 5: '0' } },
                     storage: { hubStorageMultiplier: 10 },
                 },
             }),
         ).load();
         expect(without.trade).toEqual({ saleBurnPercent: 0, maxSaleFeePercent: 0 });
-        expect(without.transport.defaultMoveFeePerUnit).toBe('0');
+    });
+
+    it('surfaces the per-resource transit-fee floors verbatim', async () => {
+        const floors = { 1: '0', 5: '0.25', 100: '2', 113: '3.5' };
+        const loaded = await makeService(
+            new FakeApi({
+                status: 200,
+                data: makeResponse({
+                    transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2, moveFeeFloors: floors },
+                }),
+            }),
+        ).load();
+        expect(loaded.transport.moveFeeFloors).toEqual(floors);
+    });
+
+    it('fails loudly when a legacy config carries no per-resource transit-fee floors', async () => {
+        const { transport: _dropped, ...rest } = makeResponse();
+        const legacy = { ...rest, transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2 } };
+        await expect(makeService(new FakeApi({ status: 200, data: legacy })).load()).rejects.toThrow();
+    });
+
+    it('rejects an empty floor map rather than normalising it to an empty record', async () => {
+        const empty = makeResponse({
+            transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2, moveFeeFloors: {} },
+        });
+        await expect(makeService(new FakeApi({ status: 200, data: empty })).load()).rejects.toThrow();
     });
 
     it('passes recipes through and defaults them to an empty array when absent', async () => {
@@ -172,6 +198,7 @@ describe('AppConfigService', () => {
                     chainId: 1,
                     contracts: { land: '', cpuToken: '', cpuHook: '', cell: '' },
                     resources: {},
+                    transport: { moveRadius: 1, hubRadius: 3, moveTimePerCellSec: 2, moveFeeFloors: { 5: '0' } },
                     storage: { hubStorageMultiplier: 10 },
                 },
             }),

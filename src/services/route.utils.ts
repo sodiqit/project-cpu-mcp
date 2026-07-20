@@ -19,18 +19,26 @@ export function nodeRadius(node: RouteNode, moveRadius: number, hubRadius: numbe
 export function effectiveTransitFee(
     overrides: Record<number, string> | null,
     resourceId: number,
-    defaultMoveFeePerUnit: string,
+    floors: Record<number, string>,
 ): string {
-    return overrides?.[resourceId] ?? defaultMoveFeePerUnit;
+    const override = overrides?.[resourceId];
+    if (override !== undefined && override !== '0') {
+        return override;
+    }
+    const floor = floors[resourceId];
+    if (floor === undefined) {
+        throw new Error(`Resource ${resourceId} has no transit-fee floor in the loaded config.`);
+    }
+    return floor;
 }
 
 export function waypointTransitFee(
     node: RouteNode,
     overrides: Record<number, string> | null,
     resourceId: number,
-    defaultMoveFeePerUnit: string,
+    floors: Record<number, string>,
 ): string | null {
-    return !node.isOwn && node.isHub ? effectiveTransitFee(overrides, resourceId, defaultMoveFeePerUnit) : null;
+    return !node.isOwn && node.isHub ? effectiveTransitFee(overrides, resourceId, floors) : null;
 }
 
 export function pairReach(a: RouteNode, b: RouteNode, moveRadius: number, hubRadius: number): number {

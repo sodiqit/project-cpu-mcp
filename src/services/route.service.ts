@@ -48,6 +48,7 @@ export class RouteService {
 
         const config = await this.appConfig.load();
         const routing = config.transport;
+        this.assertTransportable(input.resourceId, routing.moveFeeFloors);
         const address = this.wallet.get().getAddress().toLowerCase();
 
         const nodes = new Map<string, RouteNode>();
@@ -92,7 +93,7 @@ export class RouteService {
                     node,
                     cell.transitFeeOverrides,
                     input.resourceId,
-                    routing.defaultMoveFeePerUnit,
+                    routing.moveFeeFloors,
                 ),
                 distanceToTarget: towards === null ? null : (toTarget.get(Number(node.tokenId)) ?? null),
             };
@@ -123,6 +124,7 @@ export class RouteService {
 
         const config = await this.appConfig.load();
         const routing = config.transport;
+        this.assertTransportable(input.resourceId, routing.moveFeeFloors);
         const address = this.wallet.get().getAddress().toLowerCase();
 
         const nodes = new Map<string, RouteNode>();
@@ -166,7 +168,7 @@ export class RouteService {
                         node,
                         cell.transitFeeOverrides,
                         input.resourceId,
-                        routing.defaultMoveFeePerUnit,
+                        routing.moveFeeFloors,
                     ),
                     distFromSource: fromSource === null ? null : (fromSource.get(Number(node.tokenId)) ?? null),
                     distToTarget: toTarget === null ? null : (toTarget.get(Number(node.tokenId)) ?? null),
@@ -190,6 +192,15 @@ export class RouteService {
             components: result.components,
         });
         return result;
+    }
+
+    private assertTransportable(resourceId: number, floors: Record<number, string>): void {
+        if (floors[resourceId] === undefined) {
+            throw new Error(
+                `Resource ${resourceId} does not exist or is not transportable: it has no transit-fee floor in ` +
+                    'the loaded config. Check the id against cpu_get_game_config.',
+            );
+        }
     }
 
     private assertEligible(

@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 import type { MapStore } from './store.js';
-import { BuildingType } from '../api/types.js';
 import type { CellCoord } from '../geometry/types.js';
 import type { ILogger } from '../logger/types.js';
 import type { IAppConfig } from '../services/types.js';
@@ -30,7 +29,7 @@ export const rawCellResourceSchema = z.object({
 });
 
 export const cellBuildingViewSchema = z.object({
-    type: z.nativeEnum(BuildingType),
+    type: z.string(),
     buildFinishAt: z.number().nullable(),
     modeResource: z.number().nullable().default(null),
     modeRecipeId: z.string().nullable().default(null),

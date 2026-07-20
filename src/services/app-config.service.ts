@@ -57,7 +57,12 @@ export class AppConfigService implements IAppConfig {
                 recipeOpexCpu: b.recipeOpexCpu ?? null,
             })),
             reveal: data.reveal ?? { firstFree: true, reRevealCost: '0' },
-            transport: { ...data.transport, defaultMoveFeePerUnit: data.transport?.defaultMoveFeePerUnit ?? '0' },
+            transport: {
+                moveRadius: data.transport.moveRadius,
+                hubRadius: data.transport.hubRadius,
+                moveTimePerCellSec: data.transport.moveTimePerCellSec,
+                moveFeeFloors: data.transport.moveFeeFloors,
+            },
             trade: {
                 saleBurnPercent: data.trade?.saleBurnPercent ?? 0,
                 maxSaleFeePercent: bpToPercent(data.trade?.maxSaleFeeBp ?? 0),
