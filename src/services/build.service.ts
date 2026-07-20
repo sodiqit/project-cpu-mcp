@@ -14,7 +14,7 @@ import type {
 } from './types.js';
 import { assertWarehouseHas } from './warehouse.utils.js';
 import { BuildingKind } from '../api/types.js';
-import type { BuildingType, BuildingView } from '../api/types.js';
+import type { BuildingView } from '../api/types.js';
 import { CELL_ABI } from '../contracts/cell.abi.js';
 import type { ILogger } from '../logger/types.js';
 import { demolishCooldownEnd } from '../map/map.utils.js';
@@ -235,7 +235,7 @@ export class BuildService {
         return cpuToken;
     }
 
-    private buildingView(config: AppConfig, buildingType: BuildingType): BuildingView {
+    private buildingView(config: AppConfig, buildingType: string): BuildingView {
         const view = config.buildings.find((b) => b.type === buildingType);
         if (view === undefined) {
             throw new Error(`No catalog entry for a ${buildingType} on network ${config.network}.`);

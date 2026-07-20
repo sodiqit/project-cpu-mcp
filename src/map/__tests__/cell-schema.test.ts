@@ -34,8 +34,12 @@ describe('rawCellSchema fee fields', () => {
         expect(parseCell(rawCell({ saleFeeOverrides: null }))?.saleFeeOverrides).toBeNull();
     });
 
+    it('keeps a building type the client does not enumerate, so an upgraded cell is not silently dropped', () => {
+        expect(parseCell(rawCell({ building: { type: 'oil_power_plant_l2a', buildFinishAt: null } }))).not.toBeNull();
+    });
+
     it('still drops a structurally invalid cell rather than the whole snapshot', () => {
-        expect(parseCell(rawCell({ building: { type: 'not_a_real_building', buildFinishAt: null } }))).toBeNull();
+        expect(parseCell(rawCell({ building: { type: 'hub', buildFinishAt: 'soon' } }))).toBeNull();
     });
 });
 

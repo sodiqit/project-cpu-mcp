@@ -15,7 +15,7 @@ import type { CatalogBuildingView } from '../types.js';
 const RIVAL = '0x000000000000000000000000000000000000beef';
 const RES = 3;
 const DEFAULT_FLOORS: Record<number, string> = { 3: '0', 9: '0' };
-const UPGRADED_HUB = BuildingType.Datacenter;
+const UPGRADED_HUB = 'hub_l2a';
 const UNFINISHED_AT = DEFAULT_SERVER_TIME + 1000;
 
 function own(tokenId: string, over: Partial<RawCell> = {}): RawCell {
@@ -38,7 +38,7 @@ function foreignHub(tokenId: string, feePerUnit: string, over: Partial<RawCell> 
 
 function upgradedHubCatalogEntry(base: Array<CatalogBuildingView>): CatalogBuildingView {
     const entry = base.find((b) => b.kind === BuildingKind.Hub) as CatalogBuildingView;
-    return { ...entry, type: UPGRADED_HUB, onChainId: 99, name: 'Mega Hub', tier: 2 };
+    return { ...entry, type: UPGRADED_HUB as CatalogBuildingView['type'], onChainId: 99, name: 'Mega Hub', tier: 2 };
 }
 
 function makeService(cells: Array<RawCell>, moveFeeFloors: Record<number, string> = DEFAULT_FLOORS): RouteService {
