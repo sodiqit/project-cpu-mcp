@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
     WALLET_ADDRESS,
@@ -13,10 +13,11 @@ import {
     syndicateCreatedLog,
     syndicateRevert,
 } from './service-fakes.js';
-import type { ApiClient } from '../../api/client.js';
+import { ApiClient } from '../../api/client.js';
 import type { ApiSyndicateCard, ApiSyndicateMemberView } from '../../api/types.js';
 import { SyndicateSort } from '../../api/types.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
+import type { SessionManager } from '../../session/manager.js';
 import type { WalletProvider } from '../../wallet/types.js';
 import { SyndicateService } from '../syndicate.service.js';
 import type { SyndicateRatesView, AppConfig } from '../types.js';
@@ -156,12 +157,49 @@ describe('SyndicateService.getSyndicate', () => {
 });
 
 describe('SyndicateService.getMembership', () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
     it('defaults to the wallet address and reports a non-member (200 + null) as not an error', async () => {
         const { service, api } = makeService(() => ({ status: 200, data: null }));
 
         const membership = await service.getMembership({ address: null });
 
         expect(api.calls[0]?.path).toBe(`/api/v1/syndicates/player/${encodeURIComponent(WALLET_ADDRESS)}`);
+        expect(membership).toEqual({
+            address: WALLET_ADDRESS,
+            member: false,
+            syndicateId: null,
+            joinedAt: null,
+            leaveAvailableAt: null,
+            syndicate: null,
+        });
+    });
+
+    it('reads an empty 200 body from the live wire as a non-member, not a "server down" error', async () => {
+        const fetchMock = vi.fn(async () => new Response('', { status: 200 }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const api = new ApiClient({
+            baseUrl: 'https://api.test',
+            session: {} as SessionManager,
+            logger: new NoopLogger(),
+        });
+        const service = new SyndicateService({
+            api,
+            wallet: new FakeWallet(1) as unknown as WalletProvider,
+            appConfig: new FakeAppConfig(makeConfig()),
+            registry: new FakeSyndicateRegistryClient(),
+            logger: new NoopLogger(),
+        });
+
+        const membership = await service.getMembership({ address: null });
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            `https://api.test/api/v1/syndicates/player/${encodeURIComponent(WALLET_ADDRESS)}`,
+            expect.anything(),
+        );
         expect(membership).toEqual({
             address: WALLET_ADDRESS,
             member: false,

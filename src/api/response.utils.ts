@@ -1,12 +1,16 @@
-import { RESPONSE_BODY_SNIPPET_LENGTH } from './constants.js';
+import { HTTP_MULTIPLE_CHOICES, HTTP_OK, RESPONSE_BODY_SNIPPET_LENGTH } from './constants.js';
 
 /**
- * Reads the body once and parses it as JSON. On a non-JSON body — a down server / proxy error page
- * (`<html>...`), or an empty body — throws a clear, agent-readable error instead of letting a bare
+ * Reads the body once and parses it as JSON. An empty body on a 2xx response is a legitimate
+ * "no content" answer and resolves to `null`. On a non-JSON body — a down server / proxy error page
+ * (`<html>...`) — throws a clear, agent-readable error instead of letting a bare
  * `SyntaxError: Unexpected token '<'` surface from `response.json()`.
  */
 export async function parseJsonBody<T>(response: Response): Promise<T> {
     const text = await response.text();
+    if (text.trim() === '' && response.status >= HTTP_OK && response.status < HTTP_MULTIPLE_CHOICES) {
+        return null as T;
+    }
     try {
         return JSON.parse(text) as T;
     } catch {
