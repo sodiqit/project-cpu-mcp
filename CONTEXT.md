@@ -103,11 +103,12 @@ them in **basis points** (1 bp = 0.01%, 100 bp = 1%); the client converts at tha
 basis point.
 
 - **Sale fee** — a hub owner's per-resource share of every sale settled on their hub, carved out of the
-  seller's proceeds (the buyer is unaffected — they still pay exactly `pricePerUnit × value`). Structural
-  cap: 100%. Set your own with `cpu_set_sale_fee` — including while your hub is still under construction,
-  so the rate is already in force the moment it becomes Ready. Read another hub's live rate in
-  `cpu_get_markets` (per row); `cpu_get_cell` shows the hub's full rate intent per resource regardless of
-  readiness (see Readiness).
+  seller's proceeds (absent a Same-clan discount, the buyer pays exactly `pricePerUnit × value`; a
+  same-syndicate buyer's actual debit is reduced by the discount — see Same-clan discount / Nominal vs
+  actual debit). Structural cap: 100%. Set your own with `cpu_set_sale_fee` — including while your hub is
+  still under construction, so the rate is already in force the moment it becomes Ready. Read another hub's
+  live rate in `cpu_get_markets` (per row); `cpu_get_cell` shows the hub's full rate intent per resource
+  regardless of readiness (see Readiness).
 - **Frozen lot** — an open lot whose hub's live rate has risen above the seller tolerance stored on it.
   Buys revert on-chain until the hub owner lowers the rate back to the tolerance or below; the escrow stays
   intact and untouched, and cancelling a frozen lot is always fee-free. Surfaced as `frozen` on a lot read
@@ -126,9 +127,9 @@ basis point.
 - **Nominal vs actual debit** — every fee has two numbers: the *nominal* fee is what a hub or the transport
   rules charge before any Same-clan discount; the *actual debit* ("to pay") is what is actually charged
   after the discount is applied. `nominal = actual debit + discount`. Quote and result fields that name a
-  fee outright (`totalFee`, `fee`, `total`, `salePaid`, `transitPaid`) report the ACTUAL debit, never the
-  nominal, with `discount` (or `transitDiscount`) surfaced alongside as the member saving. See Same-clan
-  discount for why the discount is never refunded back — it is simply never charged.
+  fee outright (`fee`, `total`, `salePaid`, `transitPaid`) report the ACTUAL debit, never the nominal, with
+  `discount` (or `transitDiscount`) surfaced alongside as the member saving. See Same-clan discount for why
+  the discount is never refunded back — it is simply never charged.
 
 ## Transit fees
 
@@ -180,8 +181,10 @@ syndicates. Browsed and read with `cpu_list_syndicates`, `cpu_get_syndicate`, an
   Exit cooldown. Checked with `cpu_get_syndicate_membership` (defaults to your own address); read over
   HTTP from the game API, but the authority is the chain.
 - **Exit cooldown** — the minimum time after joining before a member may leave:
-  `leaveAvailableAt = joinedAt + exitCooldownSec`. Leaving early reverts on-chain, and this client surfaces
-  the available-at time from that revert rather than guessing it client-side.
+  `leaveAvailableAt = joinedAt + exitCooldownSec`, computed client-side at join/create time from the fresh
+  `joinedAt`. Leaving early reverts on-chain with `CooldownActive`, which carries no timestamp; the client
+  instead reports the authoritative `leaveAvailableAt` by re-reading the membership record from the game API
+  (`GET /api/v1/syndicates/player/{address}`).
 - **Same-clan discount** — when the buyer/transporter and the counterparty (the hub owner on a sale, the
   transit-leg hub owner on a shipment) belong to the SAME syndicate, part of the fee is simply NOT charged.
   It is a *not-made transfer*, NOT a refund — no money moves back afterward; the debit is just smaller than
