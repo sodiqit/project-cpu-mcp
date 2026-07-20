@@ -2,9 +2,11 @@ import { isAddress, parseEventLogs, type Address, type Log } from 'viem';
 import { z } from 'zod';
 
 import { describeApiError } from './reveal.helpers.js';
-import { buildSyndicateQuery, toSyndicateCardView } from './syndicate.helpers.js';
+import { buildSyndicateQuery, ratesToRegistry, toSyndicateCardView } from './syndicate.helpers.js';
 import type {
     AppConfig,
+    CreateSyndicateInput,
+    CreateSyndicateResult,
     GetMembershipInput,
     GetSyndicateInput,
     ISyndicateRegistryClient,
@@ -12,11 +14,16 @@ import type {
     JoinSyndicateResult,
     LeaveSyndicateResult,
     ListSyndicatesQuery,
+    RegistryRates,
+    SetSyndicateParamsInput,
+    SetSyndicateParamsResult,
     SyndicateCardView,
     SyndicateDetailView,
     SyndicateMemberView,
     SyndicateMembershipView,
     SyndicateServiceOptions,
+    TransferSyndicateManagerInput,
+    TransferSyndicateManagerResult,
     IAppConfig,
 } from './types.js';
 import type { ApiClient } from '../api/client.js';
@@ -93,6 +100,60 @@ export class SyndicateService {
         this.logger.info('leaving syndicate', { network: config.network });
         const receipt = await this.sendLeave(registry);
         return { syndicateId: this.decodeLeftId(receipt.logs, registry), rejoinAvailableImmediately: true };
+    }
+
+    async create(input: CreateSyndicateInput): Promise<CreateSyndicateResult> {
+        const config = await this.appConfig.load();
+        this.assertChain(config, this.wallet.get());
+        const registry = this.requireRegistry(config);
+
+        const manager = (input.manager ?? this.wallet.get().getAddress()) as Address;
+        const rates = ratesToRegistry(input.rates);
+        const cooldownSec = await this.cooldownSec(registry);
+
+        this.logger.info('creating syndicate', { manager, network: config.network });
+        const receipt = await this.sendCreate(registry, { name: input.name, link: input.link, manager, rates });
+        const syndicateId = this.decodeCreatedId(receipt.logs, registry);
+        const joinedAt = this.decodeJoinedAt(receipt.logs, registry);
+
+        return {
+            syndicateId,
+            manager,
+            name: input.name,
+            link: input.link,
+            rates: input.rates,
+            joinedAt,
+            leaveAvailableAt: joinedAt + cooldownSec,
+        };
+    }
+
+    async setParams(input: SetSyndicateParamsInput): Promise<SetSyndicateParamsResult> {
+        const config = await this.appConfig.load();
+        this.assertChain(config, this.wallet.get());
+        const registry = this.requireRegistry(config);
+
+        const id = BigInt(input.id);
+        const rates = ratesToRegistry(input.rates);
+
+        this.logger.info('updating syndicate params', { id: input.id, network: config.network });
+        await this.sendSetParams(registry, { id, name: input.name, link: input.link, rates });
+
+        return { syndicateId: input.id, name: input.name, link: input.link, rates: input.rates };
+    }
+
+    async transferManager(input: TransferSyndicateManagerInput): Promise<TransferSyndicateManagerResult> {
+        const config = await this.appConfig.load();
+        this.assertChain(config, this.wallet.get());
+        const registry = this.requireRegistry(config);
+
+        const id = BigInt(input.id);
+        const previousManager = this.wallet.get().getAddress();
+        const next = input.next as Address;
+
+        this.logger.info('transferring syndicate manager', { id: input.id, next, network: config.network });
+        await this.sendTransferManager(registry, { id, next });
+
+        return { syndicateId: input.id, previousManager, newManager: next };
     }
 
     async listSyndicates(query: ListSyndicatesQuery): Promise<Array<SyndicateCardView>> {
@@ -202,6 +263,82 @@ export class SyndicateService {
         }
     }
 
+    private async sendCreate(
+        registry: Address,
+        params: { name: string; link: string; manager: Address; rates: RegistryRates },
+    ): Promise<{ logs: Array<Log> }> {
+        try {
+            return await this.registry.create({ registry, ...params });
+        } catch (error) {
+            throw await this.explainCreateError(error);
+        }
+    }
+
+    private async sendSetParams(
+        registry: Address,
+        params: { id: bigint; name: string; link: string; rates: RegistryRates },
+    ): Promise<{ logs: Array<Log> }> {
+        try {
+            return await this.registry.setParams({ registry, ...params });
+        } catch (error) {
+            throw this.explainManagerWriteError(error, 'An address argument was the zero address.');
+        }
+    }
+
+    private async sendTransferManager(
+        registry: Address,
+        params: { id: bigint; next: Address },
+    ): Promise<{ logs: Array<Log> }> {
+        try {
+            return await this.registry.transferManager({ registry, ...params });
+        } catch (error) {
+            throw this.explainManagerWriteError(error, 'The successor address cannot be the zero address.');
+        }
+    }
+
+    private async explainCreateError(error: unknown): Promise<Error> {
+        const revert = describeRevert(error, SYNDICATE_ABI);
+        if (revert === null) {
+            return error instanceof Error ? error : new Error(String(error));
+        }
+        if (revert.startsWith('AlreadyInSyndicate')) {
+            return new Error(await this.alreadyInMessage());
+        }
+        const mapped = this.mapParamsRevert(revert, 'The manager address cannot be the zero address.');
+        return mapped ?? new Error(`Execution reverted: ${revert}`);
+    }
+
+    private explainManagerWriteError(error: unknown, zeroAddressMessage: string): Error {
+        const revert = describeRevert(error, SYNDICATE_ABI);
+        if (revert === null) {
+            return error instanceof Error ? error : new Error(String(error));
+        }
+        const mapped = this.mapParamsRevert(revert, zeroAddressMessage);
+        return mapped ?? new Error(`Execution reverted: ${revert}`);
+    }
+
+    private mapParamsRevert(revert: string, zeroAddressMessage: string): Error | null {
+        if (revert.startsWith('RateTooHigh')) {
+            return new Error('A rate exceeds the 100% cap; each of the four rates must be between 0% and 100%.');
+        }
+        if (revert.startsWith('NameEmpty')) {
+            return new Error('The syndicate name cannot be empty.');
+        }
+        if (revert.startsWith('NameTooLong')) {
+            return new Error('The syndicate name is too long (maximum 64 bytes).');
+        }
+        if (revert.startsWith('LinkTooLong')) {
+            return new Error('The syndicate link is too long (maximum 200 bytes).');
+        }
+        if (revert.startsWith('NotManager')) {
+            return new Error('Only the syndicate manager can do this.');
+        }
+        if (revert.startsWith('ZeroAddress')) {
+            return new Error(zeroAddressMessage);
+        }
+        return null;
+    }
+
     private async explainJoinError(error: unknown, id: bigint): Promise<Error> {
         const revert = describeRevert(error, SYNDICATE_ABI);
         if (revert === null) {
@@ -267,6 +404,15 @@ export class SyndicateService {
         const config = await this.registry.getConfig(registry);
         this.cachedCooldownSec = config.exitCooldownSec;
         return this.cachedCooldownSec;
+    }
+
+    private decodeCreatedId(logs: Array<Log>, registry: Address): string {
+        const events = parseEventLogs({ abi: SYNDICATE_ABI, eventName: 'SyndicateCreated', logs });
+        const event = events.find((e) => e.address.toLowerCase() === registry.toLowerCase());
+        if (event === undefined) {
+            throw new Error('Create confirmed on-chain but no SyndicateCreated event was found in the receipt.');
+        }
+        return event.args.id.toString();
     }
 
     private decodeJoinedAt(logs: Array<Log>, registry: Address): number {

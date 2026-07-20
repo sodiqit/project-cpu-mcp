@@ -35,13 +35,16 @@ import { CellClient } from '../cell.client.js';
 import {
     type AppConfig,
     type CellViewResult,
+    type CreateRegistryParams,
     type IAllowanceService,
     type IAppConfig,
     type ICellClient,
     type ISyndicateRegistryClient,
     type JoinRegistryParams,
     type LeaveRegistryParams,
+    type SetParamsRegistryParams,
     type SyndicateRegistryConfig,
+    type TransferManagerRegistryParams,
     ModeSwitchKind,
 } from '../types.js';
 
@@ -477,8 +480,74 @@ export function memberLeftLog(args: { player: Address; id: bigint; registry: Add
     } as unknown as Log;
 }
 
+export function syndicateCreatedLog(args: {
+    id: bigint;
+    creator: Address;
+    manager: Address;
+    name: string;
+    link: string;
+    ratesBp: [number, number, number, number];
+    createdAt: bigint;
+    registry: Address;
+}): Log {
+    const topics = encodeEventTopics({
+        abi: SYNDICATE_ABI,
+        eventName: 'SyndicateCreated',
+        args: { id: args.id, creator: args.creator, manager: args.manager },
+    });
+    const data = encodeAbiParameters(
+        [
+            { name: 'name', type: 'string' },
+            { name: 'link', type: 'string' },
+            {
+                name: 'rates',
+                type: 'tuple',
+                components: [
+                    { name: 'tradeDiscountBp', type: 'uint16' },
+                    { name: 'transportDiscountBp', type: 'uint16' },
+                    { name: 'tradeTaxBp', type: 'uint16' },
+                    { name: 'transportTaxBp', type: 'uint16' },
+                ],
+            },
+            { name: 'createdAt', type: 'uint64' },
+        ],
+        [
+            args.name,
+            args.link,
+            {
+                tradeDiscountBp: args.ratesBp[0],
+                transportDiscountBp: args.ratesBp[1],
+                tradeTaxBp: args.ratesBp[2],
+                transportTaxBp: args.ratesBp[3],
+            },
+            args.createdAt,
+        ],
+    );
+    return {
+        address: args.registry,
+        topics,
+        data,
+        blockNumber: 100n,
+        blockHash: `0x${'0'.repeat(64)}`,
+        logIndex: 1,
+        transactionHash: `0x${'0'.repeat(64)}`,
+        transactionIndex: 0,
+        removed: false,
+    } as unknown as Log;
+}
+
 export function syndicateRevert(
-    errorName: 'SyndicateNotFound' | 'AlreadyInSyndicate' | 'NotInSyndicate' | 'CooldownActive',
+    errorName:
+        | 'SyndicateNotFound'
+        | 'AlreadyInSyndicate'
+        | 'NotInSyndicate'
+        | 'CooldownActive'
+        | 'ZeroAddress'
+        | 'NotManager'
+        | 'RateTooHigh'
+        | 'NameEmpty'
+        | 'NameTooLong'
+        | 'LinkTooLong',
 ): Error {
     const data = encodeErrorResult({ abi: SYNDICATE_ABI, errorName });
     const error = new Error(`Execution reverted: ${errorName}()`) as Error & { data: Hex };
@@ -489,12 +558,18 @@ export function syndicateRevert(
 export interface SyndicateRegistryOutcomes {
     join: ConfirmedTx | Error;
     leave: ConfirmedTx | Error;
+    create: ConfirmedTx | Error;
+    setParams: ConfirmedTx | Error;
+    transferManager: ConfirmedTx | Error;
     config: SyndicateRegistryConfig;
 }
 
 export class FakeSyndicateRegistryClient implements ISyndicateRegistryClient {
     public readonly joinCalls: Array<JoinRegistryParams> = [];
     public readonly leaveCalls: Array<LeaveRegistryParams> = [];
+    public readonly createCalls: Array<CreateRegistryParams> = [];
+    public readonly setParamsCalls: Array<SetParamsRegistryParams> = [];
+    public readonly transferManagerCalls: Array<TransferManagerRegistryParams> = [];
     public getConfigCalls = 0;
 
     constructor(private readonly outcomes: Partial<SyndicateRegistryOutcomes> = {}) {}
@@ -507,6 +582,21 @@ export class FakeSyndicateRegistryClient implements ISyndicateRegistryClient {
     async leave(params: LeaveRegistryParams): Promise<ConfirmedTx> {
         this.leaveCalls.push(params);
         return resolveTx(this.outcomes.leave, 'leave');
+    }
+
+    async create(params: CreateRegistryParams): Promise<ConfirmedTx> {
+        this.createCalls.push(params);
+        return resolveTx(this.outcomes.create, 'create');
+    }
+
+    async setParams(params: SetParamsRegistryParams): Promise<ConfirmedTx> {
+        this.setParamsCalls.push(params);
+        return resolveTx(this.outcomes.setParams, 'setParams');
+    }
+
+    async transferManager(params: TransferManagerRegistryParams): Promise<ConfirmedTx> {
+        this.transferManagerCalls.push(params);
+        return resolveTx(this.outcomes.transferManager, 'transferManager');
     }
 
     async getConfig(_registry: Address): Promise<SyndicateRegistryConfig> {

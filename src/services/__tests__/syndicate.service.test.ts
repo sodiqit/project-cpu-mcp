@@ -10,6 +10,7 @@ import {
     makeConfig,
     memberJoinedLog,
     memberLeftLog,
+    syndicateCreatedLog,
     syndicateRevert,
 } from './service-fakes.js';
 import type { ApiClient } from '../../api/client.js';
@@ -18,7 +19,7 @@ import { SyndicateSort } from '../../api/types.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import type { WalletProvider } from '../../wallet/types.js';
 import { SyndicateService } from '../syndicate.service.js';
-import type { AppConfig } from '../types.js';
+import type { SyndicateRatesView, AppConfig } from '../types.js';
 
 interface Reply {
     status: number;
@@ -319,6 +320,232 @@ describe('SyndicateService.leave', () => {
 
         await expect(service.leave()).rejects.toThrow(/not deployed/i);
         expect(registry.leaveCalls).toEqual([]);
+    });
+});
+
+function rates(over: Partial<SyndicateRatesView> = {}): SyndicateRatesView {
+    return {
+        tradeDiscountPercent: 2.5,
+        transportDiscountPercent: 5,
+        tradeTaxPercent: 1,
+        transportTaxPercent: 0,
+        ...over,
+    };
+}
+
+const RATES_BP = { tradeDiscountBp: 250, transportDiscountBp: 500, tradeTaxBp: 100, transportTaxBp: 0 };
+
+describe('SyndicateService.create', () => {
+    it('creates with the caller as the default manager and builds the result from the receipt, input, and cached cooldown', async () => {
+        const registry = new FakeSyndicateRegistryClient({
+            create: confirmedTx([
+                syndicateCreatedLog({
+                    id: 7n,
+                    creator: WALLET_ADDRESS,
+                    manager: WALLET_ADDRESS,
+                    name: 'Iron Pact',
+                    link: '',
+                    ratesBp: [250, 500, 100, 0],
+                    createdAt: 1_000n,
+                    registry: SYNDICATE,
+                }),
+                memberJoinedLog({ player: WALLET_ADDRESS, id: 7n, joinedAt: 1_000n, registry: SYNDICATE }),
+            ]),
+            config: { exitCooldownSec: 600 },
+        });
+        const { service, registry: reg, api } = makeWriteService({ registry });
+
+        const result = await service.create({ name: 'Iron Pact', link: '', manager: null, rates: rates() });
+
+        expect(reg.createCalls).toEqual([
+            { registry: SYNDICATE, name: 'Iron Pact', link: '', manager: WALLET_ADDRESS, rates: RATES_BP },
+        ]);
+        expect(result).toEqual({
+            syndicateId: '7',
+            manager: WALLET_ADDRESS,
+            name: 'Iron Pact',
+            link: '',
+            rates: rates(),
+            joinedAt: 1_000,
+            leaveAvailableAt: 1_600,
+        });
+        expect(api.calls).toEqual([]);
+    });
+
+    it('uses an explicit manager address when provided', async () => {
+        const manager = '0x00000000000000000000000000000000000000a1';
+        const registry = new FakeSyndicateRegistryClient({
+            create: confirmedTx([
+                syndicateCreatedLog({
+                    id: 8n,
+                    creator: WALLET_ADDRESS,
+                    manager: manager as `0x${string}`,
+                    name: 'Copper Cartel',
+                    link: 'https://example.test/c',
+                    ratesBp: [250, 500, 100, 0],
+                    createdAt: 2_000n,
+                    registry: SYNDICATE,
+                }),
+                memberJoinedLog({ player: WALLET_ADDRESS, id: 8n, joinedAt: 2_000n, registry: SYNDICATE }),
+            ]),
+            config: { exitCooldownSec: 0 },
+        });
+        const { service, registry: reg } = makeWriteService({ registry });
+
+        const result = await service.create({
+            name: 'Copper Cartel',
+            link: 'https://example.test/c',
+            manager,
+            rates: rates(),
+        });
+
+        expect(reg.createCalls[0]?.manager).toBe(manager);
+        expect(result.manager).toBe(manager);
+        expect(result.syndicateId).toBe('8');
+        expect(result.leaveAvailableAt).toBe(2_000);
+    });
+
+    it('rejects a rate finer than one basis point before any transaction', async () => {
+        const registry = new FakeSyndicateRegistryClient();
+        const { service } = makeWriteService({ registry });
+
+        await expect(
+            service.create({ name: 'X', link: '', manager: null, rates: rates({ tradeDiscountPercent: 2.555 }) }),
+        ).rejects.toThrow(/basis point/i);
+        expect(registry.createCalls).toEqual([]);
+    });
+
+    it('rejects a rate above 100% before any transaction', async () => {
+        const registry = new FakeSyndicateRegistryClient();
+        const { service } = makeWriteService({ registry });
+
+        await expect(
+            service.create({ name: 'X', link: '', manager: null, rates: rates({ tradeTaxPercent: 150 }) }),
+        ).rejects.toThrow(/trade tax rate must be between 0% and 100%/i);
+        expect(registry.createCalls).toEqual([]);
+    });
+
+    it('rewrites an AlreadyInSyndicate revert into a clear error naming the current syndicate (nothing created)', async () => {
+        const registry = new FakeSyndicateRegistryClient({ create: syndicateRevert('AlreadyInSyndicate') });
+        const { service } = makeWriteService({
+            route: (path) =>
+                path.includes('/player/')
+                    ? { status: 200, data: { syndicateId: '2', joinedAt: 100, leaveAvailableAt: 700 } }
+                    : { status: 200, data: cardWire({ id: '2', name: 'Copper Cartel' }) },
+            registry,
+        });
+
+        await expect(service.create({ name: 'X', link: '', manager: null, rates: rates() })).rejects.toThrow(
+            /already in syndicate 2 "Copper Cartel"/i,
+        );
+    });
+
+    it('rewrites a RateTooHigh revert into a cap message', async () => {
+        const registry = new FakeSyndicateRegistryClient({ create: syndicateRevert('RateTooHigh') });
+        const { service } = makeWriteService({ registry });
+        await expect(service.create({ name: 'X', link: '', manager: null, rates: rates() })).rejects.toThrow(
+            /100% cap/i,
+        );
+    });
+
+    it('rewrites a NameTooLong revert into a clear name-cap message', async () => {
+        const registry = new FakeSyndicateRegistryClient({ create: syndicateRevert('NameTooLong') });
+        const { service } = makeWriteService({ registry });
+        await expect(service.create({ name: 'X', link: '', manager: null, rates: rates() })).rejects.toThrow(
+            /name is too long/i,
+        );
+    });
+
+    it('refuses before any transaction when the registry is not deployed', async () => {
+        const registry = new FakeSyndicateRegistryClient();
+        const { service } = makeWriteService({ registry, config: darkConfig() });
+
+        await expect(service.create({ name: 'X', link: '', manager: null, rates: rates() })).rejects.toThrow(
+            /not deployed/i,
+        );
+        expect(registry.createCalls).toEqual([]);
+    });
+});
+
+describe('SyndicateService.setParams', () => {
+    it('sends the full replacement state and echoes it back without a post-tx card read', async () => {
+        const registry = new FakeSyndicateRegistryClient({ setParams: confirmedTx([]) });
+        const { service, registry: reg, api } = makeWriteService({ registry });
+
+        const result = await service.setParams({
+            id: '5',
+            name: 'Iron Pact',
+            link: 'https://example.test/i',
+            rates: rates(),
+        });
+
+        expect(reg.setParamsCalls).toEqual([
+            { registry: SYNDICATE, id: 5n, name: 'Iron Pact', link: 'https://example.test/i', rates: RATES_BP },
+        ]);
+        expect(result).toEqual({
+            syndicateId: '5',
+            name: 'Iron Pact',
+            link: 'https://example.test/i',
+            rates: rates(),
+        });
+        expect(api.calls).toEqual([]);
+    });
+
+    it('rewrites a NotManager revert into a manager-only message', async () => {
+        const registry = new FakeSyndicateRegistryClient({ setParams: syndicateRevert('NotManager') });
+        const { service } = makeWriteService({ registry });
+        await expect(service.setParams({ id: '5', name: 'X', link: '', rates: rates() })).rejects.toThrow(
+            /only the syndicate manager/i,
+        );
+    });
+
+    it('refuses before any transaction when the registry is not deployed', async () => {
+        const registry = new FakeSyndicateRegistryClient();
+        const { service } = makeWriteService({ registry, config: darkConfig() });
+
+        await expect(service.setParams({ id: '5', name: 'X', link: '', rates: rates() })).rejects.toThrow(
+            /not deployed/i,
+        );
+        expect(registry.setParamsCalls).toEqual([]);
+    });
+});
+
+describe('SyndicateService.transferManager', () => {
+    it('transfers to the successor and reports the caller as the previous manager', async () => {
+        const next = '0x00000000000000000000000000000000000000d1';
+        const registry = new FakeSyndicateRegistryClient({ transferManager: confirmedTx([]) });
+        const { service, registry: reg } = makeWriteService({ registry });
+
+        const result = await service.transferManager({ id: '5', next });
+
+        expect(reg.transferManagerCalls).toEqual([{ registry: SYNDICATE, id: 5n, next }]);
+        expect(result).toEqual({ syndicateId: '5', previousManager: WALLET_ADDRESS, newManager: next });
+    });
+
+    it('rewrites a NotManager revert into a manager-only message', async () => {
+        const registry = new FakeSyndicateRegistryClient({ transferManager: syndicateRevert('NotManager') });
+        const { service } = makeWriteService({ registry });
+        await expect(
+            service.transferManager({ id: '5', next: '0x00000000000000000000000000000000000000d1' }),
+        ).rejects.toThrow(/only the syndicate manager/i);
+    });
+
+    it('rewrites a ZeroAddress revert into a clear successor message', async () => {
+        const registry = new FakeSyndicateRegistryClient({ transferManager: syndicateRevert('ZeroAddress') });
+        const { service } = makeWriteService({ registry });
+        await expect(
+            service.transferManager({ id: '5', next: '0x0000000000000000000000000000000000000000' }),
+        ).rejects.toThrow(/successor address cannot be the zero address/i);
+    });
+
+    it('refuses before any transaction when the registry is not deployed', async () => {
+        const registry = new FakeSyndicateRegistryClient();
+        const { service } = makeWriteService({ registry, config: darkConfig() });
+
+        await expect(
+            service.transferManager({ id: '5', next: '0x00000000000000000000000000000000000000d1' }),
+        ).rejects.toThrow(/not deployed/i);
+        expect(registry.transferManagerCalls).toEqual([]);
     });
 });
 

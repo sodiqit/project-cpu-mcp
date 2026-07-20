@@ -1,10 +1,13 @@
 import type {
+    CreateSyndicateResult,
     JoinSyndicateResult,
     LeaveSyndicateResult,
+    SetSyndicateParamsResult,
     SyndicateCardView,
     SyndicateDetailView,
     SyndicateMembershipView,
     SyndicateRatesView,
+    TransferSyndicateManagerResult,
 } from '../../services/types.js';
 import { formatUnixSeconds } from '../../utils/format.utils.js';
 
@@ -52,6 +55,27 @@ export function summarizeJoin(result: JoinSyndicateResult): string {
     return (
         `Joined syndicate ${result.syndicateId} "${result.name}" · joined ${formatUnixSeconds(result.joinedAt)} · ` +
         `${summarizeRates(result.rates)}. ${leaveClause}`
+    );
+}
+
+export function summarizeCreate(result: CreateSyndicateResult): string {
+    const linkClause = result.link !== '' ? ` · ${result.link}` : '';
+    return (
+        `Created syndicate ${result.syndicateId} "${result.name}"${linkClause} · manager ${result.manager} · ` +
+        `${summarizeRates(result.rates)}. You auto-joined at ${formatUnixSeconds(result.joinedAt)}; ` +
+        `you may leave from ${formatUnixSeconds(result.leaveAvailableAt)} (unix ${result.leaveAvailableAt}).`
+    );
+}
+
+export function summarizeSetParams(result: SetSyndicateParamsResult): string {
+    const linkClause = result.link !== '' ? ` · ${result.link}` : '';
+    return `Updated syndicate ${result.syndicateId} "${result.name}"${linkClause} · ${summarizeRates(result.rates)}.`;
+}
+
+export function summarizeTransfer(result: TransferSyndicateManagerResult): string {
+    return (
+        `Transferred management of syndicate ${result.syndicateId} from ${result.previousManager} to ` +
+        `${result.newManager}. The member-tax stream now pays the new manager.`
     );
 }
 

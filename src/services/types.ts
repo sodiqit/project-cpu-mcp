@@ -1074,6 +1074,35 @@ export interface LeaveRegistryParams {
     registry: Address;
 }
 
+export interface RegistryRates {
+    tradeDiscountBp: number;
+    transportDiscountBp: number;
+    tradeTaxBp: number;
+    transportTaxBp: number;
+}
+
+export interface CreateRegistryParams {
+    registry: Address;
+    name: string;
+    link: string;
+    manager: Address;
+    rates: RegistryRates;
+}
+
+export interface SetParamsRegistryParams {
+    registry: Address;
+    id: bigint;
+    name: string;
+    link: string;
+    rates: RegistryRates;
+}
+
+export interface TransferManagerRegistryParams {
+    registry: Address;
+    id: bigint;
+    next: Address;
+}
+
 export interface SyndicateRegistryConfig {
     exitCooldownSec: number;
 }
@@ -1081,6 +1110,9 @@ export interface SyndicateRegistryConfig {
 export interface ISyndicateRegistryClient {
     join(params: JoinRegistryParams): Promise<ConfirmedTx>;
     leave(params: LeaveRegistryParams): Promise<ConfirmedTx>;
+    create(params: CreateRegistryParams): Promise<ConfirmedTx>;
+    setParams(params: SetParamsRegistryParams): Promise<ConfirmedTx>;
+    transferManager(params: TransferManagerRegistryParams): Promise<ConfirmedTx>;
     getConfig(registry: Address): Promise<SyndicateRegistryConfig>;
 }
 
@@ -1106,6 +1138,48 @@ export interface SyndicateRatesView {
     transportDiscountPercent: number;
     tradeTaxPercent: number;
     transportTaxPercent: number;
+}
+
+export interface CreateSyndicateInput {
+    name: string;
+    link: string;
+    manager: string | null;
+    rates: SyndicateRatesView;
+}
+
+export interface CreateSyndicateResult {
+    syndicateId: string;
+    manager: string;
+    name: string;
+    link: string;
+    rates: SyndicateRatesView;
+    joinedAt: number;
+    leaveAvailableAt: number;
+}
+
+export interface SetSyndicateParamsInput {
+    id: string;
+    name: string;
+    link: string;
+    rates: SyndicateRatesView;
+}
+
+export interface SetSyndicateParamsResult {
+    syndicateId: string;
+    name: string;
+    link: string;
+    rates: SyndicateRatesView;
+}
+
+export interface TransferSyndicateManagerInput {
+    id: string;
+    next: string;
+}
+
+export interface TransferSyndicateManagerResult {
+    syndicateId: string;
+    previousManager: string;
+    newManager: string;
 }
 
 export interface SyndicateCardView {
