@@ -386,9 +386,7 @@ export interface QuoteRouteParams {
 }
 
 export interface RouteQuote {
-    /** Actual $CPU (wei) debit across the route — the nominal fee minus the sender's member discount. */
     totalFee: bigint;
-    /** Same-clan member saving on this route, in $CPU wei; the nominal fee equals `totalFee + discount`. */
     discount: bigint;
     totalDistance: bigint;
     arrivalAt: bigint;
@@ -430,9 +428,8 @@ export interface TransportInput {
 }
 
 export interface TransportQuote {
-    /** Actual transit fee to pay in $CPU (decimal); "0" for an own-cells-only route. */
+    /** Transit fee in $CPU (decimal); "0" for an own-cells-only route. */
     fee: string;
-    /** Member saving already applied, in $CPU (decimal); the nominal fee equals `fee + discount`. */
     discount: string;
     totalDistance: number;
     arrivalAt: number;
