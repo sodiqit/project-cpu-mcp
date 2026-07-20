@@ -13,6 +13,7 @@ import type { MintService } from './services/mint.service.js';
 import type { RevealService } from './services/reveal.service.js';
 import type { RouteService } from './services/route.service.js';
 import type { SwapService } from './services/swap.service.js';
+import type { SyndicateService } from './services/syndicate.service.js';
 import type { TradeService } from './services/trade.service.js';
 import type { TransportService } from './services/transport.service.js';
 import type { WithdrawService } from './services/withdraw.service.js';
@@ -38,6 +39,7 @@ export interface AppContext {
     transport: TransportService;
     route: RouteService;
     trade: TradeService;
+    syndicate: SyndicateService;
     swap: SwapService;
     mint: MintService;
     balance: BalanceService;

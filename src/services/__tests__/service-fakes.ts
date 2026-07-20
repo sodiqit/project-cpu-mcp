@@ -51,6 +51,7 @@ export const CELL = '0x5555555555555555555555555555555555555555';
 export const CELL_LENS = '0x6666666666666666666666666666666666666666';
 export const TRANSPORT = '0x7777777777777777777777777777777777777777';
 export const TRADE = '0x8888888888888888888888888888888888888888';
+export const SYNDICATE = '0x9999999999999999999999999999999999999999';
 export const WALLET_ADDRESS = '0x000000000000000000000000000000000000dEaD' as Address;
 export const APPROVE_HASH = `0x${'c'.repeat(64)}` as Hash;
 export const R = `0x${'a'.repeat(64)}` as Hex;
@@ -68,6 +69,7 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
             cellLens: CELL_LENS,
             transport: TRANSPORT,
             trade: TRADE,
+            syndicate: SYNDICATE,
         },
         resources: { 1: 'WCPU', 5: 'Iron', 6: 'Copper', 7: 'Water', 101: 'Concrete', 102: 'Steel' },
         recipes: [

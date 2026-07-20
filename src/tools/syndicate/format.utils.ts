@@ -1,0 +1,53 @@
+import type {
+    SyndicateCardView,
+    SyndicateDetailView,
+    SyndicateMembershipView,
+    SyndicateRatesView,
+} from '../../services/types.js';
+import { formatUnixSeconds } from '../../utils/format.utils.js';
+
+function summarizeRates(rates: SyndicateRatesView): string {
+    return (
+        `trade ${rates.tradeDiscountPercent}% off / ${rates.tradeTaxPercent}% tax, ` +
+        `transport ${rates.transportDiscountPercent}% off / ${rates.transportTaxPercent}% tax`
+    );
+}
+
+function summarizeCardLine(card: SyndicateCardView): string {
+    return (
+        `Syndicate ${card.id} "${card.name}" · ${card.memberCount} member(s) · manager ${card.manager} · ` +
+        `${summarizeRates(card.rates)} · created ${formatUnixSeconds(card.createdAt)}`
+    );
+}
+
+export function summarizeSyndicateList(cards: Array<SyndicateCardView>): string {
+    if (cards.length === 0) {
+        return 'No syndicates match.';
+    }
+    return cards.map(summarizeCardLine).join('\n');
+}
+
+export function summarizeSyndicateDetail(detail: SyndicateDetailView): string {
+    const { card, members } = detail;
+    const header = `${summarizeCardLine(card)}${card.link !== '' ? ` · ${card.link}` : ''}`;
+    if (members.length === 0) {
+        return `${header}\nNo members on this page.`;
+    }
+    const lines = members
+        .map((member) => `  ${member.address} · joined ${formatUnixSeconds(member.joinedAt)}`)
+        .join('\n');
+    return `${header}\nMembers (${members.length}):\n${lines}`;
+}
+
+export function summarizeMembership(membership: SyndicateMembershipView): string {
+    if (!membership.member) {
+        return `${membership.address} is not in a syndicate.`;
+    }
+    const cardLine = membership.syndicate !== null ? `\n${summarizeCardLine(membership.syndicate)}` : '';
+    const leave =
+        membership.leaveAvailableAt !== null
+            ? `, can leave from ${formatUnixSeconds(membership.leaveAvailableAt)}`
+            : '';
+    const joined = membership.joinedAt !== null ? formatUnixSeconds(membership.joinedAt) : 'unknown';
+    return `${membership.address} is a member of syndicate ${membership.syndicateId} (joined ${joined}${leave}).${cardLine}`;
+}

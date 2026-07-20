@@ -8,6 +8,7 @@ export enum HttpStatus {
     Ok = 200,
     Accepted = 202,
     Unauthorized = 401,
+    NotFound = 404,
     Conflict = 409,
 }
 
@@ -76,6 +77,7 @@ export interface AppContractsConfig {
     cellLens: string;
     transport: string;
     trade: string;
+    syndicate: string | null;
 }
 
 /** Must match the game's recipe catalog — never rename or reuse a value. */
@@ -404,3 +406,51 @@ export const apiMarketResourceSummarySchema = z
         distanceFromAnchor: z.number().nullable(),
     })
     .passthrough();
+
+// ---- Syndicate registry ----
+
+export enum SyndicateSort {
+    MembersDesc = 'members_desc',
+    Recent = 'recent',
+    Name = 'name',
+}
+
+export const apiSyndicateRatesSchema = z
+    .object({
+        tradeDiscountBp: z.number().int(),
+        transportDiscountBp: z.number().int(),
+        tradeTaxBp: z.number().int(),
+        transportTaxBp: z.number().int(),
+    })
+    .passthrough();
+export type ApiSyndicateRates = z.infer<typeof apiSyndicateRatesSchema>;
+
+export const apiSyndicateCardSchema = z
+    .object({
+        id: z.string(),
+        manager: z.string(),
+        name: z.string(),
+        link: z.string(),
+        rates: apiSyndicateRatesSchema,
+        memberCount: z.number().int(),
+        createdAt: z.number().int(),
+    })
+    .passthrough();
+export type ApiSyndicateCard = z.infer<typeof apiSyndicateCardSchema>;
+
+export const apiSyndicateMemberViewSchema = z
+    .object({
+        address: z.string(),
+        joinedAt: z.number().int(),
+    })
+    .passthrough();
+export type ApiSyndicateMemberView = z.infer<typeof apiSyndicateMemberViewSchema>;
+
+export const apiSyndicateMembershipSchema = z
+    .object({
+        syndicateId: z.string(),
+        joinedAt: z.number().int(),
+        leaveAvailableAt: z.number().int(),
+    })
+    .passthrough();
+export type ApiSyndicateMembership = z.infer<typeof apiSyndicateMembershipSchema>;

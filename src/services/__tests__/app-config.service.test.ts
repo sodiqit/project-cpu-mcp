@@ -39,6 +39,7 @@ function makeResponse(overrides: Partial<AppConfigResponse> = {}): AppConfigResp
             cellLens: '0x6666666666666666666666666666666666666666',
             transport: '0x7777777777777777777777777777777777777777',
             trade: '0x8888888888888888888888888888888888888888',
+            syndicate: '0x9999999999999999999999999999999999999999',
             ...overrides.contracts,
         },
         resources: { 5: 'Iron' },
@@ -129,6 +130,34 @@ describe('AppConfigService', () => {
         expect(first.trade).toEqual({ saleBurnPercent: 1, maxSaleFeePercent: 50 });
         expect(first.storage).toEqual({ hubStorageMultiplier: 10 });
         expect(second).toBe(first);
+    });
+
+    it('carries the syndicate registry address through when configured', async () => {
+        const config = await makeService(new FakeApi({ status: 200, data: makeResponse() })).load();
+        expect(config.contracts.syndicate).toBe('0x9999999999999999999999999999999999999999');
+    });
+
+    it('normalizes a missing syndicate address to null', async () => {
+        const base = makeResponse();
+        const { syndicate: _dropped, ...contracts } = base.contracts;
+        const data = { ...base, contracts };
+        const config = await makeService(new FakeApi({ status: 200, data })).load();
+        expect(config.contracts.syndicate).toBeNull();
+    });
+
+    it('normalizes the zero syndicate address to null', async () => {
+        const config = await makeService(
+            new FakeApi({
+                status: 200,
+                data: makeResponse({
+                    contracts: {
+                        ...makeResponse().contracts,
+                        syndicate: '0x0000000000000000000000000000000000000000',
+                    },
+                }),
+            }),
+        ).load();
+        expect(config.contracts.syndicate).toBeNull();
     });
 
     it('defaults the trade block when an older API omits it', async () => {

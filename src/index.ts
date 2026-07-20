@@ -24,6 +24,7 @@ import { MintService } from './services/mint.service.js';
 import { RevealService } from './services/reveal.service.js';
 import { RouteService } from './services/route.service.js';
 import { SwapService } from './services/swap.service.js';
+import { SyndicateService } from './services/syndicate.service.js';
 import { TradeClient } from './services/trade.client.js';
 import { TradeService } from './services/trade.service.js';
 import { TransportClient } from './services/transport.client.js';
@@ -87,6 +88,7 @@ async function main(): Promise<void> {
         transportClient,
         logger: logger.child('trade'),
     });
+    const syndicate = new SyndicateService({ api, wallet, logger: logger.child('syndicate') });
     const swap = new SwapService({ wallet, appConfig, allowance, logger: logger.child('swap') });
     const mint = new MintService({ wallet, appConfig, logger: logger.child('mint') });
     const balance = new BalanceService({ wallet, appConfig, logger: logger.child('balance') });
@@ -166,6 +168,7 @@ async function main(): Promise<void> {
         transport,
         route,
         trade,
+        syndicate,
         swap,
         mint,
         balance,

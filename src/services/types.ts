@@ -11,6 +11,7 @@ import type {
     RecipeView,
     RevealCostView,
     StorageConfigView,
+    SyndicateSort,
     TransportRoutingView,
 } from '../api/types.js';
 import type { Network } from '../config/types.js';
@@ -44,6 +45,7 @@ export interface AppContracts {
     transport: string;
     /** The lot marketplace; empty until configured. Validate with `isAddress` before a trade write. */
     trade: string;
+    syndicate: string | null;
 }
 
 export enum ModeSwitchKind {
@@ -1011,4 +1013,67 @@ export interface BalanceResult {
     cpu: string;
     /** Native gas balance in ETH (decimal). */
     native: string;
+}
+
+// ---- Syndicate registry ----
+
+export interface SyndicateServiceOptions {
+    api: ApiClient;
+    wallet: WalletProvider;
+    logger: ILogger;
+}
+
+export interface SyndicateRatesView {
+    tradeDiscountPercent: number;
+    transportDiscountPercent: number;
+    tradeTaxPercent: number;
+    transportTaxPercent: number;
+}
+
+export interface SyndicateCardView {
+    id: string;
+    manager: string;
+    name: string;
+    link: string;
+    rates: SyndicateRatesView;
+    memberCount: number;
+    createdAt: number;
+}
+
+export interface SyndicateMemberView {
+    address: string;
+    joinedAt: number;
+}
+
+export interface ListSyndicatesQuery {
+    name: string | null;
+    minMembers: number | null;
+    maxMembers: number | null;
+    sort: SyndicateSort | null;
+    limit: number | null;
+    offset: number | null;
+}
+
+export interface GetSyndicateInput {
+    id: string;
+    membersLimit: number | null;
+    membersOffset: number | null;
+}
+
+export interface SyndicateDetailView {
+    card: SyndicateCardView;
+    members: Array<SyndicateMemberView>;
+}
+
+export interface GetMembershipInput {
+    address: string | null;
+}
+
+export interface SyndicateMembershipView {
+    address: string;
+    member: boolean;
+    syndicateId: string | null;
+    joinedAt: number | null;
+    leaveAvailableAt: number | null;
+    syndicate: SyndicateCardView | null;
 }
