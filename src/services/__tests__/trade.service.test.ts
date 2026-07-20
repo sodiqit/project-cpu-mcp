@@ -25,6 +25,7 @@ import {
 import { TradeService } from '../trade.service.js';
 import type {
     BuyLotParams,
+    BuyQuoteResult,
     CancelLotParams,
     CreateLotParams,
     FinalizeParams,
@@ -32,8 +33,11 @@ import type {
     ITradeClient,
     ITransportClient,
     MoveParams,
+    QuoteBuyParams,
     QuoteRouteParams,
+    QuoteSaleParams,
     RouteQuote,
+    SaleQuoteResult,
     SetSaleFeeParams,
 } from '../types.js';
 import {
@@ -270,16 +274,47 @@ class FakeContractClient implements IContractClient {
     }
 }
 
+function fakeSaleQuote(over: Partial<SaleQuoteResult> = {}): SaleQuoteResult {
+    return {
+        buyerTotal: parseEther('5'),
+        sellerNet: parseEther('5'),
+        sale: parseEther('5'),
+        feeBp: 250,
+        hubFee: 0n,
+        burn: 0n,
+        discount: 0n,
+        tax: 0n,
+        ownerNet: 0n,
+        ...over,
+    };
+}
+
+function fakeBuyQuote(over: Partial<BuyQuoteResult> = {}): BuyQuoteResult {
+    return {
+        sale: fakeSaleQuote(over.sale),
+        transitFee: 1_000n,
+        transitDiscount: 0n,
+        arrivalAt: 1704n,
+        totalCost: parseEther('5') + 1_000n,
+        ...over,
+    };
+}
+
 class FakeTradeClient implements ITradeClient {
     public readonly creates: Array<CreateLotParams> = [];
     public readonly buys: Array<BuyLotParams> = [];
     public readonly cancels: Array<CancelLotParams> = [];
     public readonly saleFees: Array<SetSaleFeeParams> = [];
     public readonly saleFeeReads: Array<GetSaleFeeParams> = [];
+    public readonly saleQuotes: Array<QuoteSaleParams> = [];
+    public readonly buyQuotes: Array<QuoteBuyParams> = [];
     constructor(
         private readonly liveSaleFeeBp: number = 0,
         private readonly createError: Error | null = null,
         private readonly buyError: Error | null = null,
+        private readonly saleQuote: SaleQuoteResult = fakeSaleQuote(),
+        private readonly buyQuote: BuyQuoteResult = fakeBuyQuote(),
+        private readonly quoteError: Error | null = null,
     ) {}
     async createLot(p: CreateLotParams): Promise<Hash> {
         this.creates.push(p);
@@ -306,6 +341,20 @@ class FakeTradeClient implements ITradeClient {
     async getSaleFee(p: GetSaleFeeParams): Promise<number> {
         this.saleFeeReads.push(p);
         return this.liveSaleFeeBp;
+    }
+    async quoteSale(p: QuoteSaleParams): Promise<SaleQuoteResult> {
+        this.saleQuotes.push(p);
+        if (this.quoteError !== null) {
+            throw this.quoteError;
+        }
+        return this.saleQuote;
+    }
+    async quoteBuy(p: QuoteBuyParams): Promise<BuyQuoteResult> {
+        this.buyQuotes.push(p);
+        if (this.quoteError !== null) {
+            throw this.quoteError;
+        }
+        return this.buyQuote;
     }
 }
 
@@ -342,6 +391,9 @@ type Options = Partial<{
     liveSaleFeeBp: number;
     createError: Error | null;
     buyError: Error | null;
+    saleQuote: SaleQuoteResult;
+    buyQuote: BuyQuoteResult;
+    tradeQuoteError: Error | null;
 }>;
 
 function makeTrade(opts: Options = {}): {
@@ -357,7 +409,14 @@ function makeTrade(opts: Options = {}): {
     const wallet = new FakeWallet(opts.walletChainId ?? 1);
     const allowance = new FakeAllowance(opts.approve ?? null);
     const contracts = new FakeContractClient(opts.confirmLogs ?? [], opts.reverts ?? false);
-    const tradeClient = new FakeTradeClient(opts.liveSaleFeeBp ?? 0, opts.createError ?? null, opts.buyError ?? null);
+    const tradeClient = new FakeTradeClient(
+        opts.liveSaleFeeBp ?? 0,
+        opts.createError ?? null,
+        opts.buyError ?? null,
+        opts.saleQuote ?? fakeSaleQuote(),
+        opts.buyQuote ?? fakeBuyQuote(),
+        opts.tradeQuoteError ?? null,
+    );
     const transportClient = new FakeTransportClient(
         opts.quote ?? { totalFee: 0n, discount: 0n, totalDistance: 2n, arrivalAt: 1704n },
         opts.quoteError ?? null,
@@ -669,84 +728,137 @@ describe('TradeService.cancelLot', () => {
 });
 
 describe('TradeService.quoteBuy', () => {
-    it('includes the transit fee for a routed preview and sends no transaction', async () => {
+    it('preflights a routed buy through quoteBuy (sale leg + transit) and sends no transaction', async () => {
         const h = makeTrade({
-            response: {
-                status: 200,
-                data: lotView({ id: '7', pricePerUnit: parseEther('0.5').toString(), remaining: '100' }),
-            },
-            quote: { totalFee: 1_000n, discount: 0n, totalDistance: 4n, arrivalAt: 1704n },
+            response: { status: 200, data: lotView({ id: '7', remaining: '100' }) },
+            buyQuote: fakeBuyQuote({
+                sale: fakeSaleQuote({
+                    sale: parseEther('5'),
+                    buyerTotal: parseEther('4.9'),
+                    feeBp: 300,
+                    discount: parseEther('0.1'),
+                }),
+                transitFee: 1_000n,
+                transitDiscount: 40n,
+                arrivalAt: 1704n,
+                totalCost: parseEther('4.9') + 1_000n,
+            }),
         });
 
-        const result = await h.service.quoteBuy({
-            lotId: '7',
-            value: '10',
-            chain: [20, 75],
-        });
+        const result = await h.service.quoteBuy({ lotId: '7', value: '10', chain: [20, 75] });
 
-        expect(h.transportClient.quotes).toHaveLength(1);
+        expect(h.tradeClient.buyQuotes).toHaveLength(1);
+        expect(h.tradeClient.buyQuotes[0]).toMatchObject({
+            trade: TRADE,
+            lotId: 7n,
+            value: 10n,
+            destTokenIds: [20n, 75n],
+            buyer: WALLET_ADDRESS,
+        });
+        expect(h.transportClient.quotes).toHaveLength(0);
+        expect(h.tradeClient.saleQuotes).toHaveLength(0);
         expect(result.routed).toBe(true);
+        expect(result.saleFeePercent).toBe(3);
         expect(result.sale).toBe('5');
+        expect(result.salePaid).toBe('4.9');
         expect(result.transitFee).toBe(formatEther(1_000n));
-        expect(result.total).toBe(formatEther(parseEther('5') + 1_000n));
-        expect(result.totalDistance).toBe(4);
+        expect(result.transitDiscount).toBe(formatEther(40n));
+        expect(result.total).toBe(formatEther(parseEther('4.9') + 1_000n));
         expect(result.arrivalAt).toBe(1704);
         expect(h.tradeClient.buys).toHaveLength(0);
     });
 
-    it('gives a seller-only estimate with no route and no on-chain quote', async () => {
+    it('gives a seller-only estimate via quoteSale with the buyer passed explicitly', async () => {
         const h = makeTrade({
-            response: {
-                status: 200,
-                data: lotView({ id: '7', pricePerUnit: parseEther('0.5').toString(), remaining: '100' }),
-            },
+            response: { status: 200, data: lotView({ id: '7', remaining: '100' }) },
+            saleQuote: fakeSaleQuote({ sale: parseEther('5'), buyerTotal: parseEther('5'), feeBp: 250 }),
         });
 
         const result = await h.service.quoteBuy({ lotId: '7', value: '10', chain: null });
 
+        expect(h.tradeClient.saleQuotes).toHaveLength(1);
+        expect(h.tradeClient.saleQuotes[0]).toMatchObject({
+            trade: TRADE,
+            lotId: 7n,
+            value: 10n,
+            buyer: WALLET_ADDRESS,
+        });
+        expect(h.tradeClient.buyQuotes).toHaveLength(0);
         expect(h.transportClient.quotes).toHaveLength(0);
         expect(result.routed).toBe(false);
         expect(result.transitFee).toBeNull();
-        expect(result.total).toBe('5');
-        expect(result.totalDistance).toBeNull();
+        expect(result.transitDiscount).toBeNull();
         expect(result.arrivalAt).toBeNull();
+        expect(result.sale).toBe('5');
+        expect(result.total).toBe('5');
     });
 
-    it('reads the API price as wei — 20 units @ 2 $CPU quotes 4e19 wei, not 4e37', async () => {
+    it('surfaces a zero split and the buyer-total intact', async () => {
         const h = makeTrade({
-            response: {
-                status: 200,
-                data: lotView({ id: '7', pricePerUnit: parseEther('2').toString(), remaining: '100' }),
-            },
-        });
-
-        const result = await h.service.quoteBuy({ lotId: '7', value: '20', chain: null });
-
-        expect(result.pricePerUnit).toBe('2');
-        expect(result.sale).toBe('40');
-        expect(result.total).toBe('40');
-    });
-
-    it('flags a frozen lot in the quote and still returns the estimate (warns, does not refuse)', async () => {
-        const h = makeTrade({
-            response: {
-                status: 200,
-                data: lotView({
-                    id: '7',
-                    pricePerUnit: parseEther('0.5').toString(),
-                    remaining: '100',
-                    saleFeeBp: 600,
-                    maxSaleFeeBp: 500,
-                }),
-            },
+            response: { status: 200, data: lotView({ id: '7', remaining: '100' }) },
+            saleQuote: fakeSaleQuote({
+                sale: parseEther('5'),
+                buyerTotal: parseEther('5'),
+                feeBp: 0,
+                discount: 0n,
+                tax: 0n,
+                ownerNet: 0n,
+            }),
         });
 
         const result = await h.service.quoteBuy({ lotId: '7', value: '10', chain: null });
 
-        expect(result.frozen).toBe(true);
-        expect(result.saleFeePercent).toBe(6);
-        expect(result.maxSaleFeePercent).toBe(5);
-        expect(result.sale).toBe('5');
+        expect(result.saleFeePercent).toBe(0);
+        expect(result.discount).toBe('0');
+        expect(result.tax).toBe('0');
+        expect(result.ownerNet).toBe('0');
+        expect(result.salePaid).toBe('5');
+    });
+
+    it('surfaces a non-zero clan split — discount, tax, ownerNet — from the contract quote', async () => {
+        const h = makeTrade({
+            response: { status: 200, data: lotView({ id: '7', remaining: '100' }) },
+            saleQuote: fakeSaleQuote({
+                sale: parseEther('5'),
+                buyerTotal: parseEther('4.75'),
+                feeBp: 500,
+                hubFee: parseEther('0.25'),
+                discount: parseEther('0.25'),
+                tax: parseEther('0.05'),
+                ownerNet: parseEther('0.2'),
+            }),
+        });
+
+        const result = await h.service.quoteBuy({ lotId: '7', value: '10', chain: null });
+
+        expect(result.saleFeePercent).toBe(5);
+        expect(result.discount).toBe('0.25');
+        expect(result.salePaid).toBe('4.75');
+        expect(result.tax).toBe('0.05');
+        expect(result.ownerNet).toBe('0.2');
+        expect(result.total).toBe('4.75');
+    });
+
+    it('translates a reverted quote into a human reason and refuses', async () => {
+        const h = makeTrade({
+            response: { status: 200, data: lotView({ id: '7', remaining: '100' }) },
+            tradeQuoteError: new Error('Quote reverted: ExceedsRemaining()'),
+        });
+
+        await expect(h.service.quoteBuy({ lotId: '7', value: '999', chain: null })).rejects.toThrow(
+            /won't go through: the amount exceeds the lot's remaining units/,
+        );
+    });
+
+    it('names a foreign frozen hub on the route from a bubbled transport revert', async () => {
+        const h = makeTrade({
+            response: { status: 200, data: lotView({ id: '7', remaining: '100' }) },
+            tradeQuoteError: new Error('Quote reverted: NotEligibleWaypoint()'),
+        });
+
+        await expect(h.service.quoteBuy({ lotId: '7', value: '10', chain: [20, 75] })).rejects.toThrow(
+            /foreign frozen hub blocks the path/,
+        );
     });
 });
 

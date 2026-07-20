@@ -725,6 +725,41 @@ export interface BuyLotParams {
     maxFee: bigint;
 }
 
+export interface QuoteSaleParams {
+    trade: Address;
+    lotId: bigint;
+    value: bigint;
+    buyer: Address;
+}
+
+export interface QuoteBuyParams {
+    trade: Address;
+    lotId: bigint;
+    value: bigint;
+    destTokenIds: Array<bigint>;
+    buyer: Address;
+}
+
+export interface SaleQuoteResult {
+    buyerTotal: bigint;
+    sellerNet: bigint;
+    sale: bigint;
+    feeBp: number;
+    hubFee: bigint;
+    burn: bigint;
+    discount: bigint;
+    tax: bigint;
+    ownerNet: bigint;
+}
+
+export interface BuyQuoteResult {
+    sale: SaleQuoteResult;
+    transitFee: bigint;
+    transitDiscount: bigint;
+    arrivalAt: bigint;
+    totalCost: bigint;
+}
+
 export interface CancelLotParams {
     trade: Address;
     lotId: bigint;
@@ -739,6 +774,8 @@ export interface ITradeClient {
     cancel(params: CancelLotParams): Promise<Hash>;
     setSaleFee(params: SetSaleFeeParams): Promise<Hash>;
     getSaleFee(params: GetSaleFeeParams): Promise<number>;
+    quoteSale(params: QuoteSaleParams): Promise<SaleQuoteResult>;
+    quoteBuy(params: QuoteBuyParams): Promise<BuyQuoteResult>;
 }
 
 export interface SetSaleFeeResult {
@@ -826,22 +863,20 @@ export interface CancelLotResult {
 export interface TradeQuote {
     lotId: string;
     resourceId: number;
-    /** Decimal $CPU per unit (e.g. "2"). */
     pricePerUnit: string;
     value: string;
     remaining: string;
     routed: boolean;
-    /** value × pricePerUnit, in $CPU (decimal). */
     sale: string;
-    /** Transit fee in $CPU (decimal), or null for a seller-only estimate. */
-    transitFee: string | null;
-    /** sale + transitFee, in $CPU (decimal) — the expected $CPU buy_lot charges. */
-    total: string;
-    totalDistance: number | null;
-    arrivalAt: number | null;
-    frozen: boolean;
     saleFeePercent: number;
-    maxSaleFeePercent: number;
+    discount: string;
+    salePaid: string;
+    tax: string;
+    ownerNet: string;
+    transitFee: string | null;
+    transitDiscount: string | null;
+    arrivalAt: number | null;
+    total: string;
 }
 
 // ---- Swap (Uniswap v4 ETH/$CPU pool) ----

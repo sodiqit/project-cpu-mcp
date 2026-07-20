@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { decodeDeliveryScheduled, settleTransitFees } from './delivery.helpers.js';
 import { describeApiError } from './reveal.helpers.js';
 import {
+    enrichBuyQuoteRevert,
     enrichFrozenBuyError,
     enrichSaleFeeToleranceError,
     withDecimalMinPrice,
@@ -14,6 +15,7 @@ import {
     type AppConfig,
     type BuyLotInput,
     type BuyLotResult,
+    type BuyQuoteResult,
     type CancelLotInput,
     type CancelLotResult,
     type CreateLotInput,
@@ -26,6 +28,7 @@ import {
     type MarketsQuery,
     type QuoteBuyInput,
     type QuoteRouteParams,
+    type SaleQuoteResult,
     type SetSaleFeeInput,
     type SetSaleFeeResult,
     type TradeQuote,
@@ -323,49 +326,61 @@ export class TradeService {
     }
 
     /**
-     * Non-destructive buy preview: `sale = value × pricePerUnit` (immutable, from the projection) plus
-     * the on-chain transit fee when a route is supplied. Pass `chain` for the exact routed total, omit
-     * it for a seller-only estimate.
+     * Non-destructive buy preview priced entirely by the Trade contract's views: without a route the
+     * sale leg via `quoteSale`, with a route the full preflight (sale leg + transit) via `quoteBuy`.
+     * Both revert with the same selectors as `buy`, so a failed quote is a truthful "this won't go
+     * through" preview. It does not check pause, $CPU balance, or allowance — a fill can still revert
+     * on those.
      */
     async quoteBuy(input: QuoteBuyInput): Promise<TradeQuote> {
         const { config, wallet } = await this.ready();
+        const trade = this.resolveTrade(config);
         const lot = await this.getLot(input.lotId);
+        const lotId = BigInt(input.lotId);
         const value = BigInt(input.value);
-        const saleWei = value * parseEther(lot.pricePerUnit);
+        const buyer = wallet.getAddress();
 
-        let transitFeeWei: bigint | null = null;
-        let totalDistance: number | null = null;
-        let arrivalAt: number | null = null;
-
-        if (input.chain !== null) {
-            const transport = this.resolveTransport(config);
-            const quote = await this.transportClient.quoteRoute({
-                transport,
-                from: wallet.getAddress(),
-                tokenIds: input.chain.map((tokenId) => BigInt(tokenId)),
-                res: lot.resourceId,
-                amount: value,
+        try {
+            if (input.chain === null) {
+                const sale = await this.tradeClient.quoteSale({ trade, lotId, value, buyer });
+                return this.toTradeQuote(input, lot, sale, null);
+            }
+            const buy = await this.tradeClient.quoteBuy({
+                trade,
+                lotId,
+                value,
+                destTokenIds: input.chain.map((tokenId) => BigInt(tokenId)),
+                buyer,
             });
-            transitFeeWei = quote.totalFee;
-            totalDistance = Number(quote.totalDistance);
-            arrivalAt = Number(quote.arrivalAt);
+            return this.toTradeQuote(input, lot, buy.sale, buy);
+        } catch (error) {
+            throw enrichBuyQuoteRevert(error);
         }
+    }
 
+    private toTradeQuote(
+        input: QuoteBuyInput,
+        lot: LotView,
+        sale: SaleQuoteResult,
+        buy: BuyQuoteResult | null,
+    ): TradeQuote {
         return {
             lotId: input.lotId,
             resourceId: lot.resourceId,
             pricePerUnit: lot.pricePerUnit,
             value: input.value,
             remaining: lot.remaining,
-            routed: input.chain !== null,
-            sale: cpuFromWei(saleWei.toString()),
-            transitFee: transitFeeWei === null ? null : cpuFromWei(transitFeeWei.toString()),
-            total: cpuFromWei((saleWei + (transitFeeWei ?? 0n)).toString()),
-            totalDistance,
-            arrivalAt,
-            frozen: lot.frozen,
-            saleFeePercent: lot.saleFeePercent,
-            maxSaleFeePercent: lot.maxSaleFeePercent,
+            routed: buy !== null,
+            sale: cpuFromWei(sale.sale.toString()),
+            saleFeePercent: bpToPercent(sale.feeBp),
+            discount: cpuFromWei(sale.discount.toString()),
+            salePaid: cpuFromWei(sale.buyerTotal.toString()),
+            tax: cpuFromWei(sale.tax.toString()),
+            ownerNet: cpuFromWei(sale.ownerNet.toString()),
+            transitFee: buy === null ? null : cpuFromWei(buy.transitFee.toString()),
+            transitDiscount: buy === null ? null : cpuFromWei(buy.transitDiscount.toString()),
+            arrivalAt: buy === null ? null : Number(buy.arrivalAt),
+            total: cpuFromWei((buy === null ? sale.buyerTotal : buy.totalCost).toString()),
         };
     }
 

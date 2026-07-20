@@ -1,17 +1,25 @@
-import { encodeFunctionData, type Hash } from 'viem';
+import { encodeFunctionData, type Abi, type Hash } from 'viem';
 
 import type {
     BuyLotParams,
+    BuyQuoteResult,
     CancelLotParams,
     CreateLotParams,
     GetSaleFeeParams,
     ITradeClient,
+    QuoteBuyParams,
+    QuoteSaleParams,
+    SaleQuoteResult,
     SetSaleFeeParams,
     TradeClientOptions,
 } from './types.js';
 import { TRADE_ABI } from '../contracts/trade.abi.js';
+import { TRANSPORT_ABI } from '../contracts/transport.abi.js';
 import type { ILogger } from '../logger/types.js';
+import { describeRevert } from '../wallet/revert.utils.js';
 import type { IContractClient } from '../wallet/types.js';
+
+const QUOTE_ERROR_ABI = [...TRADE_ABI, ...TRANSPORT_ABI] as unknown as Abi;
 
 export class TradeClient implements ITradeClient {
     private readonly contracts: IContractClient;
@@ -92,4 +100,38 @@ export class TradeClient implements ITradeClient {
         });
         return Number(feeBp);
     }
+
+    async quoteSale(params: QuoteSaleParams): Promise<SaleQuoteResult> {
+        try {
+            return await this.contracts.read<SaleQuoteResult>({
+                address: params.trade,
+                abi: TRADE_ABI,
+                functionName: 'quoteSale',
+                args: [params.lotId, params.value, params.buyer],
+            });
+        } catch (error) {
+            throw namedQuoteRevert(error);
+        }
+    }
+
+    async quoteBuy(params: QuoteBuyParams): Promise<BuyQuoteResult> {
+        try {
+            return await this.contracts.read<BuyQuoteResult>({
+                address: params.trade,
+                abi: TRADE_ABI,
+                functionName: 'quoteBuy',
+                args: [params.lotId, params.value, params.destTokenIds, params.buyer],
+            });
+        } catch (error) {
+            throw namedQuoteRevert(error);
+        }
+    }
+}
+
+function namedQuoteRevert(error: unknown): unknown {
+    const revert = describeRevert(error, QUOTE_ERROR_ABI);
+    if (revert === null) {
+        return error;
+    }
+    return new Error(`Quote reverted: ${revert}`, { cause: error });
 }

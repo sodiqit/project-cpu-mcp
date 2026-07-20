@@ -117,22 +117,19 @@ function summarizeLotLine(lot: LotView, resources: ResourceNames): string {
 
 export function summarizeQuoteBuy(quote: TradeQuote, resources: ResourceNames): string {
     const goods = `${quote.value} ${resourceLabel(resources, quote.resourceId)} @ ${quote.pricePerUnit} $CPU/u`;
-    const frozen = quote.frozen
-        ? ` FROZEN: the hub's live sale fee (${quote.saleFeePercent}%) exceeds the seller tolerance ` +
-          `(${quote.maxSaleFeePercent}%), so buy_lot reverts on-chain until the hub lowers the rate — or the seller ` +
-          `cancels (fee-free). The estimate above is what you would pay if it clears.`
-        : '';
+    const discount = quote.discount === '0' ? '' : ` − ${quote.discount} syndicate discount`;
+    const saleLeg = `sale ${quote.sale} $CPU (hub fee ${quote.saleFeePercent}%)${discount} = ${quote.salePaid} charged`;
+    const caveat = ' This is what the contract would settle now — it does not check pause, $CPU balance, or allowance.';
     if (!quote.routed) {
         return (
-            `Seller-only estimate for lot ${quote.lotId}: ${goods} = ${quote.sale} $CPU (transit ` +
-            `excluded — pass a chain for the exact total). ${quote.remaining} units remain.${frozen}`
+            `Seller-only estimate for lot ${quote.lotId}: ${goods} → ${saleLeg} (transit excluded — pass a chain ` +
+            `for the exact routed total). ${quote.remaining} units remain.${caveat}`
         );
     }
-    const hops = quote.totalDistance !== null ? `, ${quote.totalDistance} hops` : '';
     const eta = quote.arrivalAt !== null ? ` ~ETA ${formatUnixSeconds(quote.arrivalAt)}` : '';
     return (
-        `Buy quote for lot ${quote.lotId}: ${goods} = ${quote.sale} $CPU + ` +
-        `${quote.transitFee ?? '0'} transit = ${quote.total} $CPU total${hops}${eta}. ` +
-        `${quote.remaining} units remain. Commit with buy_lot.${frozen}`
+        `Buy quote for lot ${quote.lotId}: ${goods} → ${saleLeg} + ${quote.transitFee ?? '0'} transit ` +
+        `${quote.transitDiscount !== null && quote.transitDiscount !== '0' ? `(saved ${quote.transitDiscount}) ` : ''}` +
+        `= ${quote.total} $CPU total${eta}. ${quote.remaining} units remain. Commit with buy_lot.${caveat}`
     );
 }

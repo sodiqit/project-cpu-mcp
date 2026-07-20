@@ -254,23 +254,25 @@ describe('quote_buy tool', () => {
             remaining: '80',
             routed: true,
             sale: '50',
-            transitFee: '5',
-            total: '55',
-            totalDistance: 4,
-            arrivalAt: 1704,
-            frozen: false,
             saleFeePercent: 1.5,
-            maxSaleFeePercent: 50,
+            discount: '0',
+            salePaid: '50',
+            tax: '0',
+            ownerNet: '0.75',
+            transitFee: '5',
+            transitDiscount: '0',
+            arrivalAt: 1704,
+            total: '55',
         };
         const handler = capture(registerQuoteBuyTool, { trade: { quoteBuy: async () => quote } });
         const result = await handler({ lotId: '7', value: '100', chain: [] } as never);
         expect(result.content[0]?.text).toMatch(/Buy quote for lot 7/);
         expect(result.content[0]?.text).toMatch(/Silica \(#3\)/);
         expect(result.content[0]?.text).toMatch(/55 \$CPU total/);
-        expect(result.content[0]?.text).not.toMatch(/FROZEN/);
+        expect(result.content[0]?.text).toMatch(/does not check pause, \$CPU balance, or allowance/);
     });
 
-    it('summarizes a seller-only estimate', async () => {
+    it('summarizes a seller-only estimate with the sale split', async () => {
         const quote: TradeQuote = {
             lotId: '7',
             resourceId: 3,
@@ -279,21 +281,23 @@ describe('quote_buy tool', () => {
             remaining: '80',
             routed: false,
             sale: '50',
-            transitFee: null,
-            total: '50',
-            totalDistance: null,
-            arrivalAt: null,
-            frozen: false,
             saleFeePercent: 1.5,
-            maxSaleFeePercent: 50,
+            discount: '2',
+            salePaid: '48',
+            tax: '0.1',
+            ownerNet: '0.65',
+            transitFee: null,
+            transitDiscount: null,
+            arrivalAt: null,
+            total: '48',
         };
         const handler = capture(registerQuoteBuyTool, { trade: { quoteBuy: async () => quote } });
         const result = await handler({ lotId: '7', value: '100', chain: null } as never);
         expect(result.content[0]?.text).toMatch(/Seller-only estimate for lot 7/);
-        expect(result.content[0]?.text).toMatch(/50 \$CPU/);
+        expect(result.content[0]?.text).toMatch(/sale 50 \$CPU \(hub fee 1.5%\) − 2 syndicate discount = 48 charged/);
     });
 
-    it('appends a frozen warning to the quote without refusing', async () => {
+    it('states the pause/balance/allowance caveat', async () => {
         const quote: TradeQuote = {
             lotId: '7',
             resourceId: 3,
@@ -302,21 +306,19 @@ describe('quote_buy tool', () => {
             remaining: '80',
             routed: false,
             sale: '50',
-            transitFee: null,
-            total: '50',
-            totalDistance: null,
-            arrivalAt: null,
-            frozen: true,
             saleFeePercent: 6,
-            maxSaleFeePercent: 5,
+            discount: '0',
+            salePaid: '50',
+            tax: '0',
+            ownerNet: '3',
+            transitFee: null,
+            transitDiscount: null,
+            arrivalAt: null,
+            total: '50',
         };
         const handler = capture(registerQuoteBuyTool, { trade: { quoteBuy: async () => quote } });
         const result = await handler({ lotId: '7', value: '100', chain: null } as never);
-        expect(result.content[0]?.text).toMatch(/Seller-only estimate for lot 7/);
-        expect(result.content[0]?.text).toMatch(
-            /FROZEN: the hub's live sale fee \(6%\) exceeds the seller tolerance \(5%\)/,
-        );
-        expect(result.content[0]?.text).toMatch(/buy_lot reverts on-chain/);
+        expect(result.content[0]?.text).toMatch(/does not check pause, \$CPU balance, or allowance/);
     });
 });
 
