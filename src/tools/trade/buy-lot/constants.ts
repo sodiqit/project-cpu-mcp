@@ -6,5 +6,8 @@ export const BUY_LOT_DESCRIPTION = [
     'Goods ship to your cell and credit only after arrival, when you `cpu_finalize_delivery` the returned',
     'deliveryId. If the lot is frozen — the hub raised its live sale fee above the seller tolerance — the buy',
     'reverts on-chain until the hub lowers the rate (or you pick another lot); `cpu_get_lot` flags it up front.',
-    'Buying your own lot is allowed.',
+    'Buying your own lot is allowed. The result reports the sale-leg clan economics: `paid` is what you were actually',
+    'debited for the sale (= `sale` − `discount`, the syndicate discount when buyer and seller share a syndicate),',
+    "while `tax` is the clan tax carved from the hub fee to the owner's syndicate manager and `ownerNet` is the hub",
+    "owner's net proceeds.",
 ].join(' ');

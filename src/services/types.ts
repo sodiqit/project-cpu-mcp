@@ -775,14 +775,10 @@ export interface BuyLotResult {
     value: string;
     /** value × pricePerUnit, in $CPU (decimal). */
     sale: string;
-    /** Syndicate discount on the sale, in $CPU (decimal); 0 when no split applies. */
     discount: string;
-    /** Actually charged for the sale leg, in $CPU (decimal) — equals sale − discount. */
     paid: string;
     hubFee: string;
-    /** Syndicate tax carved out of the hub fee, in $CPU (decimal); 0 when no split applies. */
     tax: string;
-    /** The hub owner's net receipt, in $CPU (decimal) — hubFee − discount − tax. */
     ownerNet: string;
     burn: string;
     /** Units left on the lot after this buy (0 = sold out). */
