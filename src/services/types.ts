@@ -1092,8 +1092,8 @@ export interface JoinSyndicateResult {
     syndicateId: string;
     joinedAt: number;
     leaveAvailableAt: number;
-    name: string;
-    rates: SyndicateRatesView;
+    name: string | null;
+    rates: SyndicateRatesView | null;
 }
 
 export interface LeaveSyndicateResult {

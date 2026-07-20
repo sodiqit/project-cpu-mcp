@@ -42,10 +42,16 @@ export function summarizeSyndicateDetail(detail: SyndicateDetailView): string {
 }
 
 export function summarizeJoin(result: JoinSyndicateResult): string {
+    const leaveClause = `You may leave from ${formatUnixSeconds(result.leaveAvailableAt)} (unix ${result.leaveAvailableAt}).`;
+    if (result.name === null || result.rates === null) {
+        return (
+            `Joined syndicate ${result.syndicateId} · joined ${formatUnixSeconds(result.joinedAt)}. ${leaveClause} ` +
+            "Its name and fee rates couldn't be read yet (the projection may lag) — re-check with cpu_get_syndicate."
+        );
+    }
     return (
         `Joined syndicate ${result.syndicateId} "${result.name}" · joined ${formatUnixSeconds(result.joinedAt)} · ` +
-        `${summarizeRates(result.rates)}. You may leave from ${formatUnixSeconds(result.leaveAvailableAt)} ` +
-        `(unix ${result.leaveAvailableAt}).`
+        `${summarizeRates(result.rates)}. ${leaveClause}`
     );
 }
 

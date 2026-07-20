@@ -229,6 +229,30 @@ describe('SyndicateService.join', () => {
         });
     });
 
+    it('still returns a successful result when the post-tx card read fails (projection lag)', async () => {
+        const registry = new FakeSyndicateRegistryClient({
+            join: confirmedTx([
+                memberJoinedLog({ player: WALLET_ADDRESS, id: 1n, joinedAt: 1_000n, registry: SYNDICATE }),
+            ]),
+            config: { exitCooldownSec: 600 },
+        });
+        const { service, registry: reg } = makeWriteService({
+            route: () => ({ status: 404, data: { message: 'SyndicateNotFound' } }),
+            registry,
+        });
+
+        const result = await service.join({ id: '1' });
+
+        expect(reg.joinCalls).toEqual([{ registry: SYNDICATE, id: 1n }]);
+        expect(result).toEqual({
+            syndicateId: '1',
+            joinedAt: 1_000,
+            leaveAvailableAt: 1_600,
+            name: null,
+            rates: null,
+        });
+    });
+
     it('rewrites AlreadyInSyndicate into a message naming the current syndicate from HTTP membership', async () => {
         const registry = new FakeSyndicateRegistryClient({ join: syndicateRevert('AlreadyInSyndicate') });
         const { service } = makeWriteService({

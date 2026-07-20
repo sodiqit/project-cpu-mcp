@@ -57,19 +57,32 @@ export class SyndicateService {
         const registry = this.requireRegistry(config);
 
         const id = BigInt(input.id);
+        const cooldownSec = await this.cooldownSec(registry);
+
         this.logger.info('joining syndicate', { id: input.id, network: config.network });
         const receipt = await this.sendJoin(registry, id);
-
         const joinedAt = this.decodeJoinedAt(receipt.logs, registry);
-        const cooldownSec = await this.cooldownSec(registry);
-        const card = await this.getCard(input.id);
+
+        const card = await this.readCardBestEffort(input.id);
         return {
             syndicateId: input.id,
             joinedAt,
             leaveAvailableAt: joinedAt + cooldownSec,
-            name: card.name,
-            rates: card.rates,
+            name: card?.name ?? null,
+            rates: card?.rates ?? null,
         };
+    }
+
+    private async readCardBestEffort(id: string): Promise<SyndicateCardView | null> {
+        try {
+            return await this.getCard(id);
+        } catch (enrichError) {
+            this.logger.warn('join confirmed but the syndicate card could not be read for enrichment', {
+                id,
+                error: enrichError,
+            });
+            return null;
+        }
     }
 
     async leave(): Promise<LeaveSyndicateResult> {
