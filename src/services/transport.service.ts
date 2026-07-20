@@ -104,6 +104,7 @@ export class TransportService {
         const quote = await this.transportClient.quoteRoute(route);
         return {
             fee: cpuFromWei(quote.totalFee.toString()),
+            discount: cpuFromWei(quote.discount.toString()),
             totalDistance: Number(quote.totalDistance),
             arrivalAt: Number(quote.arrivalAt),
         };

@@ -2,7 +2,8 @@ import type { DeliveryView, TransportQuote, TransportResult } from '../../servic
 import { formatUnixSeconds, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
 
 export function summarizeQuote(quote: TransportQuote): string {
-    const fee = quote.fee === '0' ? 'free (no transit fee)' : `${quote.fee} $CPU fee`;
+    const saving = quote.discount === '0' ? '' : ` (member saving ${quote.discount} $CPU already applied)`;
+    const fee = quote.fee === '0' ? 'free (no transit fee)' : `${quote.fee} $CPU to pay${saving}`;
     return `Route — ${fee}, ${quote.totalDistance} hops, arrival ${formatUnixSeconds(quote.arrivalAt)}. Commit it with transport.`;
 }
 

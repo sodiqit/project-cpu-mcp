@@ -320,7 +320,7 @@ function makeTrade(opts: Options = {}): {
     const contracts = new FakeContractClient(opts.confirmLogs ?? [], opts.reverts ?? false);
     const tradeClient = new FakeTradeClient(opts.liveSaleFeeBp ?? 0, opts.createError ?? null, opts.buyError ?? null);
     const transportClient = new FakeTransportClient(
-        opts.quote ?? { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
+        opts.quote ?? { totalFee: 0n, discount: 0n, totalDistance: 2n, arrivalAt: 1704n },
         opts.quoteError ?? null,
     );
     const service = new TradeService({
@@ -339,7 +339,7 @@ function makeTrade(opts: Options = {}): {
 describe('TradeService.createLot', () => {
     it('lists an own-cell route, locks the live rate in as tolerance, and decodes it back', async () => {
         const h = makeTrade({
-            quote: { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
+            quote: { totalFee: 0n, discount: 0n, totalDistance: 2n, arrivalAt: 1704n },
             liveSaleFeeBp: 250,
             confirmLogs: [createdLog({ lotId: 7n, hub: 20n, maxSaleFeeBp: 250 }), scheduledLog(123n, 1704n)],
         });
@@ -397,7 +397,7 @@ describe('TradeService.createLot', () => {
 
     it('approves the buffered transit fee to Transport for a foreign-hub route', async () => {
         const h = makeTrade({
-            quote: { totalFee: 1_000n, totalDistance: 4n, arrivalAt: 1704n },
+            quote: { totalFee: 1_000n, discount: 0n, totalDistance: 4n, arrivalAt: 1704n },
             approve: APPROVE_HASH,
             confirmLogs: [createdLog({ lotId: 7n, hub: 20n, maxSaleFeeBp: 0 }), scheduledLog(123n, 1704n)],
         });
@@ -471,7 +471,7 @@ describe('TradeService.buyLot', () => {
                 status: 200,
                 data: lotView({ id: '7', pricePerUnit: parseEther('0.5').toString(), remaining: '100' }),
             },
-            quote: { totalFee: 1_000n, totalDistance: 4n, arrivalAt: 1704n },
+            quote: { totalFee: 1_000n, discount: 0n, totalDistance: 4n, arrivalAt: 1704n },
             approve: APPROVE_HASH,
             confirmLogs: [
                 boughtLog({
@@ -516,7 +516,7 @@ describe('TradeService.buyLot', () => {
                 status: 200,
                 data: lotView({ id: '7', pricePerUnit: parseEther('0.5').toString(), remaining: '100' }),
             },
-            quote: { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
+            quote: { totalFee: 0n, discount: 0n, totalDistance: 2n, arrivalAt: 1704n },
             approve: APPROVE_HASH,
             confirmLogs: [
                 boughtLog({ lotId: 7n, value: 10n, remaining: 90n, sale: parseEther('5'), hubFee: 0n, burn: 0n }),
@@ -538,7 +538,7 @@ describe('TradeService.buyLot', () => {
     it('sends the buy on a frozen lot and enriches the SaleFeeExceedsMax revert with the next moves', async () => {
         const h = makeTrade({
             response: { status: 200, data: lotView({ id: '7', saleFeeBp: 600, maxSaleFeeBp: 500 }) },
-            quote: { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
+            quote: { totalFee: 0n, discount: 0n, totalDistance: 2n, arrivalAt: 1704n },
             approve: APPROVE_HASH,
             buyError: new Error('Execution reverted: SaleFeeExceedsMax()'),
         });
@@ -554,7 +554,7 @@ describe('TradeService.cancelLot', () => {
     it('reads the lot remaining, routes it home, and decodes the cancel', async () => {
         const h = makeTrade({
             response: { status: 200, data: lotView({ id: '7', remaining: '100' }) },
-            quote: { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
+            quote: { totalFee: 0n, discount: 0n, totalDistance: 2n, arrivalAt: 1704n },
             confirmLogs: [cancelledLog({ lotId: 7n, returned: 100n }), scheduledLog(123n, 1704n)],
         });
 
@@ -581,7 +581,7 @@ describe('TradeService.quoteBuy', () => {
                 status: 200,
                 data: lotView({ id: '7', pricePerUnit: parseEther('0.5').toString(), remaining: '100' }),
             },
-            quote: { totalFee: 1_000n, totalDistance: 4n, arrivalAt: 1704n },
+            quote: { totalFee: 1_000n, discount: 0n, totalDistance: 4n, arrivalAt: 1704n },
         });
 
         const result = await h.service.quoteBuy({

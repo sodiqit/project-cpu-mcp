@@ -25,6 +25,7 @@ export const TRANSPORT_ABI = [
         ],
         outputs: [
             { name: 'totalFee', type: 'uint256', internalType: 'uint256' },
+            { name: 'discount', type: 'uint256', internalType: 'uint256' },
             { name: 'totalDistance', type: 'uint256', internalType: 'uint256' },
             { name: 'arrivalAt', type: 'uint64', internalType: 'uint64' },
         ],

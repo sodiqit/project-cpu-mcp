@@ -105,16 +105,26 @@ describe('transport tool', () => {
 });
 
 describe('quote_transport tool', () => {
-    it('summarizes a paid quote', async () => {
-        const quote: TransportQuote = { fee: '10', totalDistance: 4, arrivalAt: 1704 };
+    it('summarizes a paid quote with the member saving', async () => {
+        const quote: TransportQuote = { fee: '10', discount: '2.5', totalDistance: 4, arrivalAt: 1704 };
         const handler = capture(registerQuoteTransportTool, { quote: async () => quote });
         const result = await handler({ path: [], resourceId: 3, amount: '100' } as never);
-        expect(result.content[0]?.text).toMatch(/10 \$CPU fee/);
+        expect(result.content[0]?.text).toMatch(/10 \$CPU to pay/);
+        expect(result.content[0]?.text).toMatch(/member saving 2\.5 \$CPU already applied/);
         expect(result.content[0]?.text).toMatch(/4 hops/);
+        expect(result.content[1]?.text).toContain('"discount":"2.5"');
+    });
+
+    it('omits the saving when there is no discount', async () => {
+        const quote: TransportQuote = { fee: '10', discount: '0', totalDistance: 4, arrivalAt: 1704 };
+        const handler = capture(registerQuoteTransportTool, { quote: async () => quote });
+        const result = await handler({ path: [], resourceId: 3, amount: '100' } as never);
+        expect(result.content[0]?.text).toMatch(/10 \$CPU to pay/);
+        expect(result.content[0]?.text).not.toMatch(/member saving/);
     });
 
     it('summarizes a free quote', async () => {
-        const quote: TransportQuote = { fee: '0', totalDistance: 2, arrivalAt: 1704 };
+        const quote: TransportQuote = { fee: '0', discount: '0', totalDistance: 2, arrivalAt: 1704 };
         const handler = capture(registerQuoteTransportTool, { quote: async () => quote });
         const result = await handler({ path: [], resourceId: 3, amount: '100' } as never);
         expect(result.content[0]?.text).toMatch(/free \(no transit fee\)/);
