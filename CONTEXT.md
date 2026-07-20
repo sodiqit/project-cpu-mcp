@@ -123,6 +123,12 @@ basis point.
   actually settles at, moment to moment — never a value fixed at listing time. Surfaced as `saleFeePercent`
   in lot reads and as `liveSaleFeePercent` in `cpu_get_markets` (enriched locally from the world map and
   advisory — it may trail the chain by moments; the on-chain rate at buy time is the authority).
+- **Nominal vs actual debit** — every fee has two numbers: the *nominal* fee is what a hub or the transport
+  rules charge before any Same-clan discount; the *actual debit* ("to pay") is what is actually charged
+  after the discount is applied. `nominal = actual debit + discount`. Quote and result fields that name a
+  fee outright (`totalFee`, `fee`, `total`, `salePaid`, `transitPaid`) report the ACTUAL debit, never the
+  nominal, with `discount` (or `transitDiscount`) surfaced alongside as the member saving. See Same-clan
+  discount for why the discount is never refunded back — it is simply never charged.
 
 ## Transit fees
 
@@ -134,12 +140,14 @@ Charged by a foreign transit hub to route a shipment through it (distinct from t
 - **Transit fee floor** — the config's per-resource minimum a foreign transit hub charges for a resource it
   has no override for (`transport.moveFeeFloors`: `resourceId → decimal $CPU`). Every resource in the game
   carries a floor — free transit no longer exists.
-- **Effective transit fee** — what a shipment of a given resource actually pays through a hub: a non-zero
-  override, else the resource's floor. An override set before its floor was later raised stays in force
-  even below the new floor — the chain charges the override as set, and this client mirrors that rather
-  than taking a maximum of the two. The route tools (`cpu_route_network`, `cpu_next_hops`) require a
-  `resourceId` and report this exact effective rate per foreign-hub waypoint; the on-chain transport quote
-  remains the authority for a routed total.
+- **Effective transit fee** — the NOMINAL per-unit rate a shipment of a given resource is charged through a
+  hub, before any Same-clan discount: a non-zero override, else the resource's floor. An override set
+  before its floor was later raised stays in force even below the new floor — the chain charges the
+  override as set, and this client mirrors that rather than taking a maximum of the two. The route tools
+  (`cpu_route_network`, `cpu_next_hops`) require a `resourceId` and report this exact nominal rate per
+  foreign-hub waypoint; `cpu_quote_transport` and the on-chain transport quote remain the authority for a
+  routed total — and report the ACTUAL debit after any discount (see Nominal vs actual debit), not this
+  nominal per-unit rate summed across hops.
 
 On a cell, `transitFeeOverrides` and `saleFeeOverrides` each report an *intent*, not a live rate: the
 game API serves both maps for any hub-kind building, including one still under construction, so an
@@ -154,6 +162,42 @@ owner chose, distinct from having no override at all — the sale model has no f
 `transitFeeOverrides`, `0` is a reset sentinel: it clears the override and falls back to the resource's
 floor rather than charging nothing, and such an entry never appears on the map wire — the game API strips
 a reset override instead of serving a literal `0`.
+
+## Syndicates
+
+An on-chain alliance layer over hub/land owners: joining one changes the economics of every trade and
+transit leg you touch as a member, and changes what a hub you own collects from members of other
+syndicates. Browsed and read with `cpu_list_syndicates`, `cpu_get_syndicate`, and
+`cpu_get_syndicate_membership`; managed with `cpu_join_syndicate`, `cpu_leave_syndicate`,
+`cpu_create_syndicate`, `cpu_set_syndicate_params`, and `cpu_transfer_syndicate_manager`.
+
+- **Syndicate** — an on-chain alliance of hub/land owners with four configurable rates (a trade and a
+  transport discount rate for same-syndicate counterparties, and a trade and a transport tax rate its
+  manager collects — all in percent); identified by an id.
+  *Avoid* calling it a "clan" loosely — "clan" survives only inside the fixed compound term Same-clan
+  discount below, never as a stand-alone synonym for Syndicate.
+- **Membership** — an address's belonging to at most one syndicate at a time, with a join time and an
+  Exit cooldown. Checked with `cpu_get_syndicate_membership` (defaults to your own address); read over
+  HTTP from the game API, but the authority is the chain.
+- **Exit cooldown** — the minimum time after joining before a member may leave:
+  `leaveAvailableAt = joinedAt + exitCooldownSec`. Leaving early reverts on-chain, and this client surfaces
+  the available-at time from that revert rather than guessing it client-side.
+- **Same-clan discount** — when the buyer/transporter and the counterparty (the hub owner on a sale, the
+  transit-leg hub owner on a shipment) belong to the SAME syndicate, part of the fee is simply NOT charged.
+  It is a *not-made transfer*, NOT a refund — no money moves back afterward; the debit is just smaller than
+  the nominal from the start (see Nominal vs actual debit).
+  *Avoid* describing it as a rebate or refund.
+- **Member tax** — a share of a fee carved off to the OWNER's syndicate MANAGER — the counterparty's
+  syndicate (the hub owner's, on a sale), never the buyer's or transporter's own syndicate. Distinct from
+  the Same-clan discount: the discount shrinks what the buyer/transporter owes, while the tax redirects
+  part of what the counterparty would otherwise keep.
+- **Manager** — the address that receives a syndicate's Member tax and is the only one who may change its
+  params (`cpu_set_syndicate_params`) or transfer the role (`cpu_transfer_syndicate_manager`). The manager
+  need NOT be a member of the syndicate it manages.
+- **Dark registry** — a stand where the syndicate registry contract address is absent from config
+  (`contracts.syndicate` is `null`). On a dark registry the syndicate write tools refuse clearly ("not
+  deployed") instead of attempting a call, while trade, transport, and their quotes still work — with a
+  neutral split: every discount reads 0 and no syndicate settle events fire.
 
 ## Withdraw
 
