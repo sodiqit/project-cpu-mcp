@@ -13,6 +13,7 @@ import type { ApiClient } from '../../api/client.js';
 import { BuildingKind, BuildingType, CraftRecipeId } from '../../api/types.js';
 import { Network } from '../../config/types.js';
 import { ERC20_ABI } from '../../contracts/erc20.abi.js';
+import { TRANSPORT_ABI } from '../../contracts/transport.abi.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import type { ILogger } from '../../logger/types.js';
 import { toCell } from '../../map/cell-view.utils.js';
@@ -369,6 +370,39 @@ export function cpuBurnLog(from: Address, amountWei: bigint): Log {
         blockHash: `0x${'0'.repeat(64)}`,
         blockNumber: 1n,
         logIndex: 1,
+        transactionHash: `0x${'0'.repeat(64)}`,
+        transactionIndex: 0,
+        removed: false,
+    } as unknown as Log;
+}
+
+export function transitSettledLog(args: { deliveryId: bigint; owner: Address; gross: bigint; discount: bigint }): Log {
+    const topics = encodeEventTopics({
+        abi: TRANSPORT_ABI,
+        eventName: 'TransitFeeSettled',
+        args: { deliveryId: args.deliveryId, payer: WALLET_ADDRESS, owner: args.owner },
+    });
+    const data = encodeAbiParameters(
+        [
+            { name: 'gross', type: 'uint256' },
+            { name: 'burn', type: 'uint256' },
+            { name: 'discount', type: 'uint256' },
+            { name: 'tax', type: 'uint256' },
+            { name: 'ownerNet', type: 'uint256' },
+            { name: 'payerSyndicateId', type: 'uint256' },
+            { name: 'ownerSyndicateId', type: 'uint256' },
+            { name: 'taxTo', type: 'address' },
+            { name: 'settledAt', type: 'uint64' },
+        ],
+        [args.gross, args.gross - args.discount, args.discount, 0n, 0n, 0n, 0n, zeroAddress, 0n],
+    );
+    return {
+        address: TRANSPORT as Address,
+        topics,
+        data,
+        blockNumber: 100n,
+        blockHash: `0x${'0'.repeat(64)}`,
+        logIndex: 2,
         transactionHash: `0x${'0'.repeat(64)}`,
         transactionIndex: 0,
         removed: false,

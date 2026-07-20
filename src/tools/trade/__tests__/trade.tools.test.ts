@@ -63,6 +63,8 @@ const createResult: CreateLotResult = {
     deliveryId: '123',
     arrivalAt: 1704,
     fee: '0',
+    transitPaid: '0',
+    transitDiscount: '0',
     txHash: '0xcreate',
     approveTxHash: null,
     status: TxStatus.Success,
@@ -74,6 +76,8 @@ const cancelResult: CancelLotResult = {
     resourceId: 3,
     returned: '80',
     fee: '0',
+    transitPaid: '0',
+    transitDiscount: '0',
     deliveryId: '123',
     arrivalAt: 1704,
     txHash: '0xcancel',
@@ -95,6 +99,8 @@ const buyResult: BuyLotResult = {
     burn: '0.05',
     remaining: '90',
     fee: '0',
+    transitPaid: '0.5',
+    transitDiscount: '0.1',
     deliveryId: '123',
     arrivalAt: 1704,
     txHash: '0xbuy',
@@ -218,6 +224,7 @@ describe('buy_lot tool', () => {
         expect(result.content[0]?.text).toMatch(/sale 5 \$CPU/);
         expect(result.content[0]?.text).toMatch(/0.2 syndicate discount/);
         expect(result.content[0]?.text).toMatch(/4.8 charged/);
+        expect(result.content[0]?.text).toMatch(/transit 0.5 \$CPU \(saved 0.1 \$CPU via syndicate\)/);
         expect(result.content[0]?.text).toMatch(/0.03 taxed to the hub's syndicate/);
         expect(result.content[0]?.text).toMatch(/0.095 net to the hub owner/);
         expect(result.content[0]?.text).toMatch(/0.05 was burned/);

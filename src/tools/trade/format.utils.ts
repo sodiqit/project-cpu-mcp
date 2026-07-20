@@ -7,7 +7,7 @@ import type {
     SetSaleFeeResult,
     TradeQuote,
 } from '../../services/types.js';
-import { formatUnixSeconds, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
+import { formatUnixSeconds, resourceLabel, summarizeTransit, type ResourceNames } from '../../utils/format.utils.js';
 
 /** Human header for a confirmed `create_lot`. */
 export function summarizeCreateLot(result: CreateLotResult, resources: ResourceNames): string {
@@ -19,7 +19,8 @@ export function summarizeCreateLot(result: CreateLotResult, resources: ResourceN
         `freezes and buys revert until the hub lowers it; cancel_lot is always fee-free and returns the escrow). ` +
         `Escrow shipping to the Hub (delivery ${result.deliveryId}, ETA ${formatUnixSeconds(result.arrivalAt)}); the ` +
         `lot opens once it arrives — run finalize_delivery on ${result.deliveryId} after the ETA (or wait). Transit ` +
-        `fee ${result.fee} $CPU. ${approve}create tx ${result.txHash} in block ${result.blockNumber}.`
+        `fee ${summarizeTransit(result.transitPaid, result.transitDiscount)}. ${approve}create tx ${result.txHash} ` +
+        `in block ${result.blockNumber}.`
     );
 }
 
@@ -43,8 +44,9 @@ export function summarizeBuyLot(result: BuyLotResult, resources: ResourceNames):
     const approve = approvals.length > 0 ? `${approvals.join(', ')}, ` : '';
     return (
         `Bought ${result.value} ${resourceLabel(resources, result.resourceId)} from lot ${result.lotId}: sale ` +
-        `${result.sale} $CPU − ${result.discount} syndicate discount = ${result.paid} charged (+ ${result.fee} ` +
-        `transit). Of the sale, ${result.hubFee} was the hub fee — ${result.tax} taxed to the hub's syndicate, ` +
+        `${result.sale} $CPU − ${result.discount} syndicate discount = ${result.paid} charged (+ transit ` +
+        `${summarizeTransit(result.transitPaid, result.transitDiscount)}). Of the sale, ${result.hubFee} was the ` +
+        `hub fee — ${result.tax} taxed to the hub's syndicate, ` +
         `${result.ownerNet} net to the hub owner — and ${result.burn} was burned. ${result.remaining} units remain ` +
         `on the lot. Goods shipping to your cell (delivery ${result.deliveryId}, ETA ` +
         `${formatUnixSeconds(result.arrivalAt)}) — run finalize_delivery on ${result.deliveryId} after the ETA. ` +
@@ -59,7 +61,8 @@ export function summarizeCancelLot(result: CancelLotResult, resources: ResourceN
         `Cancelled lot ${result.lotId}: ${result.returned} ${resourceLabel(resources, result.resourceId)} ` +
         `returning to you (delivery ${result.deliveryId}, ETA ${formatUnixSeconds(result.arrivalAt)}) — run ` +
         `finalize_delivery on ${result.deliveryId} after the ETA to reclaim them. Transit fee ` +
-        `${result.fee} $CPU. ${approve}cancel tx ${result.txHash} in block ${result.blockNumber}.`
+        `${summarizeTransit(result.transitPaid, result.transitDiscount)}. ${approve}cancel tx ${result.txHash} ` +
+        `in block ${result.blockNumber}.`
     );
 }
 

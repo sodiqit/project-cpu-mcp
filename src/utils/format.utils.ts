@@ -59,3 +59,8 @@ export function saleFeeOverridesToPercent(overrides: Record<number, number> | nu
 export function formatUnixSeconds(seconds: number): string {
     return `${new Date(seconds * 1000).toISOString().slice(0, 19).replace('T', ' ')} UTC`;
 }
+
+export function summarizeTransit(transitPaid: string, transitDiscount: string): string {
+    const saved = transitDiscount === '0' ? '' : ` (saved ${transitDiscount} $CPU via syndicate)`;
+    return `${transitPaid} $CPU${saved}`;
+}

@@ -1,6 +1,6 @@
 import { isAddress, type Address, type Hash } from 'viem';
 
-import { decodeDeliveryScheduled } from './delivery.helpers.js';
+import { decodeDeliveryScheduled, settleTransitFees } from './delivery.helpers.js';
 import { describeApiError } from './reveal.helpers.js';
 import { TRANSPORT_MAX_FEE_BUFFER_PERCENT } from './transport.constants.js';
 import {
@@ -68,6 +68,7 @@ export class TransportService {
         const txHash = await this.transportClient.move({ ...route, maxFee });
         const confirmed = await this.contracts.confirm(txHash, 'Transport move');
         const scheduled = decodeDeliveryScheduled(confirmed.logs, route.transport);
+        const transit = settleTransitFees(confirmed.logs, route.transport, quote.totalFee);
 
         this.logger.info('transport move confirmed', {
             deliveryId: scheduled.deliveryId.toString(),
@@ -82,6 +83,8 @@ export class TransportService {
             resourceId: input.resourceId,
             amount: input.amount,
             fee: cpuFromWei(quote.totalFee.toString()),
+            transitPaid: cpuFromWei(transit.transitPaid.toString()),
+            transitDiscount: cpuFromWei(transit.transitDiscount.toString()),
             arrivalAt: Number(scheduled.arrivalAt),
             txHash: confirmed.txHash,
             approveTxHash,

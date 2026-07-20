@@ -47,7 +47,10 @@ import {
     TRANSPORT,
     WALLET_ADDRESS,
     makeConfig,
+    transitSettledLog,
 } from './service-fakes.js';
+
+const FOREIGN_OWNER = '0x00000000000000000000000000000000000000f1' as Address;
 
 const CREATE_HASH = `0x${'1'.repeat(64)}` as Hash;
 const BUY_HASH = `0x${'2'.repeat(64)}` as Hash;
@@ -398,6 +401,8 @@ describe('TradeService.createLot', () => {
         expect(result.maxSaleFeePercent).toBe(2.5);
         expect(result.deliveryId).toBe('123');
         expect(result.fee).toBe('0');
+        expect(result.transitPaid).toBe('0');
+        expect(result.transitDiscount).toBe('0');
         expect(result.txHash).toBe(CREATE_HASH);
     });
 
@@ -443,6 +448,8 @@ describe('TradeService.createLot', () => {
         expect(h.allowance.calls).toEqual([{ token: CPU_TOKEN, spender: TRANSPORT, needed: 1_100n }]);
         expect(h.tradeClient.creates[0]?.maxFee).toBe(1_100n);
         expect(result.fee).toBe(formatEther(1_000n));
+        expect(result.transitPaid).toBe(formatEther(1_000n));
+        expect(result.transitDiscount).toBe('0');
         expect(result.approveTxHash).toBe(APPROVE_HASH);
     });
 
@@ -525,6 +532,18 @@ describe('TradeService.buyLot', () => {
                     taxTo: WALLET_ADDRESS,
                     settledAt: 1704n,
                 }),
+                transitSettledLog({
+                    deliveryId: 123n,
+                    owner: FOREIGN_OWNER,
+                    gross: parseEther('0.6'),
+                    discount: parseEther('0.1'),
+                }),
+                transitSettledLog({
+                    deliveryId: 123n,
+                    owner: WALLET_ADDRESS,
+                    gross: parseEther('0.5'),
+                    discount: parseEther('0.05'),
+                }),
                 scheduledLog(123n, 1704n),
             ],
         });
@@ -545,6 +564,8 @@ describe('TradeService.buyLot', () => {
         expect(result.sale).toBe('5');
         expect(result.discount).toBe('0.2');
         expect(result.paid).toBe('4.8');
+        expect(result.transitPaid).toBe('0.95');
+        expect(result.transitDiscount).toBe('0.15');
         expect(result.hubFee).toBe('0.125');
         expect(result.tax).toBe('0.03');
         expect(result.ownerNet).toBe('0.095');
@@ -602,6 +623,8 @@ describe('TradeService.buyLot', () => {
         expect(result.tax).toBe('0');
         expect(result.paid).toBe(result.sale);
         expect(result.paid).toBe('5');
+        expect(result.transitPaid).toBe('0');
+        expect(result.transitDiscount).toBe('0');
     });
 
     it('sends the buy on a frozen lot and enriches the SaleFeeExceedsMax revert with the next moves', async () => {
@@ -637,6 +660,8 @@ describe('TradeService.cancelLot', () => {
         expect(h.transportClient.quotes[0]?.amount).toBe(100n);
         expect(result.returned).toBe('100');
         expect(result.fee).toBe('0');
+        expect(result.transitPaid).toBe('0');
+        expect(result.transitDiscount).toBe('0');
         expect(result.deliveryId).toBe('123');
         expect(result.approveTxHash).toBeNull();
         expect(result.txHash).toBe(CANCEL_HASH);

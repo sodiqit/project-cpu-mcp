@@ -1,7 +1,7 @@
 import { isAddress, parseEther, parseEventLogs, type Address, type Hash } from 'viem';
 import { z } from 'zod';
 
-import { decodeDeliveryScheduled } from './delivery.helpers.js';
+import { decodeDeliveryScheduled, settleTransitFees } from './delivery.helpers.js';
 import { describeApiError } from './reveal.helpers.js';
 import {
     enrichFrozenBuyError,
@@ -134,6 +134,7 @@ export class TradeService {
             'LotCreated',
         );
         const scheduled = decodeDeliveryScheduled(confirmed.logs, transport);
+        const transit = settleTransitFees(confirmed.logs, transport, feeWei);
 
         this.logger.info('lot created', {
             lotId: created.args.lotId.toString(),
@@ -152,6 +153,8 @@ export class TradeService {
             deliveryId: scheduled.deliveryId.toString(),
             arrivalAt: Number(scheduled.arrivalAt),
             fee: cpuFromWei(feeWei.toString()),
+            transitPaid: cpuFromWei(transit.transitPaid.toString()),
+            transitDiscount: cpuFromWei(transit.transitDiscount.toString()),
             txHash: confirmed.txHash,
             approveTxHash,
             status: confirmed.status,
@@ -237,6 +240,7 @@ export class TradeService {
             'LotBought',
         );
         const scheduled = decodeDeliveryScheduled(confirmed.logs, transport);
+        const transit = settleTransitFees(confirmed.logs, transport, feeWei);
 
         this.logger.info('lot bought', {
             lotId: input.lotId,
@@ -258,6 +262,8 @@ export class TradeService {
             burn: cpuFromWei(bought.args.burn.toString()),
             remaining: bought.args.remaining.toString(),
             fee: cpuFromWei(feeWei.toString()),
+            transitPaid: cpuFromWei(transit.transitPaid.toString()),
+            transitDiscount: cpuFromWei(transit.transitDiscount.toString()),
             deliveryId: scheduled.deliveryId.toString(),
             arrivalAt: Number(scheduled.arrivalAt),
             txHash: confirmed.txHash,
@@ -298,12 +304,15 @@ export class TradeService {
             'LotCancelled',
         );
         const scheduled = decodeDeliveryScheduled(confirmed.logs, transport);
+        const transit = settleTransitFees(confirmed.logs, transport, feeWei);
 
         return {
             lotId: input.lotId,
             resourceId: lot.resourceId,
             returned: cancelled.args.returned.toString(),
             fee: cpuFromWei(feeWei.toString()),
+            transitPaid: cpuFromWei(transit.transitPaid.toString()),
+            transitDiscount: cpuFromWei(transit.transitDiscount.toString()),
             deliveryId: scheduled.deliveryId.toString(),
             arrivalAt: Number(scheduled.arrivalAt),
             txHash: confirmed.txHash,

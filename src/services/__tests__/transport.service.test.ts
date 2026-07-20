@@ -1,4 +1,4 @@
-import { type Abi, encodeAbiParameters, encodeEventTopics, type Hash, type Log } from 'viem';
+import { type Abi, type Address, encodeAbiParameters, encodeEventTopics, type Hash, type Log, parseEther } from 'viem';
 import { describe, expect, it } from 'vitest';
 
 import type { ApiClient } from '../../api/client.js';
@@ -32,7 +32,10 @@ import {
     TRANSPORT,
     WALLET_ADDRESS,
     makeConfig,
+    transitSettledLog,
 } from './service-fakes.js';
+
+const FOREIGN_OWNER = '0x00000000000000000000000000000000000000f1' as Address;
 
 const MOVE_HASH = `0x${'1'.repeat(64)}` as Hash;
 const FINALIZE_HASH = `0x${'2'.repeat(64)}` as Hash;
@@ -193,6 +196,8 @@ describe('TransportService.transport', () => {
         expect(result.sourceTokenId).toBe('10');
         expect(result.targetTokenId).toBe('20');
         expect(result.fee).toBe('0');
+        expect(result.transitPaid).toBe('0');
+        expect(result.transitDiscount).toBe('0');
         expect(result.arrivalAt).toBe(1704);
         expect(result.approveTxHash).toBeNull();
         expect(result.txHash).toBe(MOVE_HASH);
@@ -212,7 +217,36 @@ describe('TransportService.transport', () => {
         expect(h.allowance.calls).toEqual([{ token: CPU_TOKEN, spender: TRANSPORT, needed: 1_100n }]);
         expect(h.transportClient.moves[0]?.maxFee).toBe(1_100n);
         expect(result.fee).toBe('0.000000000000001');
+        expect(result.transitPaid).toBe('0.000000000000001');
+        expect(result.transitDiscount).toBe('0');
         expect(result.approveTxHash).toBe(APPROVE_HASH);
+    });
+
+    it('aggregates the settled transit legs into transitPaid and transitDiscount', async () => {
+        const h = makeTransport({
+            quote: { totalFee: parseEther('0.95'), discount: parseEther('0.15'), totalDistance: 4n, arrivalAt: 1704n },
+            approve: APPROVE_HASH,
+            confirmLogs: [
+                scheduledLog({ deliveryId: 5n, sourceId: 10n, targetId: 20n, arrivalAt: 1704n }),
+                transitSettledLog({
+                    deliveryId: 5n,
+                    owner: FOREIGN_OWNER,
+                    gross: parseEther('0.6'),
+                    discount: parseEther('0.1'),
+                }),
+                transitSettledLog({
+                    deliveryId: 5n,
+                    owner: WALLET_ADDRESS,
+                    gross: parseEther('0.5'),
+                    discount: parseEther('0.05'),
+                }),
+            ],
+        });
+
+        const result = await h.service.transport(INPUT);
+
+        expect(result.transitPaid).toBe('0.95');
+        expect(result.transitDiscount).toBe('0.15');
     });
 
     it('refuses on a chain mismatch before quoting', async () => {

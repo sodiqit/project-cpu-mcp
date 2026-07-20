@@ -443,6 +443,8 @@ export interface TransportResult {
     amount: string;
     /** Transit fee paid, in $CPU (decimal). */
     fee: string;
+    transitPaid: string;
+    transitDiscount: string;
     arrivalAt: number;
     txHash: Hash;
     approveTxHash: Hash | null;
@@ -761,6 +763,8 @@ export interface CreateLotResult {
     arrivalAt: number;
     /** Transit fee quoted for the routing, in $CPU (decimal). */
     fee: string;
+    transitPaid: string;
+    transitDiscount: string;
     txHash: Hash;
     /** Transport-fee approve, when the route crossed a foreign hub. */
     approveTxHash: Hash | null;
@@ -785,6 +789,8 @@ export interface BuyLotResult {
     remaining: string;
     /** Transit fee paid, in $CPU (decimal). */
     fee: string;
+    transitPaid: string;
+    transitDiscount: string;
     deliveryId: string;
     arrivalAt: number;
     txHash: Hash;
@@ -804,6 +810,8 @@ export interface CancelLotResult {
     returned: string;
     /** Transit fee paid, in $CPU (decimal). */
     fee: string;
+    transitPaid: string;
+    transitDiscount: string;
     deliveryId: string;
     arrivalAt: number;
     txHash: Hash;
