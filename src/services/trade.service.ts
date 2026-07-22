@@ -1,9 +1,10 @@
 import { isAddress, parseEther, parseEventLogs, type Address, type Hash } from 'viem';
 import { z } from 'zod';
 
-import { decodeDeliveryScheduled } from './delivery.helpers.js';
+import { decodeDeliveryScheduled, settleTransitFees } from './delivery.helpers.js';
 import { describeApiError } from './reveal.helpers.js';
 import {
+    enrichBuyQuoteRevert,
     enrichFrozenBuyError,
     enrichSaleFeeToleranceError,
     withDecimalMinPrice,
@@ -14,6 +15,7 @@ import {
     type AppConfig,
     type BuyLotInput,
     type BuyLotResult,
+    type BuyQuoteResult,
     type CancelLotInput,
     type CancelLotResult,
     type CreateLotInput,
@@ -26,6 +28,7 @@ import {
     type MarketsQuery,
     type QuoteBuyInput,
     type QuoteRouteParams,
+    type SaleQuoteResult,
     type SetSaleFeeInput,
     type SetSaleFeeResult,
     type TradeQuote,
@@ -46,6 +49,7 @@ import {
 import { TRADE_ABI } from '../contracts/trade.abi.js';
 import type { ILogger } from '../logger/types.js';
 import { bpToPercent, cpuFromWei, percentToBp } from '../utils/format.utils.js';
+import { buildQuery } from '../utils/query.utils.js';
 import type { IContractClient, WalletManager, WalletProvider } from '../wallet/types.js';
 
 /**
@@ -134,6 +138,7 @@ export class TradeService {
             'LotCreated',
         );
         const scheduled = decodeDeliveryScheduled(confirmed.logs, transport);
+        const transit = settleTransitFees(confirmed.logs, transport, feeWei);
 
         this.logger.info('lot created', {
             lotId: created.args.lotId.toString(),
@@ -152,6 +157,8 @@ export class TradeService {
             deliveryId: scheduled.deliveryId.toString(),
             arrivalAt: Number(scheduled.arrivalAt),
             fee: cpuFromWei(feeWei.toString()),
+            transitPaid: cpuFromWei(transit.transitPaid.toString()),
+            transitDiscount: cpuFromWei(transit.transitDiscount.toString()),
             txHash: confirmed.txHash,
             approveTxHash,
             status: confirmed.status,
@@ -237,6 +244,7 @@ export class TradeService {
             'LotBought',
         );
         const scheduled = decodeDeliveryScheduled(confirmed.logs, transport);
+        const transit = settleTransitFees(confirmed.logs, transport, feeWei);
 
         this.logger.info('lot bought', {
             lotId: input.lotId,
@@ -250,10 +258,16 @@ export class TradeService {
             resourceId: lot.resourceId,
             value: input.value,
             sale: cpuFromWei(bought.args.sale.toString()),
+            discount: cpuFromWei(bought.args.discount.toString()),
+            paid: cpuFromWei((bought.args.sale - bought.args.discount).toString()),
             hubFee: cpuFromWei(bought.args.hubFee.toString()),
+            tax: cpuFromWei(bought.args.tax.toString()),
+            ownerNet: cpuFromWei(bought.args.ownerNet.toString()),
             burn: cpuFromWei(bought.args.burn.toString()),
             remaining: bought.args.remaining.toString(),
             fee: cpuFromWei(feeWei.toString()),
+            transitPaid: cpuFromWei(transit.transitPaid.toString()),
+            transitDiscount: cpuFromWei(transit.transitDiscount.toString()),
             deliveryId: scheduled.deliveryId.toString(),
             arrivalAt: Number(scheduled.arrivalAt),
             txHash: confirmed.txHash,
@@ -294,12 +308,15 @@ export class TradeService {
             'LotCancelled',
         );
         const scheduled = decodeDeliveryScheduled(confirmed.logs, transport);
+        const transit = settleTransitFees(confirmed.logs, transport, feeWei);
 
         return {
             lotId: input.lotId,
             resourceId: lot.resourceId,
             returned: cancelled.args.returned.toString(),
             fee: cpuFromWei(feeWei.toString()),
+            transitPaid: cpuFromWei(transit.transitPaid.toString()),
+            transitDiscount: cpuFromWei(transit.transitDiscount.toString()),
             deliveryId: scheduled.deliveryId.toString(),
             arrivalAt: Number(scheduled.arrivalAt),
             txHash: confirmed.txHash,
@@ -309,50 +326,55 @@ export class TradeService {
         };
     }
 
-    /**
-     * Non-destructive buy preview: `sale = value × pricePerUnit` (immutable, from the projection) plus
-     * the on-chain transit fee when a route is supplied. Pass `chain` for the exact routed total, omit
-     * it for a seller-only estimate.
-     */
     async quoteBuy(input: QuoteBuyInput): Promise<TradeQuote> {
         const { config, wallet } = await this.ready();
+        const trade = this.resolveTrade(config);
         const lot = await this.getLot(input.lotId);
+        const lotId = BigInt(input.lotId);
         const value = BigInt(input.value);
-        const saleWei = value * parseEther(lot.pricePerUnit);
+        const buyer = wallet.getAddress();
 
-        let transitFeeWei: bigint | null = null;
-        let totalDistance: number | null = null;
-        let arrivalAt: number | null = null;
-
-        if (input.chain !== null) {
-            const transport = this.resolveTransport(config);
-            const quote = await this.transportClient.quoteRoute({
-                transport,
-                from: wallet.getAddress(),
-                tokenIds: input.chain.map((tokenId) => BigInt(tokenId)),
-                res: lot.resourceId,
-                amount: value,
+        try {
+            if (input.chain === null) {
+                const sale = await this.tradeClient.quoteSale({ trade, lotId, value, buyer });
+                return this.toTradeQuote(input, lot, sale, null);
+            }
+            const buy = await this.tradeClient.quoteBuy({
+                trade,
+                lotId,
+                value,
+                destTokenIds: input.chain.map((tokenId) => BigInt(tokenId)),
+                buyer,
             });
-            transitFeeWei = quote.totalFee;
-            totalDistance = Number(quote.totalDistance);
-            arrivalAt = Number(quote.arrivalAt);
+            return this.toTradeQuote(input, lot, buy.sale, buy);
+        } catch (error) {
+            throw enrichBuyQuoteRevert(error);
         }
+    }
 
+    private toTradeQuote(
+        input: QuoteBuyInput,
+        lot: LotView,
+        sale: SaleQuoteResult,
+        buy: BuyQuoteResult | null,
+    ): TradeQuote {
         return {
             lotId: input.lotId,
             resourceId: lot.resourceId,
             pricePerUnit: lot.pricePerUnit,
             value: input.value,
             remaining: lot.remaining,
-            routed: input.chain !== null,
-            sale: cpuFromWei(saleWei.toString()),
-            transitFee: transitFeeWei === null ? null : cpuFromWei(transitFeeWei.toString()),
-            total: cpuFromWei((saleWei + (transitFeeWei ?? 0n)).toString()),
-            totalDistance,
-            arrivalAt,
-            frozen: lot.frozen,
-            saleFeePercent: lot.saleFeePercent,
-            maxSaleFeePercent: lot.maxSaleFeePercent,
+            routed: buy !== null,
+            sale: cpuFromWei(sale.sale.toString()),
+            saleFeePercent: bpToPercent(sale.feeBp),
+            discount: cpuFromWei(sale.discount.toString()),
+            salePaid: cpuFromWei(sale.buyerTotal.toString()),
+            tax: cpuFromWei(sale.tax.toString()),
+            ownerNet: cpuFromWei(sale.ownerNet.toString()),
+            transitFee: buy === null ? null : cpuFromWei(buy.transitFee.toString()),
+            transitDiscount: buy === null ? null : cpuFromWei(buy.transitDiscount.toString()),
+            arrivalAt: buy === null ? null : Number(buy.arrivalAt),
+            total: cpuFromWei((buy === null ? sale.buyerTotal : buy.totalCost).toString()),
         };
     }
 
@@ -478,15 +500,4 @@ export class TradeService {
         }
         return { config, wallet };
     }
-}
-
-/** Serialise a query object to `?a=1&b=2`, dropping null fields and URL-encoding values. */
-function buildQuery(params: Record<string, string | number | null>): string {
-    const pairs: Array<string> = [];
-    for (const [key, value] of Object.entries(params)) {
-        if (value !== null) {
-            pairs.push(`${key}=${encodeURIComponent(String(value))}`);
-        }
-    }
-    return pairs.length === 0 ? '' : `?${pairs.join('&')}`;
 }

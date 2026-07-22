@@ -1,14 +1,18 @@
 import type { DeliveryView, TransportQuote, TransportResult } from '../../services/types.js';
-import { formatUnixSeconds, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
+import { formatUnixSeconds, resourceLabel, summarizeTransit, type ResourceNames } from '../../utils/format.utils.js';
 
 export function summarizeQuote(quote: TransportQuote): string {
-    const fee = quote.fee === '0' ? 'free (no transit fee)' : `${quote.fee} $CPU fee`;
+    const saving = quote.discount === '0' ? '' : ` (member saving ${quote.discount} $CPU already applied)`;
+    const fee = quote.fee === '0' ? 'free (no transit fee)' : `${quote.fee} $CPU to pay${saving}`;
     return `Route — ${fee}, ${quote.totalDistance} hops, arrival ${formatUnixSeconds(quote.arrivalAt)}. Commit it with transport.`;
 }
 
 export function summarizeTransport(r: TransportResult, resources: ResourceNames): string {
     const approve = r.approveTxHash !== null ? `approve tx ${r.approveTxHash}, ` : '';
-    const fee = r.fee === '0' ? 'no $CPU fee' : `${r.fee} $CPU fee`;
+    const fee =
+        r.transitPaid === '0' && r.transitDiscount === '0'
+            ? 'no transit fee'
+            : `transit fee ${summarizeTransit(r.transitPaid, r.transitDiscount)}`;
     return (
         `Transport delivery ${r.deliveryId}: ${r.amount} ${resourceLabel(resources, r.resourceId)} from cell ` +
         `${r.sourceTokenId} → ${r.targetTokenId}, ${fee}. ${approve}move tx ${r.txHash} confirmed in block ` +

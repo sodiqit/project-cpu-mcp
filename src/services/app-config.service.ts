@@ -1,4 +1,4 @@
-import { toModeSwitchView } from './app-config.utils.js';
+import { normalizeOptionalAddress, toModeSwitchView } from './app-config.utils.js';
 import type { AppConfig, AppConfigServiceOptions, IAppConfig } from './types.js';
 import type { ApiClient } from '../api/client.js';
 import { type AppConfigResponse, appConfigResponseSchema, HttpStatus } from '../api/types.js';
@@ -45,6 +45,7 @@ export class AppConfigService implements IAppConfig {
                 cellLens: data.contracts.cellLens,
                 transport: data.contracts.transport,
                 trade: data.contracts.trade,
+                syndicate: normalizeOptionalAddress(data.contracts.syndicate),
             },
             resources: data.resources ?? {},
             recipes: data.recipes ?? [],

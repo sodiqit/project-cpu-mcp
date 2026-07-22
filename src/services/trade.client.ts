@@ -1,11 +1,16 @@
 import { encodeFunctionData, type Hash } from 'viem';
 
+import { namedQuoteRevert } from './trade.helpers.js';
 import type {
     BuyLotParams,
+    BuyQuoteResult,
     CancelLotParams,
     CreateLotParams,
     GetSaleFeeParams,
     ITradeClient,
+    QuoteBuyParams,
+    QuoteSaleParams,
+    SaleQuoteResult,
     SetSaleFeeParams,
     TradeClientOptions,
 } from './types.js';
@@ -91,5 +96,31 @@ export class TradeClient implements ITradeClient {
             args: [params.hub, params.res],
         });
         return Number(feeBp);
+    }
+
+    async quoteSale(params: QuoteSaleParams): Promise<SaleQuoteResult> {
+        try {
+            return await this.contracts.read<SaleQuoteResult>({
+                address: params.trade,
+                abi: TRADE_ABI,
+                functionName: 'quoteSale',
+                args: [params.lotId, params.value, params.buyer],
+            });
+        } catch (error) {
+            throw namedQuoteRevert(error);
+        }
+    }
+
+    async quoteBuy(params: QuoteBuyParams): Promise<BuyQuoteResult> {
+        try {
+            return await this.contracts.read<BuyQuoteResult>({
+                address: params.trade,
+                abi: TRADE_ABI,
+                functionName: 'quoteBuy',
+                args: [params.lotId, params.value, params.destTokenIds, params.buyer],
+            });
+        } catch (error) {
+            throw namedQuoteRevert(error);
+        }
     }
 }

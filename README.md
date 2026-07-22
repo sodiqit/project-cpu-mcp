@@ -137,6 +137,14 @@ Once connected, the server exposes tools grouped by area:
 - **Trading** — `cpu_get_markets`, `cpu_list_lots`, `cpu_get_lot`, `cpu_quote_buy`, `cpu_buy_lot`, `cpu_create_lot`,
   `cpu_cancel_lot`, `cpu_list_my_lots`, and `cpu_set_sale_fee` (a hub owner sets the per-resource sale-fee
   rate on their own hub). See [CONTEXT.md](./CONTEXT.md) for the fee vocabulary.
+- **Syndicates** — `cpu_list_syndicates` (browse the registry by name/size, sort, page), `cpu_get_syndicate`
+  (one syndicate's card plus a page of its members), `cpu_get_syndicate_membership` (check an address's
+  membership, defaults to your own), `cpu_join_syndicate` (join by id for same-clan discounts; reports your
+  exit cooldown), `cpu_leave_syndicate` (leave after the cooldown; re-join anywhere immediately),
+  `cpu_create_syndicate` (found your own — name, link, four rates, optional manager — you auto-join),
+  `cpu_set_syndicate_params` (replace your syndicate's full parameters — no partial patches), and
+  `cpu_transfer_syndicate_manager` (hand the manager role and its tax stream to a successor, irreversible).
+  See [CONTEXT.md](./CONTEXT.md) for the syndicate vocabulary.
 - **Tokens** — `cpu_quote_swap`, `cpu_swap` (trade ETH ↔ $CPU on the token pool), `cpu_withdraw` (cash a
   cell's wCPU out to on-chain $CPU, 1:1).
 

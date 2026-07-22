@@ -11,6 +11,7 @@ import type {
     RecipeView,
     RevealCostView,
     StorageConfigView,
+    SyndicateSort,
     TransportRoutingView,
 } from '../api/types.js';
 import type { Network } from '../config/types.js';
@@ -18,7 +19,7 @@ import type { CellCoord } from '../geometry/types.js';
 import type { ILogger } from '../logger/types.js';
 import type { Cell, RevealCellReader } from '../map/types.js';
 import type { SessionManager } from '../session/manager.js';
-import type { IContractClient, TxStatus, WalletManager, WalletProvider } from '../wallet/types.js';
+import type { ConfirmedTx, IContractClient, TxStatus, WalletManager, WalletProvider } from '../wallet/types.js';
 
 export interface AuthServiceOptions {
     session: SessionManager;
@@ -44,6 +45,7 @@ export interface AppContracts {
     transport: string;
     /** The lot marketplace; empty until configured. Validate with `isAddress` before a trade write. */
     trade: string;
+    syndicate: string | null;
 }
 
 export enum ModeSwitchKind {
@@ -387,6 +389,7 @@ export interface QuoteRouteParams {
 
 export interface RouteQuote {
     totalFee: bigint;
+    discount: bigint;
     totalDistance: bigint;
     arrivalAt: bigint;
 }
@@ -429,6 +432,7 @@ export interface TransportInput {
 export interface TransportQuote {
     /** Transit fee in $CPU (decimal); "0" for an own-cells-only route. */
     fee: string;
+    discount: string;
     totalDistance: number;
     arrivalAt: number;
 }
@@ -441,6 +445,8 @@ export interface TransportResult {
     amount: string;
     /** Transit fee paid, in $CPU (decimal). */
     fee: string;
+    transitPaid: string;
+    transitDiscount: string;
     arrivalAt: number;
     txHash: Hash;
     approveTxHash: Hash | null;
@@ -719,6 +725,41 @@ export interface BuyLotParams {
     maxFee: bigint;
 }
 
+export interface QuoteSaleParams {
+    trade: Address;
+    lotId: bigint;
+    value: bigint;
+    buyer: Address;
+}
+
+export interface QuoteBuyParams {
+    trade: Address;
+    lotId: bigint;
+    value: bigint;
+    destTokenIds: Array<bigint>;
+    buyer: Address;
+}
+
+export interface SaleQuoteResult {
+    buyerTotal: bigint;
+    sellerNet: bigint;
+    sale: bigint;
+    feeBp: number;
+    hubFee: bigint;
+    burn: bigint;
+    discount: bigint;
+    tax: bigint;
+    ownerNet: bigint;
+}
+
+export interface BuyQuoteResult {
+    sale: SaleQuoteResult;
+    transitFee: bigint;
+    transitDiscount: bigint;
+    arrivalAt: bigint;
+    totalCost: bigint;
+}
+
 export interface CancelLotParams {
     trade: Address;
     lotId: bigint;
@@ -733,6 +774,8 @@ export interface ITradeClient {
     cancel(params: CancelLotParams): Promise<Hash>;
     setSaleFee(params: SetSaleFeeParams): Promise<Hash>;
     getSaleFee(params: GetSaleFeeParams): Promise<number>;
+    quoteSale(params: QuoteSaleParams): Promise<SaleQuoteResult>;
+    quoteBuy(params: QuoteBuyParams): Promise<BuyQuoteResult>;
 }
 
 export interface SetSaleFeeResult {
@@ -759,6 +802,8 @@ export interface CreateLotResult {
     arrivalAt: number;
     /** Transit fee quoted for the routing, in $CPU (decimal). */
     fee: string;
+    transitPaid: string;
+    transitDiscount: string;
     txHash: Hash;
     /** Transport-fee approve, when the route crossed a foreign hub. */
     approveTxHash: Hash | null;
@@ -773,12 +818,18 @@ export interface BuyLotResult {
     value: string;
     /** value × pricePerUnit, in $CPU (decimal). */
     sale: string;
+    discount: string;
+    paid: string;
     hubFee: string;
+    tax: string;
+    ownerNet: string;
     burn: string;
     /** Units left on the lot after this buy (0 = sold out). */
     remaining: string;
     /** Transit fee paid, in $CPU (decimal). */
     fee: string;
+    transitPaid: string;
+    transitDiscount: string;
     deliveryId: string;
     arrivalAt: number;
     txHash: Hash;
@@ -798,6 +849,8 @@ export interface CancelLotResult {
     returned: string;
     /** Transit fee paid, in $CPU (decimal). */
     fee: string;
+    transitPaid: string;
+    transitDiscount: string;
     deliveryId: string;
     arrivalAt: number;
     txHash: Hash;
@@ -810,22 +863,20 @@ export interface CancelLotResult {
 export interface TradeQuote {
     lotId: string;
     resourceId: number;
-    /** Decimal $CPU per unit (e.g. "2"). */
     pricePerUnit: string;
     value: string;
     remaining: string;
     routed: boolean;
-    /** value × pricePerUnit, in $CPU (decimal). */
     sale: string;
-    /** Transit fee in $CPU (decimal), or null for a seller-only estimate. */
-    transitFee: string | null;
-    /** sale + transitFee, in $CPU (decimal) — the expected $CPU buy_lot charges. */
-    total: string;
-    totalDistance: number | null;
-    arrivalAt: number | null;
-    frozen: boolean;
     saleFeePercent: number;
-    maxSaleFeePercent: number;
+    discount: string;
+    salePaid: string;
+    tax: string;
+    ownerNet: string;
+    transitFee: string | null;
+    transitDiscount: string | null;
+    arrivalAt: number | null;
+    total: string;
 }
 
 // ---- Swap (Uniswap v4 ETH/$CPU pool) ----
@@ -997,4 +1048,184 @@ export interface BalanceResult {
     cpu: string;
     /** Native gas balance in ETH (decimal). */
     native: string;
+}
+
+// ---- Syndicate registry ----
+
+export interface SyndicateServiceOptions {
+    api: ApiClient;
+    wallet: WalletProvider;
+    appConfig: IAppConfig;
+    registry: ISyndicateRegistryClient;
+    logger: ILogger;
+}
+
+export interface SyndicateRegistryClientOptions {
+    contracts: IContractClient;
+    logger: ILogger;
+}
+
+export interface JoinRegistryParams {
+    registry: Address;
+    id: bigint;
+}
+
+export interface LeaveRegistryParams {
+    registry: Address;
+}
+
+export interface RegistryRates {
+    tradeDiscountBp: number;
+    transportDiscountBp: number;
+    tradeTaxBp: number;
+    transportTaxBp: number;
+}
+
+export interface CreateRegistryParams {
+    registry: Address;
+    name: string;
+    link: string;
+    manager: Address;
+    rates: RegistryRates;
+}
+
+export interface SetParamsRegistryParams {
+    registry: Address;
+    id: bigint;
+    name: string;
+    link: string;
+    rates: RegistryRates;
+}
+
+export interface TransferManagerRegistryParams {
+    registry: Address;
+    id: bigint;
+    next: Address;
+}
+
+export interface SyndicateRegistryConfig {
+    exitCooldownSec: number;
+}
+
+export interface ISyndicateRegistryClient {
+    join(params: JoinRegistryParams): Promise<ConfirmedTx>;
+    leave(params: LeaveRegistryParams): Promise<ConfirmedTx>;
+    create(params: CreateRegistryParams): Promise<ConfirmedTx>;
+    setParams(params: SetParamsRegistryParams): Promise<ConfirmedTx>;
+    transferManager(params: TransferManagerRegistryParams): Promise<ConfirmedTx>;
+    getConfig(registry: Address): Promise<SyndicateRegistryConfig>;
+}
+
+export interface JoinSyndicateInput {
+    id: string;
+}
+
+export interface JoinSyndicateResult {
+    syndicateId: string;
+    joinedAt: number;
+    leaveAvailableAt: number;
+    name: string | null;
+    rates: SyndicateRatesView | null;
+}
+
+export interface LeaveSyndicateResult {
+    syndicateId: string;
+    rejoinAvailableImmediately: boolean;
+}
+
+export interface SyndicateRatesView {
+    tradeDiscountPercent: number;
+    transportDiscountPercent: number;
+    tradeTaxPercent: number;
+    transportTaxPercent: number;
+}
+
+export interface CreateSyndicateInput {
+    name: string;
+    link: string;
+    manager: string | null;
+    rates: SyndicateRatesView;
+}
+
+export interface CreateSyndicateResult {
+    syndicateId: string;
+    manager: string;
+    name: string;
+    link: string;
+    rates: SyndicateRatesView;
+    joinedAt: number;
+    leaveAvailableAt: number;
+}
+
+export interface SetSyndicateParamsInput {
+    id: string;
+    name: string;
+    link: string;
+    rates: SyndicateRatesView;
+}
+
+export interface SetSyndicateParamsResult {
+    syndicateId: string;
+    name: string;
+    link: string;
+    rates: SyndicateRatesView;
+}
+
+export interface TransferSyndicateManagerInput {
+    id: string;
+    next: string;
+}
+
+export interface TransferSyndicateManagerResult {
+    syndicateId: string;
+    previousManager: string;
+    newManager: string;
+}
+
+export interface SyndicateCardView {
+    id: string;
+    manager: string;
+    name: string;
+    link: string;
+    rates: SyndicateRatesView;
+    memberCount: number;
+    createdAt: number;
+}
+
+export interface SyndicateMemberView {
+    address: string;
+    joinedAt: number;
+}
+
+export interface ListSyndicatesQuery {
+    name: string | null;
+    minMembers: number | null;
+    maxMembers: number | null;
+    sort: SyndicateSort | null;
+    limit: number | null;
+    offset: number | null;
+}
+
+export interface GetSyndicateInput {
+    id: string;
+    membersLimit: number | null;
+    membersOffset: number | null;
+}
+
+export interface SyndicateDetailView {
+    card: SyndicateCardView;
+    members: Array<SyndicateMemberView>;
+}
+
+export interface GetMembershipInput {
+    address: string | null;
+}
+
+export interface SyndicateMembershipView {
+    address: string;
+    member: boolean;
+    syndicateId: string | null;
+    joinedAt: number | null;
+    leaveAvailableAt: number | null;
+    syndicate: SyndicateCardView | null;
 }

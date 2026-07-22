@@ -1,3 +1,5 @@
+import { zeroAddress } from 'viem';
+
 import { type ModeSwitchView, ModeSwitchKind } from './types.js';
 
 export function toModeSwitchView(cost: string | null | undefined): ModeSwitchView {
@@ -8,4 +10,11 @@ export function toModeSwitchView(cost: string | null | undefined): ModeSwitchVie
         return { kind: ModeSwitchKind.Impossible };
     }
     return { kind: ModeSwitchKind.Possible, costCpu: cost };
+}
+
+export function normalizeOptionalAddress(address: string | null | undefined): string | null {
+    if (address === undefined || address === null || address === '') {
+        return null;
+    }
+    return address.toLowerCase() === zeroAddress ? null : address;
 }

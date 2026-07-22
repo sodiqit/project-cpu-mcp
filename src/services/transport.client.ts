@@ -22,13 +22,15 @@ export class TransportClient implements ITransportClient {
     }
 
     async quoteRoute(params: QuoteRouteParams): Promise<RouteQuote> {
-        const [totalFee, totalDistance, arrivalAt] = await this.contracts.read<readonly [bigint, bigint, bigint]>({
+        const [totalFee, discount, totalDistance, arrivalAt] = await this.contracts.read<
+            readonly [bigint, bigint, bigint, bigint]
+        >({
             address: params.transport,
             abi: TRANSPORT_ABI,
             functionName: 'quoteRoute',
             args: [params.from, params.tokenIds, params.res, params.amount],
         });
-        return { totalFee, totalDistance, arrivalAt };
+        return { totalFee, discount, totalDistance, arrivalAt };
     }
 
     async move(params: MoveParams): Promise<Hash> {

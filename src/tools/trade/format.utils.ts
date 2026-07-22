@@ -7,7 +7,7 @@ import type {
     SetSaleFeeResult,
     TradeQuote,
 } from '../../services/types.js';
-import { formatUnixSeconds, resourceLabel, type ResourceNames } from '../../utils/format.utils.js';
+import { formatUnixSeconds, resourceLabel, summarizeTransit, type ResourceNames } from '../../utils/format.utils.js';
 
 /** Human header for a confirmed `create_lot`. */
 export function summarizeCreateLot(result: CreateLotResult, resources: ResourceNames): string {
@@ -19,7 +19,8 @@ export function summarizeCreateLot(result: CreateLotResult, resources: ResourceN
         `freezes and buys revert until the hub lowers it; cancel_lot is always fee-free and returns the escrow). ` +
         `Escrow shipping to the Hub (delivery ${result.deliveryId}, ETA ${formatUnixSeconds(result.arrivalAt)}); the ` +
         `lot opens once it arrives — run finalize_delivery on ${result.deliveryId} after the ETA (or wait). Transit ` +
-        `fee ${result.fee} $CPU. ${approve}create tx ${result.txHash} in block ${result.blockNumber}.`
+        `fee ${summarizeTransit(result.transitPaid, result.transitDiscount)}. ${approve}create tx ${result.txHash} ` +
+        `in block ${result.blockNumber}.`
     );
 }
 
@@ -42,11 +43,14 @@ export function summarizeBuyLot(result: BuyLotResult, resources: ResourceNames):
     ].filter((v): v is string => v !== null);
     const approve = approvals.length > 0 ? `${approvals.join(', ')}, ` : '';
     return (
-        `Bought ${result.value} ${resourceLabel(resources, result.resourceId)} from lot ${result.lotId} for ` +
-        `${result.sale} $CPU (+ ${result.fee} transit) — of the sale, ${result.hubFee} went to the hub owner and ` +
-        `${result.burn} was burned. ${result.remaining} units remain on the lot. Goods shipping to your cell ` +
-        `(delivery ${result.deliveryId}, ETA ${formatUnixSeconds(result.arrivalAt)}) — run finalize_delivery on ` +
-        `${result.deliveryId} after the ETA. ${approve}buy tx ${result.txHash} in block ${result.blockNumber}.`
+        `Bought ${result.value} ${resourceLabel(resources, result.resourceId)} from lot ${result.lotId}: sale ` +
+        `${result.sale} $CPU − ${result.discount} syndicate discount = ${result.paid} charged (+ transit ` +
+        `${summarizeTransit(result.transitPaid, result.transitDiscount)}). Of the sale, ${result.hubFee} was the ` +
+        `hub fee — ${result.tax} taxed to the hub's syndicate, ` +
+        `${result.ownerNet} net to the hub owner — and ${result.burn} was burned. ${result.remaining} units remain ` +
+        `on the lot. Goods shipping to your cell (delivery ${result.deliveryId}, ETA ` +
+        `${formatUnixSeconds(result.arrivalAt)}) — run finalize_delivery on ${result.deliveryId} after the ETA. ` +
+        `${approve}buy tx ${result.txHash} in block ${result.blockNumber}.`
     );
 }
 
@@ -57,7 +61,8 @@ export function summarizeCancelLot(result: CancelLotResult, resources: ResourceN
         `Cancelled lot ${result.lotId}: ${result.returned} ${resourceLabel(resources, result.resourceId)} ` +
         `returning to you (delivery ${result.deliveryId}, ETA ${formatUnixSeconds(result.arrivalAt)}) — run ` +
         `finalize_delivery on ${result.deliveryId} after the ETA to reclaim them. Transit fee ` +
-        `${result.fee} $CPU. ${approve}cancel tx ${result.txHash} in block ${result.blockNumber}.`
+        `${summarizeTransit(result.transitPaid, result.transitDiscount)}. ${approve}cancel tx ${result.txHash} ` +
+        `in block ${result.blockNumber}.`
     );
 }
 
@@ -112,22 +117,19 @@ function summarizeLotLine(lot: LotView, resources: ResourceNames): string {
 
 export function summarizeQuoteBuy(quote: TradeQuote, resources: ResourceNames): string {
     const goods = `${quote.value} ${resourceLabel(resources, quote.resourceId)} @ ${quote.pricePerUnit} $CPU/u`;
-    const frozen = quote.frozen
-        ? ` FROZEN: the hub's live sale fee (${quote.saleFeePercent}%) exceeds the seller tolerance ` +
-          `(${quote.maxSaleFeePercent}%), so buy_lot reverts on-chain until the hub lowers the rate — or the seller ` +
-          `cancels (fee-free). The estimate above is what you would pay if it clears.`
-        : '';
+    const discount = quote.discount === '0' ? '' : ` − ${quote.discount} syndicate discount`;
+    const saleLeg = `sale ${quote.sale} $CPU (hub fee ${quote.saleFeePercent}%)${discount} = ${quote.salePaid} charged`;
+    const caveat = ' This is what the contract would settle now — it does not check pause, $CPU balance, or allowance.';
     if (!quote.routed) {
         return (
-            `Seller-only estimate for lot ${quote.lotId}: ${goods} = ${quote.sale} $CPU (transit ` +
-            `excluded — pass a chain for the exact total). ${quote.remaining} units remain.${frozen}`
+            `Seller-only estimate for lot ${quote.lotId}: ${goods} → ${saleLeg} (transit excluded — pass a chain ` +
+            `for the exact routed total). ${quote.remaining} units remain.${caveat}`
         );
     }
-    const hops = quote.totalDistance !== null ? `, ${quote.totalDistance} hops` : '';
     const eta = quote.arrivalAt !== null ? ` ~ETA ${formatUnixSeconds(quote.arrivalAt)}` : '';
     return (
-        `Buy quote for lot ${quote.lotId}: ${goods} = ${quote.sale} $CPU + ` +
-        `${quote.transitFee ?? '0'} transit = ${quote.total} $CPU total${hops}${eta}. ` +
-        `${quote.remaining} units remain. Commit with buy_lot.${frozen}`
+        `Buy quote for lot ${quote.lotId}: ${goods} → ${saleLeg} + ${quote.transitFee ?? '0'} transit ` +
+        `${quote.transitDiscount !== null && quote.transitDiscount !== '0' ? `(saved ${quote.transitDiscount}) ` : ''}` +
+        `= ${quote.total} $CPU total${eta}. ${quote.remaining} units remain. Commit with buy_lot.${caveat}`
     );
 }

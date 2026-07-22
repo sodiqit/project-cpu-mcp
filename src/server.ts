@@ -23,6 +23,14 @@ import { registerQuoteMintTool } from './tools/mint/quote/quote-mint.js';
 import { registerRevealTool } from './tools/reveal/reveal.js';
 import { registerQuoteSwapTool } from './tools/swap/quote/quote-swap.js';
 import { registerSwapTool } from './tools/swap/swap.js';
+import { registerCreateSyndicateTool } from './tools/syndicate/create/create-syndicate.js';
+import { registerGetSyndicateTool } from './tools/syndicate/get/get-syndicate.js';
+import { registerJoinSyndicateTool } from './tools/syndicate/join/join-syndicate.js';
+import { registerLeaveSyndicateTool } from './tools/syndicate/leave/leave-syndicate.js';
+import { registerListSyndicatesTool } from './tools/syndicate/list/list-syndicates.js';
+import { registerGetSyndicateMembershipTool } from './tools/syndicate/membership/get-membership.js';
+import { registerSetSyndicateParamsTool } from './tools/syndicate/set-params/set-syndicate-params.js';
+import { registerTransferSyndicateManagerTool } from './tools/syndicate/transfer-manager/transfer-syndicate-manager.js';
 import { registerBuyLotTool } from './tools/trade/buy-lot/buy-lot.js';
 import { registerCancelLotTool } from './tools/trade/cancel-lot/cancel-lot.js';
 import { registerCreateLotTool } from './tools/trade/create-lot/create-lot.js';
@@ -101,6 +109,11 @@ const SERVER_INSTRUCTIONS = [
     'and `cpu_get_cell`. The hub settles its live rate on every sale; when listing, set the highest rate you accept',
     'with `cpu_create_lot`’s `maxSaleFeePercent` (or omit it to lock in the live rate). If the hub later raises the',
     'rate above your tolerance the lot freezes — buys revert until it drops back — and `cpu_cancel_lot` is fee-free.',
+    'Join a syndicate to earn same-syndicate discounts on trade and transit: browse with `cpu_list_syndicates`,',
+    'inspect one with `cpu_get_syndicate`, and check any address’s membership with `cpu_get_syndicate_membership`.',
+    '`cpu_join_syndicate` and `cpu_leave_syndicate` manage your own membership (leaving is gated by an exit',
+    'cooldown reported at join time); `cpu_create_syndicate` founds your own (you auto-join), and its manager',
+    'tunes it with `cpu_set_syndicate_params` or hands the role off with `cpu_transfer_syndicate_manager`.',
     'Check spendable $CPU and gas with `cpu_get_balance` before any paid action.',
     'A `cpu_withdraw` mints $CPU against an off-chain signature; if it is interrupted, re-run it with the same args',
     'to finish the pending one rather than starting a second.',
@@ -143,6 +156,14 @@ export async function createServer(context: AppContext): Promise<void> {
     registerBuyLotTool(server, context);
     registerCancelLotTool(server, context);
     registerSetSaleFeeTool(server, context);
+    registerListSyndicatesTool(server, context);
+    registerGetSyndicateTool(server, context);
+    registerGetSyndicateMembershipTool(server, context);
+    registerJoinSyndicateTool(server, context);
+    registerLeaveSyndicateTool(server, context);
+    registerCreateSyndicateTool(server, context);
+    registerSetSyndicateParamsTool(server, context);
+    registerTransferSyndicateManagerTool(server, context);
     registerQuoteSwapTool(server, context);
     registerSwapTool(server, context);
     registerQuoteMintTool(server, context);

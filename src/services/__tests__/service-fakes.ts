@@ -1,5 +1,6 @@
 import {
     encodeAbiParameters,
+    encodeErrorResult,
     encodeEventTopics,
     zeroAddress,
     type Abi,
@@ -13,6 +14,8 @@ import type { ApiClient } from '../../api/client.js';
 import { BuildingKind, BuildingType, CraftRecipeId } from '../../api/types.js';
 import { Network } from '../../config/types.js';
 import { ERC20_ABI } from '../../contracts/erc20.abi.js';
+import { SYNDICATE_ABI } from '../../contracts/syndicate.abi.js';
+import { TRANSPORT_ABI } from '../../contracts/transport.abi.js';
 import { NoopLogger } from '../../logger/noop.logger.js';
 import type { ILogger } from '../../logger/types.js';
 import { toCell } from '../../map/cell-view.utils.js';
@@ -32,9 +35,16 @@ import { CellClient } from '../cell.client.js';
 import {
     type AppConfig,
     type CellViewResult,
+    type CreateRegistryParams,
     type IAllowanceService,
     type IAppConfig,
     type ICellClient,
+    type ISyndicateRegistryClient,
+    type JoinRegistryParams,
+    type LeaveRegistryParams,
+    type SetParamsRegistryParams,
+    type SyndicateRegistryConfig,
+    type TransferManagerRegistryParams,
     ModeSwitchKind,
 } from '../types.js';
 
@@ -50,6 +60,7 @@ export const CELL = '0x5555555555555555555555555555555555555555';
 export const CELL_LENS = '0x6666666666666666666666666666666666666666';
 export const TRANSPORT = '0x7777777777777777777777777777777777777777';
 export const TRADE = '0x8888888888888888888888888888888888888888';
+export const SYNDICATE = '0x9999999999999999999999999999999999999999';
 export const WALLET_ADDRESS = '0x000000000000000000000000000000000000dEaD' as Address;
 export const APPROVE_HASH = `0x${'c'.repeat(64)}` as Hash;
 export const R = `0x${'a'.repeat(64)}` as Hex;
@@ -67,6 +78,7 @@ export function makeConfig(cpuToken: string = CPU_TOKEN): AppConfig {
             cellLens: CELL_LENS,
             transport: TRANSPORT,
             trade: TRADE,
+            syndicate: SYNDICATE,
         },
         resources: { 1: 'WCPU', 5: 'Iron', 6: 'Copper', 7: 'Water', 101: 'Concrete', 102: 'Steel' },
         recipes: [
@@ -375,6 +387,39 @@ export function cpuBurnLog(from: Address, amountWei: bigint): Log {
     } as unknown as Log;
 }
 
+export function transitSettledLog(args: { deliveryId: bigint; owner: Address; gross: bigint; discount: bigint }): Log {
+    const topics = encodeEventTopics({
+        abi: TRANSPORT_ABI,
+        eventName: 'TransitFeeSettled',
+        args: { deliveryId: args.deliveryId, payer: WALLET_ADDRESS, owner: args.owner },
+    });
+    const data = encodeAbiParameters(
+        [
+            { name: 'gross', type: 'uint256' },
+            { name: 'burn', type: 'uint256' },
+            { name: 'discount', type: 'uint256' },
+            { name: 'tax', type: 'uint256' },
+            { name: 'ownerNet', type: 'uint256' },
+            { name: 'payerSyndicateId', type: 'uint256' },
+            { name: 'ownerSyndicateId', type: 'uint256' },
+            { name: 'taxTo', type: 'address' },
+            { name: 'settledAt', type: 'uint64' },
+        ],
+        [args.gross, args.gross - args.discount, args.discount, 0n, 0n, 0n, 0n, zeroAddress, 0n],
+    );
+    return {
+        address: TRANSPORT as Address,
+        topics,
+        data,
+        blockNumber: 100n,
+        blockHash: `0x${'0'.repeat(64)}`,
+        logIndex: 2,
+        transactionHash: `0x${'0'.repeat(64)}`,
+        transactionIndex: 0,
+        removed: false,
+    } as unknown as Log;
+}
+
 // A large default so `startAt: 1` fixtures mature far more cycles than any cap — tests that need an exact
 // cycle count pass an explicit `serverTime`.
 export const DEFAULT_SERVER_TIME = 1_000_000_000;
@@ -394,6 +439,184 @@ export class FakeMapReader implements RevealCellReader {
     async refresh(): Promise<void> {
         this.refreshed += 1;
     }
+}
+
+export function memberJoinedLog(args: { player: Address; id: bigint; joinedAt: bigint; registry: Address }): Log {
+    const topics = encodeEventTopics({
+        abi: SYNDICATE_ABI,
+        eventName: 'MemberJoined',
+        args: { player: args.player, id: args.id },
+    });
+    const data = encodeAbiParameters([{ name: 'joinedAt', type: 'uint64' }], [args.joinedAt]);
+    return {
+        address: args.registry,
+        topics,
+        data,
+        blockNumber: 100n,
+        blockHash: `0x${'0'.repeat(64)}`,
+        logIndex: 0,
+        transactionHash: `0x${'0'.repeat(64)}`,
+        transactionIndex: 0,
+        removed: false,
+    } as unknown as Log;
+}
+
+export function memberLeftLog(args: { player: Address; id: bigint; registry: Address }): Log {
+    const topics = encodeEventTopics({
+        abi: SYNDICATE_ABI,
+        eventName: 'MemberLeft',
+        args: { player: args.player, id: args.id },
+    });
+    return {
+        address: args.registry,
+        topics,
+        data: '0x',
+        blockNumber: 100n,
+        blockHash: `0x${'0'.repeat(64)}`,
+        logIndex: 0,
+        transactionHash: `0x${'0'.repeat(64)}`,
+        transactionIndex: 0,
+        removed: false,
+    } as unknown as Log;
+}
+
+export function syndicateCreatedLog(args: {
+    id: bigint;
+    creator: Address;
+    manager: Address;
+    name: string;
+    link: string;
+    ratesBp: [number, number, number, number];
+    createdAt: bigint;
+    registry: Address;
+}): Log {
+    const topics = encodeEventTopics({
+        abi: SYNDICATE_ABI,
+        eventName: 'SyndicateCreated',
+        args: { id: args.id, creator: args.creator, manager: args.manager },
+    });
+    const data = encodeAbiParameters(
+        [
+            { name: 'name', type: 'string' },
+            { name: 'link', type: 'string' },
+            {
+                name: 'rates',
+                type: 'tuple',
+                components: [
+                    { name: 'tradeDiscountBp', type: 'uint16' },
+                    { name: 'transportDiscountBp', type: 'uint16' },
+                    { name: 'tradeTaxBp', type: 'uint16' },
+                    { name: 'transportTaxBp', type: 'uint16' },
+                ],
+            },
+            { name: 'createdAt', type: 'uint64' },
+        ],
+        [
+            args.name,
+            args.link,
+            {
+                tradeDiscountBp: args.ratesBp[0],
+                transportDiscountBp: args.ratesBp[1],
+                tradeTaxBp: args.ratesBp[2],
+                transportTaxBp: args.ratesBp[3],
+            },
+            args.createdAt,
+        ],
+    );
+    return {
+        address: args.registry,
+        topics,
+        data,
+        blockNumber: 100n,
+        blockHash: `0x${'0'.repeat(64)}`,
+        logIndex: 1,
+        transactionHash: `0x${'0'.repeat(64)}`,
+        transactionIndex: 0,
+        removed: false,
+    } as unknown as Log;
+}
+
+export function syndicateRevert(
+    errorName:
+        | 'SyndicateNotFound'
+        | 'AlreadyInSyndicate'
+        | 'NotInSyndicate'
+        | 'CooldownActive'
+        | 'ZeroAddress'
+        | 'NotManager'
+        | 'RateTooHigh'
+        | 'NameEmpty'
+        | 'NameTooLong'
+        | 'LinkTooLong',
+): Error {
+    const data = encodeErrorResult({ abi: SYNDICATE_ABI, errorName });
+    const error = new Error(`Execution reverted: ${errorName}()`) as Error & { data: Hex };
+    error.data = data;
+    return error;
+}
+
+export interface SyndicateRegistryOutcomes {
+    join: ConfirmedTx | Error;
+    leave: ConfirmedTx | Error;
+    create: ConfirmedTx | Error;
+    setParams: ConfirmedTx | Error;
+    transferManager: ConfirmedTx | Error;
+    config: SyndicateRegistryConfig;
+}
+
+export class FakeSyndicateRegistryClient implements ISyndicateRegistryClient {
+    public readonly joinCalls: Array<JoinRegistryParams> = [];
+    public readonly leaveCalls: Array<LeaveRegistryParams> = [];
+    public readonly createCalls: Array<CreateRegistryParams> = [];
+    public readonly setParamsCalls: Array<SetParamsRegistryParams> = [];
+    public readonly transferManagerCalls: Array<TransferManagerRegistryParams> = [];
+    public getConfigCalls = 0;
+
+    constructor(private readonly outcomes: Partial<SyndicateRegistryOutcomes> = {}) {}
+
+    async join(params: JoinRegistryParams): Promise<ConfirmedTx> {
+        this.joinCalls.push(params);
+        return resolveTx(this.outcomes.join, 'join');
+    }
+
+    async leave(params: LeaveRegistryParams): Promise<ConfirmedTx> {
+        this.leaveCalls.push(params);
+        return resolveTx(this.outcomes.leave, 'leave');
+    }
+
+    async create(params: CreateRegistryParams): Promise<ConfirmedTx> {
+        this.createCalls.push(params);
+        return resolveTx(this.outcomes.create, 'create');
+    }
+
+    async setParams(params: SetParamsRegistryParams): Promise<ConfirmedTx> {
+        this.setParamsCalls.push(params);
+        return resolveTx(this.outcomes.setParams, 'setParams');
+    }
+
+    async transferManager(params: TransferManagerRegistryParams): Promise<ConfirmedTx> {
+        this.transferManagerCalls.push(params);
+        return resolveTx(this.outcomes.transferManager, 'transferManager');
+    }
+
+    async getConfig(_registry: Address): Promise<SyndicateRegistryConfig> {
+        this.getConfigCalls += 1;
+        return this.outcomes.config ?? { exitCooldownSec: 0 };
+    }
+}
+
+function resolveTx(outcome: ConfirmedTx | Error | undefined, label: string): ConfirmedTx {
+    if (outcome === undefined) {
+        throw new Error(`FakeSyndicateRegistryClient.${label} was called with no configured outcome`);
+    }
+    if (outcome instanceof Error) {
+        throw outcome;
+    }
+    return outcome;
+}
+
+export function confirmedTx(logs: Array<Log>): ConfirmedTx {
+    return { txHash: `0x${'e'.repeat(64)}` as Hash, status: TxStatus.Success, blockNumber: '100', logs };
 }
 
 export interface CellServiceDeps {

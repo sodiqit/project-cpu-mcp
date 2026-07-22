@@ -42,6 +42,8 @@ const freeResult: TransportResult = {
     resourceId: 3,
     amount: '100',
     fee: '0',
+    transitPaid: '0',
+    transitDiscount: '0',
     arrivalAt: 1704,
     txHash: '0xmove',
     approveTxHash: null,
@@ -56,6 +58,8 @@ const paidResult: TransportResult = {
     resourceId: 3,
     amount: '100',
     fee: '10',
+    transitPaid: '8',
+    transitDiscount: '2',
     arrivalAt: 1704,
     txHash: '0xmove',
     approveTxHash: '0xapprove',
@@ -81,7 +85,7 @@ describe('transport tool', () => {
         const result = await handler({ path: [], resourceId: 3, amount: '100' } as never);
         expect(result.content[0]?.text).toMatch(/Transport delivery 123/);
         expect(result.content[0]?.text).toMatch(/Silica \(#3\)/);
-        expect(result.content[0]?.text).toMatch(/no \$CPU fee/);
+        expect(result.content[0]?.text).toMatch(/no transit fee/);
         expect(result.content[0]?.text).toMatch(/finalize_delivery 123/);
     });
 
@@ -89,7 +93,7 @@ describe('transport tool', () => {
         const handler = capture(registerTransportTool, { transport: async () => paidResult });
         const result = await handler({ path: [], resourceId: 3, amount: '100' } as never);
         expect(result.content[0]?.text).toMatch(/Transport delivery 77/);
-        expect(result.content[0]?.text).toMatch(/10 \$CPU fee/);
+        expect(result.content[0]?.text).toMatch(/transit fee 8 \$CPU \(saved 2 \$CPU via syndicate\)/);
         expect(result.content[0]?.text).toMatch(/approve tx 0xapprove/);
         expect(result.content[0]?.text).toMatch(/move tx 0xmove/);
     });
@@ -105,16 +109,26 @@ describe('transport tool', () => {
 });
 
 describe('quote_transport tool', () => {
-    it('summarizes a paid quote', async () => {
-        const quote: TransportQuote = { fee: '10', totalDistance: 4, arrivalAt: 1704 };
+    it('summarizes a paid quote with the member saving', async () => {
+        const quote: TransportQuote = { fee: '10', discount: '2.5', totalDistance: 4, arrivalAt: 1704 };
         const handler = capture(registerQuoteTransportTool, { quote: async () => quote });
         const result = await handler({ path: [], resourceId: 3, amount: '100' } as never);
-        expect(result.content[0]?.text).toMatch(/10 \$CPU fee/);
+        expect(result.content[0]?.text).toMatch(/10 \$CPU to pay/);
+        expect(result.content[0]?.text).toMatch(/member saving 2\.5 \$CPU already applied/);
         expect(result.content[0]?.text).toMatch(/4 hops/);
+        expect(result.content[1]?.text).toContain('"discount":"2.5"');
+    });
+
+    it('omits the saving when there is no discount', async () => {
+        const quote: TransportQuote = { fee: '10', discount: '0', totalDistance: 4, arrivalAt: 1704 };
+        const handler = capture(registerQuoteTransportTool, { quote: async () => quote });
+        const result = await handler({ path: [], resourceId: 3, amount: '100' } as never);
+        expect(result.content[0]?.text).toMatch(/10 \$CPU to pay/);
+        expect(result.content[0]?.text).not.toMatch(/member saving/);
     });
 
     it('summarizes a free quote', async () => {
-        const quote: TransportQuote = { fee: '0', totalDistance: 2, arrivalAt: 1704 };
+        const quote: TransportQuote = { fee: '0', discount: '0', totalDistance: 2, arrivalAt: 1704 };
         const handler = capture(registerQuoteTransportTool, { quote: async () => quote });
         const result = await handler({ path: [], resourceId: 3, amount: '100' } as never);
         expect(result.content[0]?.text).toMatch(/free \(no transit fee\)/);

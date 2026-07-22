@@ -1,4 +1,4 @@
-import { type Abi, encodeAbiParameters, encodeEventTopics, type Hash, type Log } from 'viem';
+import { type Abi, type Address, encodeAbiParameters, encodeEventTopics, type Hash, type Log, parseEther } from 'viem';
 import { describe, expect, it } from 'vitest';
 
 import type { ApiClient } from '../../api/client.js';
@@ -32,7 +32,10 @@ import {
     TRANSPORT,
     WALLET_ADDRESS,
     makeConfig,
+    transitSettledLog,
 } from './service-fakes.js';
+
+const FOREIGN_OWNER = '0x00000000000000000000000000000000000000f1' as Address;
 
 const MOVE_HASH = `0x${'1'.repeat(64)}` as Hash;
 const FINALIZE_HASH = `0x${'2'.repeat(64)}` as Hash;
@@ -143,7 +146,7 @@ function makeTransport(opts: Options = {}): {
     const allowance = new FakeAllowance(opts.approve ?? null);
     const contracts = new FakeContractClient(opts.confirmLogs ?? [], opts.reverts ?? false);
     const transportClient = new FakeTransportClient(
-        opts.quote ?? { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
+        opts.quote ?? { totalFee: 0n, discount: 0n, totalDistance: 2n, arrivalAt: 1704n },
         opts.quoteError ?? null,
     );
     const service = new TransportService({
@@ -178,7 +181,7 @@ function delivery(over: Partial<DeliveryResponse> = {}): DeliveryResponse {
 describe('TransportService.transport', () => {
     it('moves an own-cell route with no $CPU fee and decodes the delivery', async () => {
         const h = makeTransport({
-            quote: { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n },
+            quote: { totalFee: 0n, discount: 0n, totalDistance: 2n, arrivalAt: 1704n },
             confirmLogs: [scheduledLog({ deliveryId: 123n, sourceId: 10n, targetId: 20n, arrivalAt: 1704n })],
         });
 
@@ -193,6 +196,8 @@ describe('TransportService.transport', () => {
         expect(result.sourceTokenId).toBe('10');
         expect(result.targetTokenId).toBe('20');
         expect(result.fee).toBe('0');
+        expect(result.transitPaid).toBe('0');
+        expect(result.transitDiscount).toBe('0');
         expect(result.arrivalAt).toBe(1704);
         expect(result.approveTxHash).toBeNull();
         expect(result.txHash).toBe(MOVE_HASH);
@@ -202,7 +207,7 @@ describe('TransportService.transport', () => {
 
     it('approves the buffered maxFee to the Transport contract for a paid route', async () => {
         const h = makeTransport({
-            quote: { totalFee: 1_000n, totalDistance: 4n, arrivalAt: 1704n },
+            quote: { totalFee: 1_000n, discount: 250n, totalDistance: 4n, arrivalAt: 1704n },
             approve: APPROVE_HASH,
             confirmLogs: [scheduledLog({ deliveryId: 5n, sourceId: 10n, targetId: 20n, arrivalAt: 1704n })],
         });
@@ -212,7 +217,36 @@ describe('TransportService.transport', () => {
         expect(h.allowance.calls).toEqual([{ token: CPU_TOKEN, spender: TRANSPORT, needed: 1_100n }]);
         expect(h.transportClient.moves[0]?.maxFee).toBe(1_100n);
         expect(result.fee).toBe('0.000000000000001');
+        expect(result.transitPaid).toBe('0.000000000000001');
+        expect(result.transitDiscount).toBe('0');
         expect(result.approveTxHash).toBe(APPROVE_HASH);
+    });
+
+    it('aggregates the settled transit legs into transitPaid and transitDiscount', async () => {
+        const h = makeTransport({
+            quote: { totalFee: parseEther('0.95'), discount: parseEther('0.15'), totalDistance: 4n, arrivalAt: 1704n },
+            approve: APPROVE_HASH,
+            confirmLogs: [
+                scheduledLog({ deliveryId: 5n, sourceId: 10n, targetId: 20n, arrivalAt: 1704n }),
+                transitSettledLog({
+                    deliveryId: 5n,
+                    owner: FOREIGN_OWNER,
+                    gross: parseEther('0.6'),
+                    discount: parseEther('0.1'),
+                }),
+                transitSettledLog({
+                    deliveryId: 5n,
+                    owner: WALLET_ADDRESS,
+                    gross: parseEther('0.5'),
+                    discount: parseEther('0.05'),
+                }),
+            ],
+        });
+
+        const result = await h.service.transport(INPUT);
+
+        expect(result.transitPaid).toBe('0.95');
+        expect(result.transitDiscount).toBe('0.15');
     });
 
     it('refuses on a chain mismatch before quoting', async () => {
@@ -236,20 +270,24 @@ describe('TransportService.transport', () => {
     });
 
     it('throws when the move reverts on-chain', async () => {
-        const h = makeTransport({ quote: { totalFee: 0n, totalDistance: 2n, arrivalAt: 1704n }, reverts: true });
+        const h = makeTransport({
+            quote: { totalFee: 0n, discount: 0n, totalDistance: 2n, arrivalAt: 1704n },
+            reverts: true,
+        });
         await expect(h.service.transport(INPUT)).rejects.toThrow(/reverted/i);
     });
 });
 
 describe('TransportService.quote', () => {
     it('previews a route via the on-chain view without any transaction', async () => {
-        const h = makeTransport({ quote: { totalFee: 10n, totalDistance: 4n, arrivalAt: 1704n } });
+        const h = makeTransport({ quote: { totalFee: 10n, discount: 4n, totalDistance: 6n, arrivalAt: 1704n } });
 
         const result = await h.service.quote(INPUT);
 
         expect(h.transportClient.quotes).toHaveLength(1);
         expect(result.fee).toBe('0.00000000000000001');
-        expect(result.totalDistance).toBe(4);
+        expect(result.discount).toBe('0.000000000000000004');
+        expect(result.totalDistance).toBe(6);
         expect(result.arrivalAt).toBe(1704);
         expect(h.contracts.sent).toHaveLength(0);
     });
