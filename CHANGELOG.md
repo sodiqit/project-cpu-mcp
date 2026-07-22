@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.8.0](https://github.com/sodiqit/project-cpu-mcp/compare/v0.7.0...v0.8.0) (2026-07-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* integrate syndicates — clan-aware trade/transport quotes, results, and registry tools ([#35](https://github.com/sodiqit/project-cpu-mcp/issues/35))
+* per-resource transit-fee floors replace the scalar default ([#34](https://github.com/sodiqit/project-cpu-mcp/issues/34))
+* adapt trade, mining, withdraw, craft and demolish to the season redeploy ([#33](https://github.com/sodiqit/project-cpu-mcp/issues/33))
+* cpu_start_mining and cpu_craft results gain a required `modeSwitch` block, cpu_start_mining gains `approveTxHash`, and the building catalog gains `modeSwitch`. cpu_start_mining no longer claims it costs no $CPU.
+
+### Features
+
+* adapt trade, mining, withdraw, craft and demolish to the season redeploy ([#33](https://github.com/sodiqit/project-cpu-mcp/issues/33)) ([838b45a](https://github.com/sodiqit/project-cpu-mcp/commit/838b45a5a1427e45900178e5b7f69a134f3ae70e))
+* integrate syndicates — clan-aware trade/transport quotes, results, and registry tools ([#35](https://github.com/sodiqit/project-cpu-mcp/issues/35)) ([4d2b7c5](https://github.com/sodiqit/project-cpu-mcp/commit/4d2b7c57e4bd3ac4291196bc18f4686d37d94493))
+* per-resource transit-fee floors replace the scalar default ([#34](https://github.com/sodiqit/project-cpu-mcp/issues/34)) ([67a02a4](https://github.com/sodiqit/project-cpu-mcp/commit/67a02a4d1de487419e07a118684d5c660dab6906))
+* price building mode switches and report the burn ([#30](https://github.com/sodiqit/project-cpu-mcp/issues/30)) ([59d091f](https://github.com/sodiqit/project-cpu-mcp/commit/59d091f80307188a330b8b4b38d955af4f8c1bdf))
+
 ## [0.7.0](https://github.com/sodiqit/project-cpu-mcp/compare/v0.6.1...v0.7.0) (2026-07-15)
 
 
